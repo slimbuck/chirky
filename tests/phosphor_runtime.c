@@ -30,7 +30,7 @@ int main(void)
     assert(api->init(&host_api,"games/phosphor-run/game.conf"));
     assert(content.level_count==3 && content.sprite_count==20);
     api->render(); assert(draws>0 && draws<2000);
-    input.action_pressed[TWO_FORTY_ACTION_CONFIRM]=true; api->update(&input); input.action_pressed[TWO_FORTY_ACTION_CONFIRM]=false;
+    input.button_pressed[TWO_FORTY_BUTTON_B]=true; api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_B]=false;
     assert(current_level==0 && phase==PHASE_PLAY);
     const struct animation *shard=content_animation(&content,"shard");
     assert(shard && shard->count==3);
@@ -52,6 +52,7 @@ int main(void)
     }
     deaths=7;
     for (int stage=0;stage<3;stage++) {
+        api->update(&input);api->update(&input);
         int expected_shards=0, exit_x=0,exit_y=0;
         for (int y=0;y<level.height;y++) for (int x=0;x<level.width;x++) {
             expected_shards+=tile_at(x,y)=='o';
@@ -63,8 +64,13 @@ int main(void)
         velocity_x=velocity_y=0;
         api->update(&input); assert(phase==PHASE_WIN);
         api->render();
-        input.action_pressed[TWO_FORTY_ACTION_CONFIRM]=true;
-        api->update(&input); input.action_pressed[TWO_FORTY_ACTION_CONFIRM]=false;
+        input.buttons[TWO_FORTY_BUTTON_B]=true;
+        for(int i=0;i<3;i++)api->update(&input);
+        assert(phase==PHASE_WIN && current_level==stage);
+        input.buttons[TWO_FORTY_BUTTON_B]=false;
+        api->update(&input);api->update(&input);
+        input.button_pressed[TWO_FORTY_BUTTON_B]=true;
+        api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_B]=false;
         assert(phase==PHASE_PLAY && collected_shards==0);
         assert(current_level==(stage+1)%3);
         assert(deaths==(stage==2?0:7));
@@ -73,7 +79,8 @@ int main(void)
         assert(camera_x>=0 && camera_y>=0);
     }
     settings.start_level=1;
-    phase=PHASE_TITLE; input.action_pressed[TWO_FORTY_ACTION_CONFIRM]=true; api->update(&input);
+    api->update(&input);api->update(&input);
+    phase=PHASE_TITLE; input.button_pressed[TWO_FORTY_BUTTON_B]=true; api->update(&input);
     assert(current_level==1);
     /* All UI remains inside the safe viewport; the world uses its own camera. */
     const int sizes[][2]={{288,216},{256,192}};

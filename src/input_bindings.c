@@ -4,24 +4,30 @@
 
 void default_bindings(struct controller_binding *bindings)
 {
-    bindings[TWO_FORTY_ACTION_LEFT]=(struct controller_binding){BINDING_ABS,ABS_HAT0X,-1};
-    bindings[TWO_FORTY_ACTION_RIGHT]=(struct controller_binding){BINDING_ABS,ABS_HAT0X,1};
-    bindings[TWO_FORTY_ACTION_UP]=(struct controller_binding){BINDING_ABS,ABS_HAT0Y,-1};
-    bindings[TWO_FORTY_ACTION_DOWN]=(struct controller_binding){BINDING_ABS,ABS_HAT0Y,1};
-    bindings[TWO_FORTY_ACTION_JUMP]=(struct controller_binding){BINDING_KEY,BTN_SOUTH,0};
-    bindings[TWO_FORTY_ACTION_DASH]=(struct controller_binding){BINDING_KEY,BTN_EAST,0};
-    bindings[TWO_FORTY_ACTION_CONFIRM]=(struct controller_binding){BINDING_KEY,BTN_EAST,0};
-    bindings[TWO_FORTY_ACTION_MENU]=(struct controller_binding){BINDING_KEY,BTN_TL2,0};
+    bindings[TWO_FORTY_BUTTON_LEFT]=(struct controller_binding){BINDING_ABS,ABS_HAT0X,-1};
+    bindings[TWO_FORTY_BUTTON_RIGHT]=(struct controller_binding){BINDING_ABS,ABS_HAT0X,1};
+    bindings[TWO_FORTY_BUTTON_UP]=(struct controller_binding){BINDING_ABS,ABS_HAT0Y,-1};
+    bindings[TWO_FORTY_BUTTON_DOWN]=(struct controller_binding){BINDING_ABS,ABS_HAT0Y,1};
+    bindings[TWO_FORTY_BUTTON_Y]=(struct controller_binding){BINDING_KEY,BTN_SOUTH,0};
+    bindings[TWO_FORTY_BUTTON_B]=(struct controller_binding){BINDING_KEY,BTN_EAST,0};
+    bindings[TWO_FORTY_BUTTON_A]=(struct controller_binding){BINDING_KEY,BTN_NORTH,0};
+    bindings[TWO_FORTY_BUTTON_X]=(struct controller_binding){BINDING_KEY,BTN_C,0};
+    bindings[TWO_FORTY_BUTTON_L]=(struct controller_binding){BINDING_KEY,BTN_WEST,0};
+    bindings[TWO_FORTY_BUTTON_R]=(struct controller_binding){BINDING_KEY,BTN_Z,0};
+    bindings[TWO_FORTY_BUTTON_START]=(struct controller_binding){BINDING_KEY,BTN_TR2,0};
+    bindings[TWO_FORTY_BUTTON_SELECT]=(struct controller_binding){BINDING_KEY,BTN_TL2,0};
 }
 
 void default_keyboard_bindings(struct controller_binding *bindings)
 {
-    const unsigned int codes[]={KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_Z,KEY_X,KEY_ENTER,KEY_ESC};
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++) bindings[i]=(struct controller_binding){BINDING_KEY,codes[i],0};
+    const unsigned int codes[]={KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,
+        KEY_Z,KEY_X,KEY_C,KEY_S,KEY_A,KEY_D,KEY_ENTER,KEY_ESC};
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) bindings[i]=(struct controller_binding){BINDING_KEY,codes[i],0};
 }
 
 bool parse_binding(const char *text, struct controller_binding *binding)
 {
+    if (!strcmp(text,"none")) { *binding=(struct controller_binding){0}; return true; }
     unsigned int code=0; int direction=0; char extra;
     if (sscanf(text,"key:%u%c",&code,&extra)==1 && code<=KEY_MAX) {
         *binding=(struct controller_binding){BINDING_KEY,code,0}; return true;
@@ -52,12 +58,10 @@ void setup_release(struct binding_setup *setup, bool released)
     setup->ready=false;
     for (int i=0;i<setup->step;i++) {
         const struct controller_binding *old=&setup->pending[i], *next=&setup->candidate;
-        /* Confirm is a menu action; sharing a gameplay face button is useful. */
-        if (setup->step==TWO_FORTY_ACTION_CONFIRM && (i==TWO_FORTY_ACTION_JUMP || i==TWO_FORTY_ACTION_DASH)) continue;
         if (old->kind==next->kind && old->code==next->code && old->direction==next->direction) {
             setup->message="ALREADY USED - TRY ANOTHER"; return;
         }
     }
     setup->pending[setup->step++]=setup->candidate; setup->message="";
-    if (setup->step==TWO_FORTY_ACTION_COUNT) setup->complete=true;
+    if (setup->step==TWO_FORTY_BUTTON_COUNT) setup->complete=true;
 }

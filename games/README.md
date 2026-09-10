@@ -29,6 +29,25 @@ rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
+ABI version 6 exposes SNES inputs directly: `input->buttons[TWO_FORTY_BUTTON_B]`
+is held B, and `input->button_pressed[TWO_FORTY_BUTTON_Y]` is a new Y press.
+The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
+Each game owns what its buttons do. Use `button_label` for SNES names; keyboard
+emulation belongs to the host, so games must not read raw keyboard state.
+The host reserves Select to return to the launcher. Rebuild host and all game
+modules together when upgrading from the previous action-based ABI.
+
+For screen/phase changes, use the shared `include/input_gate.h` helper. Keep a
+`two_forty_input_gate` in game state, pass each update through
+`two_forty_gate_filter`, and call `two_forty_gate_begin` when changing a title,
+result, gameplay phase or level. It suppresses held buttons and new-press flags
+until all SNES inputs have been neutral for two updates. The update that finishes
+release detection is also consumed; the next fresh press belongs to the new
+screen. This prevents B from both beginning a run and performing its gameplay
+action. Normal gameplay holds and repeated chopping are unchanged after release.
+The host uses the same rule for all launcher/settings transitions, including
+mapping and test screens, and ignores Linux key-autorepeat events.
+
 Adding a new game therefore means copying an existing folder, changing its
 manifest, code, settings, and assets, then choosing **Deploy + build** in the
 dashboard. The host restarts at the launcher and discovers it automatically.

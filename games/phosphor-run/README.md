@@ -4,12 +4,15 @@ A 320×240, 60 Hz platformer for the Two Forty CRT host.
 
 ## Playing
 
-- Arrow keys: move (or your configured direction keys)
-- Z / configured Jump: jump; wall-jump while touching a wall
-- X / configured Dash: air dash
-- Configured Confirm (Enter / SNES B by default): begin, advance, or replay
-- R: respawn at the current checkpoint, unless mapped to a logical action
-- F1 or configured Menu (Escape / Select by default): return to the launcher
+- D-pad: move
+- B: jump; wall-jump while touching a wall; begin, advance, or replay on the corresponding screens
+- Y: air dash
+- L: respawn at the current checkpoint
+- Select: return to the launcher
+
+The game reads SNES buttons directly. Keyboard emulation is configured in the
+host's Input Settings; the default keys are arrows, Z for Y, X for B, A for L
+and Escape for Select. Game prompts always show SNES names.
 
 Collect every shard in the current level to unlock its portal. Each level starts
 with fresh shards, checkpoint, dash, particles, and camera state. The falls count
@@ -99,7 +102,7 @@ both the renderer and dashboard.
   and memory ownership. Independent of input, gameplay and graphics APIs.
 - `render.c`: read-only drawing passes for background, world, particles, player
   and HUD. Repeated rows and colour runs are merged into rectangles for the Pi's
-  scissor/clear renderer.
+  batched rectangle renderer.
 
 Keep future enemies/projectiles in their own modules with explicit entity state
 and update functions called by `game.c`. Resolve their animation IDs through the

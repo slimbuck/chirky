@@ -1,9 +1,11 @@
 #include "game_state.h"
+#include "input_gate.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 const struct two_forty_host_api *host;
+static struct two_forty_input_gate transition_gate;
 struct settings settings;
 struct level level;
 struct content content;
@@ -214,22 +216,20 @@ static void collect_world_items(void)
 
 static bool pressed_jump(const struct two_forty_input *input)
 {
-    return input->action_pressed[TWO_FORTY_ACTION_JUMP];
+    return input->button_pressed[TWO_FORTY_BUTTON_B];
 }
 
 static bool held_jump(const struct two_forty_input *input)
 {
-    return input->actions[TWO_FORTY_ACTION_JUMP];
+    return input->buttons[TWO_FORTY_BUTTON_B];
 }
 
 static void update_play(const struct two_forty_input *input)
 {
-    bool mapped_press=false;
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++) mapped_press |= input->action_pressed[i];
-    if (input->pressed[KEY_R] && !mapped_press) { respawn(); return; }
+    if (input->button_pressed[TWO_FORTY_BUTTON_L]) { respawn(); return; }
     int direction = 0;
-    if (input->actions[TWO_FORTY_ACTION_LEFT]) direction--;
-    if (input->actions[TWO_FORTY_ACTION_RIGHT]) direction++;
+    if (input->buttons[TWO_FORTY_BUTTON_LEFT]) direction--;
+    if (input->buttons[TWO_FORTY_BUTTON_RIGHT]) direction++;
     if (direction) facing = direction;
 
     if (pressed_jump(input)) jump_buffer = settings.jump_buffer_frames;
@@ -246,7 +246,7 @@ static void update_play(const struct two_forty_input *input)
         burst(player_x+6,player_y,5,settings.edge);
     }
 
-    bool dash_pressed = input->action_pressed[TWO_FORTY_ACTION_DASH];
+    bool dash_pressed = input->button_pressed[TWO_FORTY_BUTTON_Y];
     if (dash_pressed && dash_available && dash_timer == 0) {
         dash_timer = settings.dash_frames;
         dash_available = false;
@@ -298,6 +298,7 @@ static void game_shutdown(void)
 
 static bool game_init(const struct two_forty_host_api *host_api, const char *config_path)
 {
+    transition_gate=(struct two_forty_input_gate){0};
     host=host_api;
     if (host->abi_version!=TWO_FORTY_ABI_VERSION || !load_settings(config_path) ||
         !content_load(settings.content,&content)) { game_shutdown(); return false; }
@@ -319,25 +320,34 @@ static bool game_init(const struct two_forty_host_api *host_api, const char *con
     return true;
 }
 
-static void game_update(const struct two_forty_input *input)
+static void update_gameplay(const struct two_forty_input *input)
 {
     frame_number++; update_particles();
     if (phase==PHASE_TITLE) {
         title_timer++;
-        if (input->action_pressed[TWO_FORTY_ACTION_CONFIRM] ||
+        if (input->button_pressed[TWO_FORTY_BUTTON_B] ||
             (settings.title_frames > 0 && title_timer >= settings.title_frames)) new_run();
     } else if (phase==PHASE_PLAY) update_play(input);
     else if (phase==PHASE_DEAD) {
         if (--death_timer<=0) respawn();
     } else if (phase==PHASE_WIN) {
         win_timer++;
-        if (input->action_pressed[TWO_FORTY_ACTION_CONFIRM]) advance_level();
+        if (input->button_pressed[TWO_FORTY_BUTTON_B]) advance_level();
     }
 }
 
 static void game_render(void)
 {
     if (phase==PHASE_TITLE) render_title(); else render_game();
+}
+
+static void game_update(const struct two_forty_input *input)
+{
+    enum phase before=phase;int level_before=current_level;
+    struct two_forty_input filtered;
+    two_forty_gate_filter(&transition_gate,input,&filtered);
+    update_gameplay(&filtered);
+    if(phase!=before || current_level!=level_before)two_forty_gate_begin(&transition_gate);
 }
 
 static const struct two_forty_game_api api={

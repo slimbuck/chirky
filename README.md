@@ -7,6 +7,39 @@ GBM/EGL OpenGL ES surface at the connector's native resolution, and presents
 each frame with a KMS page flip. It does not use X11, Wayland, SDL, or a
 desktop compositor.
 
+Rectangles and font pixels are batched as coloured triangles in their original
+drawing order. A batch holds 4,096 rectangles; most scenes use one GPU draw.
+The previous per-rectangle scissor/clear path remains only as a test/benchmark
+reference. No changes to game artwork or the game ABI are needed for batching.
+
+## Frame timing
+
+The diagnostic strip starts disabled. Hold **Start for two seconds** to toggle
+it on or off from any screen, including the launcher, settings and games.
+Keyboard emulation works too (Enter maps to Start by default). Each hold toggles
+once; release Start before holding it again. Visibility lasts for the current
+host session and starts disabled again after a restart. `W` is host
+work/submission time (update, drawing, swap and flip submission); `F` is the
+interval between actual display flips, both in milliseconds. The white tick
+marks one refresh period (about 16.7 ms at 60 Hz). Green/yellow/red shows work
+relative to that budget, and blue-grey shows the presentation interval. The
+history on the right turns red for missed refreshes. `MISS` counts missed
+refreshes since host startup, using DRM sequence gaps, not estimates from CPU
+timings. The first flip establishes a baseline; each visible sample describes
+the previous completed presentation. The overlay covers part of the game's HUD.
+
+Old `frame_timing` configuration entries are ignored. Timing and rectangle/batch counts are also
+logged every 300 frames. GPU work can finish after submission, so `W` alone is
+not a GPU timer; the actual flip interval and missed count detect late frames.
+
+`tools/render_benchmark.c` compares the reference and batched paths on an offscreen
+EGL surface without touching the CRT or the running game. On the connected Pi,
+the initial Rosey Chop garden measured 20.8 ms versus 2.0 ms per render on average,
+including GPU completion, with byte-identical framebuffer pixels. This is an
+offscreen rendering comparison, not a claim that every live frame meets its deadline.
+Run `make benchmark` on Linux/Pi to repeat the measurement and pixel comparison,
+including a stress check that overflows the rectangle batch multiple times.
+
 ## Build on the Raspberry Pi
 
 ```sh
@@ -25,29 +58,49 @@ Run from SSH while the CRT is connected:
 ./build/two-forty-host
 ```
 
-Controls (defaults):
+The console exposes the SNES D-pad, **B, Y, A, X, L, R, Start and Select**.
+Games read those buttons directly and choose their gameplay behavior. Labels
+always name SNES buttons, including when playing with a keyboard.
 
-- D-pad: move in the launcher and games
-- SNES Y: jump; SNES B: dash in games and Confirm in every menu
-- Select: back / return to the launcher; Start has no special menu behavior
-- Keyboard: arrows, Z jump, X dash, Enter confirm, Escape back
-- F1: recovery back / cancel setup; F12: snapshot outside setup
-- Hold Start + Select for one second: recovery return from a game
+- D-pad moves through the launcher; B chooses; Select goes back or returns from a game.
+- Rosey Chop: B chops and Y jumps. Phosphor Run: B jumps, Y dashes and L restarts.
+- B begins or replays a game. Start is available to games; it does not choose launcher items.
+- F1 is a keyboard recovery/cancel shortcut; F12 captures a snapshot outside setup.
+- The physical Start + Select recovery chord is retained outside input setup.
 
-Choose **Input Settings**, then **Configure buttons** or **Configure keyboard**.
-The wizard asks for Left, Right, Up, Down, Jump, Dash, Confirm and Menu in order.
-Release each button, key or axis before the next prompt. Start and Select can be
-assigned normally; their existing actions are suspended during capture. Confirm
-may share Jump or Dash because it is used in menus. Other duplicate bindings are
-rejected. F1/F12 remain reserved on the keyboard. F1 cancels the whole draft; a
-controller-only user can hold two non-direction buttons for one second to cancel.
-Only a completed sequence is saved, atomically, in the Pi's `config/host.conf`.
-Cancelled or failed saves leave the old mappings intact. Arrow keys and Enter
-remain available for recovery navigation in the launcher. Escape no longer quits
-the host from the launcher; stop the service or use Ctrl+C in its terminal.
+Default keyboard emulation:
+
+| SNES input | Keyboard key |
+| --- | --- |
+| D-pad | Arrow keys |
+| Y | Z |
+| B | X |
+| A | C |
+| X | S |
+| L | A |
+| R | D |
+| Start | Enter |
+| Select | Escape |
+
+Choose **Input Settings**, then **Map SNES controller** or **Map keyboard to SNES**.
+Both wizards ask for Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
+Screen changes consume the opening press and wait for two neutral frames before
+accepting another. Holding B cannot open a submenu and activate its first item.
+Release all inputs between prompts. Each physical input maps to one SNES button;
+duplicates are rejected. Start and Select can be assigned during setup without
+activating navigation. F1/F12 remain reserved. F1 cancels the draft; holding two
+controller buttons for one second also cancels. Only a completed 12-input sequence
+is saved atomically; cancellation or a failed save keeps the previous mapping.
+
+The live display remains visible during mapping. Every SNES button has a green
+controller indicator and a gold keyboard indicator, so simultaneous inputs from
+both sources are visible. The PAD and KEY lines show held raw controller button
+codes/axes and keyboard key names, including unmapped inputs; NONE means released
+and MORE signals overflow. **Test buttons** suspends normal navigation so B and
+Select can be tested too. Hold Select for one second, or press F1, to leave testing.
 
 Choose **Display Area** to calibrate CRT overscan. Up/Down selects Side Margin,
-Top/Bottom Margin, Save or Cancel; Left/Right adjusts the selected margin. Keep all
+Top/Bottom Margin, Horizontal, Vertical, Save or Cancel; Left/Right adjusts the selected value. Keep all
 four cyan edges visible. The defaults reserve 16 pixels per side and 12 at the top
 and bottom, leaving a 288×216 playable area inside the physical 320×240 output.
 Margins can be 0–32 horizontally and 0–24 vertically. All drawing is translated
@@ -55,10 +108,23 @@ and clipped to this area at native pixel size; game cameras and UI use its logic
 dimensions. Cancel restores the previous area; Save persists it across restarts.
 The dashboard's level editor uses the connected Pi's viewport for its guides.
 
-Old default Start-confirm configurations automatically migrate to B on load.
-Version-2 custom mappings are kept, including Start if you explicitly assign it.
-Controller mappings use `bind_*`; keyboard mappings use `key_*`; `safe_x` and
-`safe_y` store the display margins. `input_version=2` marks the new defaults.
+Horizontal and Vertical move the whole safe region one native pixel per step
+without changing its dimensions. Positive values move right/up; negative values
+move left/down. The full region stays inside the 320×240 output: horizontal
+movement is limited to ±Side Margin and vertical movement to ±Top/Bottom Margin.
+Reducing a margin clamps the corresponding position if necessary. Save persists
+size and position; Cancel or Select restores both. Old configurations are centred
+by default. Position is saved as `safe_offset_x` / `safe_offset_y`; drawing adds
+these offsets to the existing margins, with no scaling or additional render pass.
+
+`input_version=3` stores SNES mappings as `bind_b`, `key_b`, `bind_start`, etc.
+Older mappings migrate on load: Jump becomes Y, Dash becomes B, Menu becomes
+Select and keyboard Confirm becomes Start. B now handles both gameplay and
+choosing items; a separate old controller Confirm binding is used only when Dash
+was absent (except the obsolete Start default). Explicit SNES mappings take
+precedence. New defaults that conflict with retained custom inputs are left
+unbound until configured. Saving removes obsolete action keys. `safe_x` and
+`safe_y` continue to store display margins.
 
 The program uses `/dev/dri/card0` and reads Linux evdev keyboard devices under
 `/dev/input`. The `retro` user is already a member of the `video`, `render`,
@@ -101,10 +167,12 @@ take CRT framebuffer snapshots. Put local SSH key paths in
 
 The dashboard and CRT launcher both include a deliberate Pi power-down action.
 The dashboard asks for confirmation; the launcher keeps `POWER OFF` separate
-from the game list and only activates it with Enter.
+from the game list and activates it with B.
 
 ## Included games
 
+- `rosey-chop`: clear the dead black roses from a colourful garden before the
+  rainstorm, with sweeping chops, jumping, chasing wasps and a complete first level
 - `hardware-test`: moving colour, motion, audio, input, and capture checks
 - `phosphor-run`: a scrolling CRT-native platformer with wall-jumps, air dash,
   checkpoints, hazards, particles, collectible signal shards, and a complete

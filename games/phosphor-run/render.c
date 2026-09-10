@@ -24,11 +24,11 @@ static void text(int x, int y, const char *value, int scale, struct colour colou
     host->draw_text(host->context,x,y,value,scale,colour.r,colour.g,colour.b);
 }
 
-static void controller_label(enum two_forty_action action, const char *fallback,
+static void controller_label(enum two_forty_button action, const char *fallback,
                              char *label, size_t capacity)
 {
-    if (host->action_label != NULL)
-        host->action_label(host->context, action, label, capacity);
+    if (host->button_label != NULL)
+        host->button_label(host->context, action, label, capacity);
     else
         copy_text(label, capacity, fallback);
 }
@@ -151,20 +151,20 @@ static void render_hud(void)
 void render_title(void)
 {
     char jump[32],dash[32],confirm[32],menu[32],line[96];
-    controller_label(TWO_FORTY_ACTION_JUMP,"Y",jump,sizeof(jump));
-    controller_label(TWO_FORTY_ACTION_DASH,"B",dash,sizeof(dash));
-    controller_label(TWO_FORTY_ACTION_CONFIRM,"B",confirm,sizeof(confirm));
-    controller_label(TWO_FORTY_ACTION_MENU,"SELECT",menu,sizeof(menu));
+    controller_label(TWO_FORTY_BUTTON_B,"B",jump,sizeof(jump));
+    controller_label(TWO_FORTY_BUTTON_Y,"Y",dash,sizeof(dash));
+    controller_label(TWO_FORTY_BUTTON_B,"B",confirm,sizeof(confirm));
+    controller_label(TWO_FORTY_BUTTON_SELECT,"SELECT",menu,sizeof(menu));
     render_background();
     int height=host->screen_height;
     centered_text(height-24,"PHOSPHOR",3,settings.phosphor);
     centered_text(height-54,"RUN",3,settings.amber);
     rectangle(16,height-80,host->screen_width-32,2,settings.edge);
     centered_text(height-98,"RESTORE THE LAST SIGNAL",1,settings.paper);
-    centered_text(height-116,"MOVE - DIRECTION BUTTONS",1,settings.edge);
+    centered_text(height-116,"D-PAD MOVE / L RESTART",1,settings.edge);
     snprintf(line,sizeof(line),"JUMP - %s",jump); centered_text(height-130,line,1,settings.edge);
     snprintf(line,sizeof(line),"DASH - %s",dash); centered_text(height-144,line,1,settings.edge);
-    snprintf(line,sizeof(line),"%s - MENU",menu); centered_text(height-158,line,1,settings.edge);
+    snprintf(line,sizeof(line),"%s - RETURN TO LAUNCHER",menu); centered_text(height-158,line,1,settings.edge);
     if ((title_timer/28)&1) {
         snprintf(line,sizeof(line),"%s - BEGIN",confirm); centered_text(14,line,1,settings.paper);
     }
@@ -181,7 +181,7 @@ void render_game(void)
         centered_text(middle+5,"SIGNAL LOST",2,settings.hazard);
     } else if (phase==PHASE_WIN) {
         char confirm[32],line[96];
-        controller_label(TWO_FORTY_ACTION_CONFIRM,"B",confirm,sizeof(confirm));
+        controller_label(TWO_FORTY_BUTTON_B,"B",confirm,sizeof(confirm));
         rectangle(8,middle-51,host->screen_width-16,102,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);

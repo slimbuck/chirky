@@ -1,5 +1,8 @@
 #include "two_forty.h"
 #include "input_bindings.h"
+#include "rect_renderer.h"
+#include "frame_timing.h"
+#include "input_gate.h"
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -204,8 +207,8 @@ struct framebuffer { int drm_fd; uint32_t fb_id; };
 struct input_set {
     struct input_device devices[MAX_INPUTS];
     int count;
-    bool previous_actions[TWO_FORTY_ACTION_COUNT];
-    bool pending_actions[TWO_FORTY_ACTION_COUNT];
+    bool previous_buttons[TWO_FORTY_BUTTON_COUNT];
+    bool pending_buttons[TWO_FORTY_BUTTON_COUNT];
     bool controller_up_pressed;
     bool controller_down_pressed;
     struct two_forty_input state;
@@ -244,12 +247,20 @@ struct host {
     pid_t sound_pid;
     unsigned int snapshot_sequence;
     unsigned long frame_number;
+    struct rect_renderer renderer;
+    unsigned int submitted_rectangles;
+    struct frame_timing timing;
+    bool frame_timing_enabled;
+    bool timing_start_held, timing_start_toggled;
+    uint64_t timing_start_us;
     char boot_game_id[64];
-    struct controller_binding bindings[TWO_FORTY_ACTION_COUNT];
-    struct controller_binding keyboard_bindings[TWO_FORTY_ACTION_COUNT];
+    struct controller_binding bindings[TWO_FORTY_BUTTON_COUNT];
+    struct controller_binding keyboard_bindings[TWO_FORTY_BUTTON_COUNT];
     struct binding_setup setup;
-    bool controller_settings, display_settings, ui_wait_release, last_keyboard;
+    bool controller_settings, display_settings, input_test, ui_wait_release, last_keyboard;
+    struct two_forty_input_gate transition_gate;
     int selected_option, display_option, safe_x, safe_y, saved_safe_x, saved_safe_y;
+    int safe_offset_x,safe_offset_y,saved_safe_offset_x,saved_safe_offset_y;
     const char *settings_message;
     unsigned int controller_menu_chord_frames;
 
@@ -257,6 +268,26 @@ struct host {
 
 static volatile sig_atomic_t stop_requested;
 static volatile sig_atomic_t snapshot_requested;
+static uint64_t monotonic_us(void);
+
+static void block_transition_input(struct host *host)
+{
+    host->ui_wait_release=true;
+    two_forty_gate_begin(&host->transition_gate);
+    memset(host->inputs.pending_buttons,0,sizeof(host->inputs.pending_buttons));
+    memset(host->inputs.state.button_pressed,0,sizeof(host->inputs.state.button_pressed));
+    memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
+}
+
+enum host_screen { SCREEN_LAUNCHER,SCREEN_INPUT,SCREEN_SETUP,SCREEN_TEST,SCREEN_DISPLAY,SCREEN_GAME };
+static enum host_screen current_screen(const struct host *host)
+{
+    if(host->setup.active)return SCREEN_SETUP;
+    if(host->active_game)return SCREEN_GAME;
+    if(host->display_settings)return SCREEN_DISPLAY;
+    if(host->controller_settings)return host->input_test?SCREEN_TEST:SCREEN_INPUT;
+    return SCREEN_LAUNCHER;
+}
 
 static void on_stop(int signal_number) { (void)signal_number; stop_requested = 1; }
 static void on_snapshot(int signal_number) { (void)signal_number; snapshot_requested = 1; }
@@ -276,26 +307,35 @@ static void copy_text(char *destination, size_t capacity, const char *source)
     if (capacity > 0) snprintf(destination, capacity, "%s", source);
 }
 
-static const char *const action_config_keys[TWO_FORTY_ACTION_COUNT] = {
+static const char *const button_config_keys[TWO_FORTY_BUTTON_COUNT] = {
     "bind_left", "bind_right", "bind_up", "bind_down",
-    "bind_jump", "bind_dash", "bind_confirm", "bind_menu"
+    "bind_y", "bind_b", "bind_a", "bind_x", "bind_l", "bind_r", "bind_start", "bind_select"
 };
 
-static const char *const action_names[TWO_FORTY_ACTION_COUNT] = {
-    "LEFT", "RIGHT", "UP", "DOWN", "JUMP", "DASH", "CONFIRM", "MENU"
+static const char *const button_names[TWO_FORTY_BUTTON_COUNT] = {
+    "LEFT", "RIGHT", "UP", "DOWN", "Y", "B", "A", "X", "L", "R", "START", "SELECT"
 };
 
-static const char *const keyboard_config_keys[TWO_FORTY_ACTION_COUNT] = {
+static const char *const keyboard_config_keys[TWO_FORTY_BUTTON_COUNT] = {
     "key_left", "key_right", "key_up", "key_down",
-    "key_jump", "key_dash", "key_confirm", "key_menu"
+    "key_y", "key_b", "key_a", "key_x", "key_l", "key_r", "key_start", "key_select"
 };
 
-static int binding_action_for_key(const char *key)
+static int binding_button_for_key(const char *key)
 {
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++) {
-        if (!strcmp(key,action_config_keys[i])) return i;
-        if (!strcmp(key,keyboard_config_keys[i])) return i+TWO_FORTY_ACTION_COUNT;
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+        if (!strcmp(key,button_config_keys[i])) return i;
+        if (!strcmp(key,keyboard_config_keys[i])) return i+TWO_FORTY_BUTTON_COUNT;
     }
+    return -1;
+}
+
+/* Read old action mappings once, then save only SNES button names. */
+static int legacy_binding_for_key(const char *key)
+{
+    const char *names[]={"bind_jump","bind_dash","bind_confirm","bind_menu",
+                         "key_jump","key_dash","key_confirm","key_menu"};
+    for (int i=0;i<8;i++) if (!strcmp(key,names[i])) return i;
     return -1;
 }
 
@@ -303,6 +343,7 @@ static void write_binding(FILE *file, const char *key, const struct controller_b
 {
     if (binding->kind==BINDING_KEY) fprintf(file,"%s=key:%u\n",key,binding->code);
     else if (binding->kind==BINDING_ABS) fprintf(file,"%s=abs:%u:%d\n",key,binding->code,binding->direction);
+    else fprintf(file,"%s=none\n",key);
 }
 
 static bool save_bindings(const struct host *host)
@@ -315,15 +356,16 @@ static bool save_bindings(const struct host *host)
         char *key=trim(parsed), *separator=strchr(key,'=');
         if (separator) *separator=0;
         key=trim(key);
-        if (binding_action_for_key(key)<0 && strcmp(key,"safe_x") && strcmp(key,"safe_y") && strcmp(key,"input_version"))
+        if (binding_button_for_key(key)<0 && legacy_binding_for_key(key)<0 && strcmp(key,"safe_x") && strcmp(key,"safe_y") && strcmp(key,"safe_offset_x") && strcmp(key,"safe_offset_y") && strcmp(key,"input_version"))
             fputs(line,target);
     }
     bool failed=source && ferror(source);
     if (source) fclose(source);
-    fputs("\ninput_version=2\n",target);
+    fputs("\ninput_version=3\n",target);
     fprintf(target,"safe_x=%d\nsafe_y=%d\n",host->safe_x,host->safe_y);
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++) {
-        write_binding(target,action_config_keys[i],&host->bindings[i]);
+    fprintf(target,"safe_offset_x=%d\nsafe_offset_y=%d\n",host->safe_offset_x,host->safe_offset_y);
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+        write_binding(target,button_config_keys[i],&host->bindings[i]);
         write_binding(target,keyboard_config_keys[i],&host->keyboard_bindings[i]);
     }
     if (fflush(target)!=0 || fsync(fileno(target))!=0) failed=true;
@@ -333,20 +375,38 @@ static bool save_bindings(const struct host *host)
     return !failed;
 }
 
+static void clamp_safe_position(struct host *host)
+{
+    if(host->safe_offset_x < -host->safe_x)host->safe_offset_x=-host->safe_x;
+    if(host->safe_offset_x > host->safe_x)host->safe_offset_x=host->safe_x;
+    if(host->safe_offset_y < -host->safe_y)host->safe_offset_y=-host->safe_y;
+    if(host->safe_offset_y > host->safe_y)host->safe_offset_y=host->safe_y;
+}
+
 static void update_safe_area(struct host *host)
 {
+    clamp_safe_position(host);
     host->api.screen_width=host->mode.hdisplay-host->safe_x*2;
     host->api.screen_height=host->mode.vdisplay-host->safe_y*2;
 }
 
+static void restore_display_area(struct host *host)
+{
+    host->safe_x=host->saved_safe_x;host->safe_y=host->saved_safe_y;
+    host->safe_offset_x=host->saved_safe_offset_x;host->safe_offset_y=host->saved_safe_offset_y;
+    update_safe_area(host);
+}
+
 static void keyboard_name(const struct controller_binding *binding, char *name, size_t capacity)
 {
+    if (binding->kind==BINDING_NONE) { copy_text(name,capacity,"UNBOUND"); return; }
     const char *label=NULL;
     switch (binding->code) {
         case KEY_UP: label="UP"; break; case KEY_DOWN: label="DOWN"; break;
         case KEY_LEFT: label="LEFT"; break; case KEY_RIGHT: label="RIGHT"; break;
         case KEY_ENTER: label="ENTER"; break; case KEY_ESC: label="ESC"; break;
         case KEY_SPACE: label="SPACE"; break; case KEY_TAB: label="TAB"; break;
+        case KEY_F1: label="F1"; break; case KEY_F12: label="F12"; break;
         case KEY_LEFTSHIFT: label="LEFT SHIFT"; break; case KEY_RIGHTSHIFT: label="RIGHT SHIFT"; break;
         case KEY_LEFTCTRL: label="LEFT CTRL"; break; case KEY_RIGHTCTRL: label="RIGHT CTRL"; break;
     }
@@ -356,65 +416,11 @@ static void keyboard_name(const struct controller_binding *binding, char *name, 
     snprintf(name,capacity,"KEY %u",binding->code);
 }
 
-static bool has_gp2040_controller(const struct host *host)
-{
-    for (int index = 0; index < host->inputs.count; ++index) {
-        const struct input_device *device = &host->inputs.devices[index];
-        if (device->controller && strcasestr(device->name, "gp2040") != NULL)
-            return true;
-    }
-    return false;
-}
-
-static void binding_name(const struct host *host,
-                         const struct controller_binding *binding,
-                         char *name, size_t capacity)
-{
-    bool gp2040 = has_gp2040_controller(host);
-    if (gp2040 && binding->kind == BINDING_KEY && binding->code == BTN_SOUTH)
-        copy_text(name, capacity, "Y");
-    else if (gp2040 && binding->kind == BINDING_KEY &&
-             binding->code == BTN_EAST)
-        copy_text(name, capacity, "B");
-    else if (gp2040 && binding->kind == BINDING_KEY &&
-             binding->code == BTN_TL2)
-        copy_text(name, capacity, "SELECT");
-    else if (gp2040 && binding->kind == BINDING_KEY &&
-             binding->code == BTN_TR2)
-        copy_text(name, capacity, "START");
-    else if (binding->kind == BINDING_ABS && binding->code == ABS_HAT0X)
-        copy_text(name, capacity, binding->direction < 0 ? "DPAD LEFT" : "DPAD RIGHT");
-    else if (binding->kind == BINDING_ABS && binding->code == ABS_HAT0Y)
-        copy_text(name, capacity, binding->direction < 0 ? "DPAD UP" : "DPAD DOWN");
-    else if (binding->kind == BINDING_KEY && binding->code == BTN_SOUTH)
-        copy_text(name, capacity, "B");
-    else if (binding->kind == BINDING_KEY && binding->code == BTN_WEST)
-        copy_text(name, capacity, "Y");
-    else if (binding->kind == BINDING_KEY && binding->code == BTN_START)
-        copy_text(name, capacity, "START");
-    else if (binding->kind == BINDING_KEY && binding->code == BTN_SELECT)
-        copy_text(name, capacity, "SELECT");
-    else if (binding->kind == BINDING_KEY)
-        snprintf(name, capacity, "BUTTON %u", binding->code);
-    else if (binding->kind == BINDING_ABS)
-        snprintf(name, capacity, "AXIS %u %s", binding->code,
-                 binding->direction < 0 ? "NEG" : "POS");
-    else
-        copy_text(name, capacity, "UNBOUND");
-}
-
-static void action_label(void *context, enum two_forty_action action,
+static void button_label(void *context, enum two_forty_button button,
                          char *text, size_t capacity)
 {
-    struct host *host = context;
-    if (action < 0 || action >= TWO_FORTY_ACTION_COUNT) {
-        copy_text(text, capacity, "UNBOUND");
-        return;
-    }
-    bool controller=false;
-    for (int i=0;i<host->inputs.count;i++) controller |= host->inputs.devices[i].controller;
-    if (host->last_keyboard || !controller) keyboard_name(&host->keyboard_bindings[action],text,capacity);
-    else binding_name(host,&host->bindings[action],text,capacity);
+    (void)context;
+    copy_text(text,capacity,button>=0 && button<TWO_FORTY_BUTTON_COUNT ? button_names[button] : "UNBOUND");
 }
 
 static void fill_rect(void *context, int x, int y, int width, int height,
@@ -426,8 +432,13 @@ static void fill_rect(void *context, int x, int y, int width, int height,
     if (x + width > host->api.screen_width) width = host->api.screen_width - x;
     if (y + height > host->api.screen_height) height = host->api.screen_height - y;
     if (width <= 0 || height <= 0) return;
+    host->submitted_rectangles++;
+    if (host->renderer.program) {
+        rect_renderer_rect(&host->renderer,x+host->safe_x+host->safe_offset_x,y+host->safe_y+host->safe_offset_y,width,height,red,green,blue);
+        return;
+    }
     glEnable(GL_SCISSOR_TEST);
-    glScissor(x+host->safe_x, y+host->safe_y, width, height);
+    glScissor(x+host->safe_x+host->safe_offset_x, y+host->safe_y+host->safe_offset_y, width, height);
     glClearColor(red / 255.0f, green / 255.0f, blue / 255.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
@@ -514,45 +525,82 @@ static void discover_games(struct host *host)
 
 static bool load_game(struct host *host, int index);
 
+static bool keyboard_binding_valid(struct controller_binding binding)
+{
+    return binding.kind==BINDING_NONE || (binding.kind==BINDING_KEY && binding.code<BTN_MISC &&
+        binding.code!=KEY_F1 && binding.code!=KEY_F12);
+}
+
+static bool same_binding(struct controller_binding a, struct controller_binding b)
+{
+    return a.kind!=BINDING_NONE && a.kind==b.kind && a.code==b.code && a.direction==b.direction;
+}
+
 static void load_host_config(struct host *host)
 {
     default_bindings(host->bindings);
     default_keyboard_bindings(host->keyboard_bindings);
     host->safe_x=16; host->safe_y=12;
+    host->safe_offset_x=host->safe_offset_y=0;
+    host->frame_timing_enabled=false;
+    host->timing_start_held=host->timing_start_toggled=false;
     int input_version=0;
-    FILE *file = fopen(HOST_CONFIG_PATH, "r");
-    if (file == NULL) return;
+    struct controller_binding legacy[8]={0};
+    bool supplied[2*TWO_FORTY_BUTTON_COUNT]={0}, old_supplied[8]={0};
+    FILE *file=fopen(HOST_CONFIG_PATH,"r");
+    if (!file) return;
     char line[512];
-    while (fgets(line, sizeof(line), file) != NULL) {
-        char *entry = trim(line);
-        if (!*entry || *entry == '#' || *entry == ';') continue;
-        char *separator = strchr(entry, '=');
-        if (separator == NULL) continue;
-        *separator = '\0';
-        char *key = trim(entry);
-        char *value = trim(separator + 1);
-        if (strcmp(key, "boot_game") == 0) {
-            copy_text(host->boot_game_id, sizeof(host->boot_game_id), value);
-        } else if (!strcmp(key,"safe_x")) {
-            int n=atoi(value); if (n>=0 && n<=32) host->safe_x=n;
-        } else if (!strcmp(key,"safe_y")) {
-            int n=atoi(value); if (n>=0 && n<=24) host->safe_y=n;
-        } else if (!strcmp(key,"input_version")) input_version=atoi(value);
+    while (fgets(line,sizeof(line),file)) {
+        char *key=trim(line), *separator=strchr(key,'=');
+        if (!separator || *key=='#' || *key==';') continue;
+        *separator=0; key=trim(key); char *value=trim(separator+1);
+        if (!strcmp(key,"boot_game")) copy_text(host->boot_game_id,sizeof(host->boot_game_id),value);
+        else if (!strcmp(key,"safe_x")) { int n=atoi(value); if (n>=0 && n<=32) host->safe_x=n; }
+        else if (!strcmp(key,"safe_y")) { int n=atoi(value); if (n>=0 && n<=24) host->safe_y=n; }
+        else if (!strcmp(key,"safe_offset_x")) { int n=atoi(value); if(n>=-32 && n<=32)host->safe_offset_x=n; }
+        else if (!strcmp(key,"safe_offset_y")) { int n=atoi(value); if(n>=-24 && n<=24)host->safe_offset_y=n; }
+        else if (!strcmp(key,"input_version")) input_version=atoi(value);
         else {
-            int action=binding_action_for_key(key);
+            int button=binding_button_for_key(key), old=legacy_binding_for_key(key);
             struct controller_binding parsed;
-            if (action>=0 && parse_binding(value,&parsed)) {
-                if (action<TWO_FORTY_ACTION_COUNT) host->bindings[action]=parsed;
-                else if (parsed.kind==BINDING_KEY && parsed.code<BTN_MISC && parsed.code!=KEY_F1 && parsed.code!=KEY_F12)
-                    host->keyboard_bindings[action-TWO_FORTY_ACTION_COUNT]=parsed;
+            if (!parse_binding(value,&parsed)) continue;
+            if (button>=0 && (button<TWO_FORTY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
+                if (button<TWO_FORTY_BUTTON_COUNT) host->bindings[button]=parsed;
+                else host->keyboard_bindings[button-TWO_FORTY_BUTTON_COUNT]=parsed;
+                supplied[button]=true;
+            } else if (old>=0 && (old<4 || keyboard_binding_valid(parsed))) {
+                legacy[old]=parsed; old_supplied[old]=true;
             }
         }
     }
     fclose(file);
-    if (input_version<2 && host->bindings[TWO_FORTY_ACTION_CONFIRM].kind==BINDING_KEY &&
-        host->bindings[TWO_FORTY_ACTION_CONFIRM].code==BTN_TR2)
-        host->bindings[TWO_FORTY_ACTION_CONFIRM].code=BTN_EAST;
-
+    if (input_version<3) {
+        const int targets[]={TWO_FORTY_BUTTON_Y,TWO_FORTY_BUTTON_B,-1,TWO_FORTY_BUTTON_SELECT,
+            TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_Y,TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_B,
+            TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_START,TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_SELECT};
+        for (int i=0;i<8;i++) {
+            int target=targets[i];
+            if (target<0 || !old_supplied[i] || supplied[target]) continue;
+            if (target<TWO_FORTY_BUTTON_COUNT) host->bindings[target]=legacy[i];
+            else host->keyboard_bindings[target-TWO_FORTY_BUTTON_COUNT]=legacy[i];
+            supplied[target]=true;
+        }
+        /* A legacy Confirm has no separate game button. Dash owns B; if Dash
+           was absent, retain custom Confirm as B except the obsolete Start default. */
+        if (!supplied[TWO_FORTY_BUTTON_B] && old_supplied[2] &&
+            !(input_version<2 && legacy[2].kind==BINDING_KEY && legacy[2].code==BTN_TR2)) {
+            host->bindings[TWO_FORTY_BUTTON_B]=legacy[2]; supplied[TWO_FORTY_BUTTON_B]=true;
+        }
+        /* New defaults must not turn a retained custom input into two buttons. */
+        for (int source=0;source<2;source++) {
+            struct controller_binding *map=source?host->keyboard_bindings:host->bindings;
+            bool *explicit=supplied+source*TWO_FORTY_BUTTON_COUNT;
+            for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) if (!explicit[i])
+                for (int j=0;j<TWO_FORTY_BUTTON_COUNT;j++)
+                    if (explicit[j] && same_binding(map[i],map[j])) map[i]=(struct controller_binding){0};
+        }
+    }
+    clamp_safe_position(host);
 }
 
 static bool load_boot_game(struct host *host)
@@ -583,11 +631,10 @@ static bool load_game(struct host *host, int index)
 {
     if (index < 0 || index >= host->game_count) return false;
     if (host->display_settings) {
-        host->safe_x=host->saved_safe_x; host->safe_y=host->saved_safe_y;
-        update_safe_area(host);
+        restore_display_area(host);
     }
-    host->controller_settings=host->display_settings=host->setup.active=false;
-    host->ui_wait_release=true;
+    host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
+    block_transition_input(host);
     host->controller_menu_chord_frames=0;
     unload_game(host);
     struct game_record *game = &host->games[index];
@@ -633,11 +680,10 @@ static void process_control(struct host *host)
 
     if (strcmp(line, "menu") == 0) {
         if (host->display_settings) {
-            host->safe_x=host->saved_safe_x; host->safe_y=host->saved_safe_y;
-            update_safe_area(host);
+            restore_display_area(host);
         }
-        host->controller_settings=host->display_settings=host->setup.active=false;
-        host->ui_wait_release=true;
+        host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
+        block_transition_input(host);
         unload_game(host);
     } else if (strcmp(line, "poweroff") == 0) {
         power_down_pi();
@@ -686,6 +732,7 @@ static const uint8_t *glyph(char character)
     };
     static const uint8_t dash[7] = {0,0,0,31,0,0,0};
     static const uint8_t slash[7] = {1,2,2,4,8,8,16};
+    static const uint8_t dot[7] = {0,0,0,0,0,0,4};
     static const uint8_t question[7] = {14,17,1,2,4,0,4};
     static const uint8_t blank[7] = {0,0,0,0,0,0,0};
     if (character >= 'a' && character <= 'z') character -= 32;
@@ -693,6 +740,7 @@ static const uint8_t *glyph(char character)
     if (character >= '0' && character <= '9') return digits[character - '0'];
     if (character == '-') return dash;
     if (character == '/') return slash;
+    if (character == '.') return dot;
     if (character == ' ') return blank;
     return question;
 }
@@ -741,8 +789,8 @@ static void menu_row(struct host *host, int y, const char *label, bool selected)
 
 static void menu_footer(struct host *host, bool can_go_back)
 {
-    char confirm[32],back[32],line[80]; action_label(host,TWO_FORTY_ACTION_CONFIRM,confirm,sizeof(confirm));
-    action_label(host,TWO_FORTY_ACTION_MENU,back,sizeof(back));
+    char confirm[32],back[32],line[80]; button_label(host,TWO_FORTY_BUTTON_B,confirm,sizeof(confirm));
+    button_label(host,TWO_FORTY_BUTTON_SELECT,back,sizeof(back));
     if (can_go_back) snprintf(line,sizeof(line),"%s CHOOSE - %s BACK",confirm,back);
     else snprintf(line,sizeof(line),"%s CHOOSE - UP DOWN MOVE",confirm);
     menu_text(host,10,14,line,1,112,160,170);
@@ -767,38 +815,102 @@ static void draw_launcher(struct host *host)
     menu_footer(host,false);
 }
 
+static bool binding_down(const struct input_set *inputs, const struct controller_binding *binding, bool keyboard);
+static int axis_direction(const struct input_device *device, unsigned int code, int value);
+static bool capture_axis(unsigned int code);
+
+static void append_input_name(char *line, size_t capacity, const char *name)
+{
+    size_t used=strlen(line);
+    if (strstr(line," MORE")) return;
+    if (used+strlen(name)+6>=capacity) {
+        if (used+6<capacity) snprintf(line+used,capacity-used," MORE");
+        return;
+    }
+    snprintf(line+used,capacity-used," %s",name);
+}
+
+/* Poll the device states, including unmapped inputs, without consuming events. */
+static void held_input_names(const struct host *host, bool keyboard, char *line, size_t capacity)
+{
+    copy_text(line,capacity,keyboard?"KEY":"PAD");
+    bool any=false;
+    for (unsigned int code=0;code<=KEY_MAX;code++) {
+        bool held=false;
+        for (int i=0;i<host->inputs.count;i++) {
+            const struct input_device *d=&host->inputs.devices[i];
+            if (d->controller!=keyboard && d->keys[code]) held=true;
+        }
+        if (!held) continue;
+        char name[32]; any=true;
+        if (keyboard) keyboard_name(&(struct controller_binding){BINDING_KEY,code,0},name,sizeof(name));
+        else snprintf(name,sizeof(name),"%u",code);
+        append_input_name(line,capacity,name);
+    }
+    if (!keyboard) for (unsigned int code=0;code<=ABS_MAX;code++) {
+        if (!capture_axis(code)) continue;
+        for (int direction=-1;direction<=1;direction+=2) {
+            bool held=false;
+            for (int i=0;i<host->inputs.count;i++) {
+                const struct input_device *d=&host->inputs.devices[i];
+                if (d->controller && axis_direction(d,code,d->abs_values[code])==direction) held=true;
+            }
+            if (held) {
+                char name[24]; snprintf(name,sizeof(name),"AX%u%s",code,direction<0?"NEG":"POS");
+                append_input_name(line,capacity,name); any=true;
+            }
+        }
+    }
+    if (!any) append_input_name(line,capacity,"NONE");
+}
+
+static void draw_live_inputs(struct host *host)
+{
+    int cell=(host->api.screen_width-20)/6;
+    menu_text(host,10,87,"PAD GREEN / KEY GOLD",1,155,175,180);
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+        bool pad=binding_down(&host->inputs,&host->bindings[i],false);
+        bool key=binding_down(&host->inputs,&host->keyboard_bindings[i],true);
+        int x=10+(i%6)*cell, y=61-(i/6)*21;
+        fill_rect(host,x,y,cell-2,18,pad||key?45:22,pad||key?65:32,pad||key?58:38);
+        menu_text(host,x+2,y+14,button_names[i],1,pad||key?250:130,pad||key?245:150,pad||key?220:157);
+        fill_rect(host,x+2,y+2,(cell-6)/2,3,pad?93:40,pad?220:60,pad?153:60);
+        fill_rect(host,x+cell/2,y+2,(cell-6)/2,3,key?250:60,key?196:55,key?75:40);
+    }
+    char line[96]; size_t capacity=(size_t)(host->api.screen_width-20)/6+1;
+    if (capacity>sizeof(line)) capacity=sizeof(line);
+    held_input_names(host,false,line,capacity); menu_text(host,10,38,line,1,93,220,153);
+    held_input_names(host,true,line,capacity); menu_text(host,10,26,line,1,250,196,75);
+}
+
 static void draw_controller_settings(struct host *host)
 {
     clear_screen();
     int height=host->api.screen_height;
     if (host->setup.active) {
         struct binding_setup *setup=&host->setup;
-        menu_text(host,10,height-20,setup->keyboard?"CONFIGURE KEYBOARD":"CONFIGURE BUTTONS",2,238,240,232);
+        menu_text(host,10,height-18,setup->keyboard?"MAP KEYBOARD":"MAP CONTROLLER",2,238,240,232);
+        int step=setup->step<TWO_FORTY_BUTTON_COUNT?setup->step:TWO_FORTY_BUTTON_COUNT-1;
+        menu_text(host,10,height-47,button_names[step],3,244,194,70);
         char line[80];
-        snprintf(line,sizeof(line),"%s",action_names[setup->step<TWO_FORTY_ACTION_COUNT?setup->step:TWO_FORTY_ACTION_COUNT-1]);
-        menu_text(host,10,height-52,line,3,244,194,70);
-        snprintf(line,sizeof(line),"STEP %d OF %d - %s",setup->step+1,TWO_FORTY_ACTION_COUNT,
-            setup->wait_release?"RELEASE":"PRESS NOW");
-        menu_text(host,10,height-79,line,1,112,180,190);
-        int first=setup->step>2?setup->step-2:0;
-        for (int i=first;i<setup->step;i++) {
-            char name[32];
-            if (setup->keyboard) keyboard_name(&setup->pending[i],name,sizeof(name));
-            else binding_name(host,&setup->pending[i],name,sizeof(name));
-            snprintf(line,sizeof(line),"%s - %s",action_names[i],name);
-            menu_text(host,10,height-108-(i-first)*14,line,1,150,180,170);
-        }
-        menu_text(host,10,49,setup->message,1,244,160,70);
-        menu_text(host,10,31,"SAVES AFTER ALL EIGHT",1,112,160,170);
-        menu_text(host,10,15,setup->keyboard?"F1 CANCEL":"F1 OR HOLD 2 BUTTONS TO CANCEL",1,112,160,170);
+        snprintf(line,sizeof(line),"%d OF %d - %s",step+1,TWO_FORTY_BUTTON_COUNT,
+            setup->wait_release?"RELEASE ALL INPUTS":"PRESS NOW");
+        menu_text(host,10,height-74,line,1,112,180,190);
+        menu_text(host,10,99,setup->message,1,244,160,70);
+        menu_text(host,10,12,setup->keyboard?"F1 CANCEL - SAVES AFTER ALL 12":"HOLD TWO BUTTONS TO CANCEL",1,112,160,170);
+    } else if (host->input_test) {
+        menu_text(host,10,height-22,"TEST BUTTONS",2,238,240,232);
+        menu_text(host,10,height-49,"PRESS ANY KEYS OR BUTTONS",1,112,180,190);
+        menu_text(host,10,height-64,"BOTH SOURCES LIGHT UP BELOW",1,112,180,190);
+        menu_text(host,10,12,"HOLD SELECT 1 SECOND TO RETURN",1,112,160,170);
     } else {
-        menu_text(host,10,height-22,"INPUT SETTINGS",2,238,240,232);
-        menu_text(host,10,height-51,"FOLLOW EACH PROMPT IN ORDER",1,112,160,170);
-        const char *labels[]={"CONFIGURE BUTTONS","CONFIGURE KEYBOARD","BACK"};
-        for (int i=0;i<3;i++) menu_row(host,height-81-i*25,labels[i],host->selected_option==i);
-        menu_text(host,10,38,host->settings_message?host->settings_message:"",1,244,194,70);
-        menu_footer(host,true);
+        menu_text(host,10,height-19,"INPUT SETTINGS",2,238,240,232);
+        menu_text(host,10,height-35,host->settings_message?host->settings_message:"",1,244,194,70);
+        const char *labels[]={"MAP SNES CONTROLLER","MAP KEYBOARD TO SNES","TEST BUTTONS","BACK"};
+        for (int i=0;i<4;i++) menu_row(host,height-48-i*16,labels[i],host->selected_option==i);
+        menu_text(host,10,12,"B CHOOSE - SELECT BACK",1,112,160,170);
     }
+    draw_live_inputs(host);
 }
 
 static void draw_display_settings(struct host *host)
@@ -810,10 +922,12 @@ static void draw_display_settings(struct host *host)
     menu_text(host,10,height-20,"DISPLAY AREA",2,238,240,232);
     menu_text(host,10,height-47,"KEEP ALL FOUR EDGES VISIBLE",1,112,160,170);
     char line[64];
-    snprintf(line,sizeof(line),"SIDE MARGIN - %d",host->safe_x); menu_row(host,height-74,line,host->display_option==0);
-    snprintf(line,sizeof(line),"TOP BOTTOM MARGIN - %d",host->safe_y); menu_row(host,height-98,line,host->display_option==1);
-    menu_row(host,height-122,"SAVE",host->display_option==2);
-    menu_row(host,height-146,"CANCEL",host->display_option==3);
+    snprintf(line,sizeof(line),"SIDE MARGIN - %d",host->safe_x); menu_row(host,height-70,line,host->display_option==0);
+    snprintf(line,sizeof(line),"TOP BOTTOM MARGIN - %d",host->safe_y); menu_row(host,height-86,line,host->display_option==1);
+    snprintf(line,sizeof(line),"HORIZONTAL - %d",host->safe_offset_x); menu_row(host,height-102,line,host->display_option==2);
+    snprintf(line,sizeof(line),"VERTICAL - %d",host->safe_offset_y); menu_row(host,height-118,line,host->display_option==3);
+    menu_row(host,height-134,"SAVE",host->display_option==4);
+    menu_row(host,height-150,"CANCEL",host->display_option==5);
     menu_text(host,10,25,host->settings_message && *host->settings_message?host->settings_message:"LEFT RIGHT ADJUST - UP DOWN MOVE",1,112,160,170);
     menu_footer(host,true);
 }
@@ -953,7 +1067,7 @@ static bool init_graphics(struct host *host)
     eglSwapInterval(host->egl_display, 0);
     glViewport(0, 0, host->mode.hdisplay, host->mode.vdisplay);
     printf("EGL version: %d.%d\n", major, minor);
-    return true;
+    return rect_renderer_init(&host->renderer,host->mode.hdisplay,host->mode.vdisplay);
 }
 
 static bool input_bit(const unsigned char *bits, unsigned int code)
@@ -1078,27 +1192,29 @@ static bool binding_down(const struct input_set *inputs, const struct controller
     return false;
 }
 
-static bool action_down(const struct host *host, int action)
+static bool button_down(const struct host *host, int action)
 {
     return binding_down(&host->inputs,&host->bindings[action],false) ||
         binding_down(&host->inputs,&host->keyboard_bindings[action],true);
 }
 
-static void update_controller_actions(struct host *host)
+static void update_controller_buttons(struct host *host)
 {
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++) {
-        bool down=action_down(host,i);
-        host->inputs.state.actions[i]=down;
-        host->inputs.state.action_pressed[i]=host->inputs.pending_actions[i] || (down && !host->inputs.previous_actions[i]);
-        host->inputs.previous_actions[i]=down;
-        host->inputs.pending_actions[i]=false;
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+        bool down=button_down(host,i);
+        host->inputs.state.buttons[i]=down;
+        host->inputs.state.button_pressed[i]=host->inputs.pending_buttons[i] || (down && !host->inputs.previous_buttons[i]);
+        host->inputs.previous_buttons[i]=down;
+        host->inputs.pending_buttons[i]=false;
     }
 }
 
 static void process_input_event(struct host *host, struct input_device *device, const struct input_event *event)
 {
-    bool before[TWO_FORTY_ACTION_COUNT];
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++) before[i]=action_down(host,i);
+    /* Linux autorepeat is not a physical press or release. */
+    if(event->type==EV_KEY && event->value==2)return;
+    bool before[TWO_FORTY_BUTTON_COUNT];
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) before[i]=button_down(host,i);
     if (event->type==EV_KEY && event->code<=KEY_MAX) {
         bool pressed=event->value==1 && !device->keys[event->code];
         device->keys[event->code]=event->value!=0;
@@ -1116,7 +1232,7 @@ static void process_input_event(struct host *host, struct input_device *device, 
                 if (event->code==KEY_DOWN || event->code==BTN_DPAD_DOWN) host->inputs.controller_down_pressed=true;
                 if (!controller_direction_code(event->code)) host->inputs.state.controller_pressed=true;
             }
-            if (host->setup.keyboard!=device->controller)
+            if (!host->ui_wait_release && host->setup.keyboard!=device->controller)
                 setup_offer(&host->setup,(struct controller_binding){BINDING_KEY,event->code,0});
         }
     } else if (event->type==EV_ABS && event->code<=ABS_MAX) {
@@ -1129,12 +1245,15 @@ static void process_input_event(struct host *host, struct input_device *device, 
                 if (direction<0) host->inputs.controller_up_pressed=true;
                 else host->inputs.controller_down_pressed=true;
             }
-            if (!host->setup.keyboard && capture_axis(event->code))
+            if (!host->ui_wait_release && !host->setup.keyboard && capture_axis(event->code))
                 setup_offer(&host->setup,(struct controller_binding){BINDING_ABS,event->code,direction});
         }
     }
-    for (int i=0;i<TWO_FORTY_ACTION_COUNT;i++)
-        if (!before[i] && action_down(host,i)) host->inputs.pending_actions[i]=true;
+    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)
+        if (!before[i] && button_down(host,i)) host->inputs.pending_buttons[i]=true;
+    /* A release followed by a new press may both arrive between frames. */
+    if(before[TWO_FORTY_BUTTON_START] && !button_down(host,TWO_FORTY_BUTTON_START))
+        host->timing_start_held=host->timing_start_toggled=false;
 }
 
 static void process_input(struct host *host, int fd)
@@ -1149,14 +1268,14 @@ static void process_input(struct host *host, int fd)
 
 static bool menu_confirmed(const struct two_forty_input *input)
 {
-    return input->pressed[KEY_ENTER] || input->action_pressed[TWO_FORTY_ACTION_CONFIRM];
+    return input->button_pressed[TWO_FORTY_BUTTON_B];
 }
 
 static int menu_direction(const struct host *host)
 {
     const struct two_forty_input *input=&host->inputs.state;
-    bool up=input->pressed[KEY_UP] || input->action_pressed[TWO_FORTY_ACTION_UP] || host->inputs.controller_up_pressed;
-    bool down=input->pressed[KEY_DOWN] || input->action_pressed[TWO_FORTY_ACTION_DOWN] || host->inputs.controller_down_pressed;
+    bool up=input->button_pressed[TWO_FORTY_BUTTON_UP];
+    bool down=input->button_pressed[TWO_FORTY_BUTTON_DOWN];
     return (int)down-(int)up;
 }
 
@@ -1181,7 +1300,7 @@ static void update_setup(struct host *host)
     setup_release(&host->setup,buttons_released(&host->inputs,host->setup.keyboard));
     if (host->setup.complete) {
         struct controller_binding *target=host->setup.keyboard?host->keyboard_bindings:host->bindings;
-        struct controller_binding original[TWO_FORTY_ACTION_COUNT];
+        struct controller_binding original[TWO_FORTY_BUTTON_COUNT];
         memcpy(original,target,sizeof(original)); memcpy(target,host->setup.pending,sizeof(original));
         if (save_bindings(host)) host->settings_message="BUTTONS SAVED";
         else { memcpy(target,original,sizeof(original)); host->settings_message="SAVE FAILED - NOTHING CHANGED"; }
@@ -1189,18 +1308,40 @@ static void update_setup(struct host *host)
     }
 }
 
+/* A host-wide gesture, independent of screen transitions and gameplay. Use
+   elapsed time so a slow frame cannot turn two seconds into a longer hold. */
+static void update_timing_toggle(struct host *host,uint64_t now_us)
+{
+    if(!host->inputs.state.buttons[TWO_FORTY_BUTTON_START]) {
+        host->timing_start_held=host->timing_start_toggled=false;
+        return;
+    }
+    if(!host->timing_start_held) {
+        host->timing_start_held=true;host->timing_start_us=now_us;
+    }
+    if(!host->timing_start_toggled && now_us-host->timing_start_us>=2000000u) {
+        host->frame_timing_enabled=!host->frame_timing_enabled;
+        host->timing_start_toggled=true;
+    }
+}
+
 static void update_host(struct host *host)
 {
+    enum host_screen previous_screen=current_screen(host);
     struct two_forty_input *input=&host->inputs.state;
-    update_controller_actions(host);
+    update_controller_buttons(host);
+    update_timing_toggle(host,monotonic_us());
     if (!host->setup.active && input->pressed[KEY_F12]) snapshot_requested=1;
     int direction=menu_direction(host);
     bool confirm=menu_confirmed(input);
-    bool back=input->pressed[KEY_F1] || input->action_pressed[TWO_FORTY_ACTION_MENU];
-    if (host->setup.active) update_setup(host);
-    else if (host->ui_wait_release) {
-        if (buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true)) host->ui_wait_release=false;
-    } else if (host->active_game) {
+    bool back=input->pressed[KEY_F1] || input->button_pressed[TWO_FORTY_BUTTON_SELECT];
+    if (host->ui_wait_release && !input->pressed[KEY_F1]) {
+        bool neutral=buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true);
+        for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
+        two_forty_gate_accept(&host->transition_gate,neutral);
+        host->ui_wait_release=host->transition_gate.blocked;
+    } else if (host->setup.active) update_setup(host);
+    else if (host->active_game) {
         if (recovery_chord(&host->inputs)) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         if (back || host->controller_menu_chord_frames>=60) {
@@ -1208,25 +1349,36 @@ static void update_host(struct host *host)
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         } else host->game_api->update(input);
     } else if (host->display_settings) {
-        if (direction) host->display_option=(host->display_option+direction+4)%4;
-        int delta=(int)(input->pressed[KEY_RIGHT] || input->action_pressed[TWO_FORTY_ACTION_RIGHT])-
-                  (int)(input->pressed[KEY_LEFT] || input->action_pressed[TWO_FORTY_ACTION_LEFT]);
-        int *margin=host->display_option==0?&host->safe_x:&host->safe_y;
-        int maximum=host->display_option==0?32:24;
-        if (host->display_option<2 && delta) { *margin+=delta; if (*margin<0) *margin=0; if (*margin>maximum) *margin=maximum; update_safe_area(host); }
-        if (back || (!direction && confirm && host->display_option==3)) {
-            host->safe_x=host->saved_safe_x; host->safe_y=host->saved_safe_y;
-            update_safe_area(host); host->display_settings=false;
+        if (direction) host->display_option=(host->display_option+direction+6)%6;
+        int delta=(int)input->button_pressed[TWO_FORTY_BUTTON_RIGHT]-
+                  (int)input->button_pressed[TWO_FORTY_BUTTON_LEFT];
+        int *values[]={&host->safe_x,&host->safe_y,&host->safe_offset_x,&host->safe_offset_y};
+        int maximums[]={32,24,host->safe_x,host->safe_y};
+        if (host->display_option<4 && delta) {
+            int *value=values[host->display_option],maximum=maximums[host->display_option];
+            int minimum=host->display_option<2?0:-maximum;
+            *value+=delta;if(*value<minimum)*value=minimum;if(*value>maximum)*value=maximum;
+            update_safe_area(host);
+        }
+        if (back || (!direction && confirm && host->display_option==5)) {
+            restore_display_area(host);host->display_settings=false;
             write_status(host);
-        } else if (!direction && confirm && host->display_option==2) {
+        } else if (!direction && confirm && host->display_option==4) {
             if (save_bindings(host)) { host->display_settings=false; write_status(host); }
             else host->settings_message="SAVE FAILED - TRY AGAIN";
         }
+    } else if (host->controller_settings && host->input_test) {
+        if (input->buttons[TWO_FORTY_BUTTON_SELECT]) host->controller_menu_chord_frames++;
+        else host->controller_menu_chord_frames=0;
+        if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
+            host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
+        }
     } else if (host->controller_settings) {
-        if (direction) host->selected_option=(host->selected_option+direction+3)%3;
+        if (direction) host->selected_option=(host->selected_option+direction+4)%4;
         else if (back) host->controller_settings=false;
         else if (confirm) {
-            if (host->selected_option==2) host->controller_settings=false;
+            if (host->selected_option==3) host->controller_settings=false;
+            else if (host->selected_option==2) { host->input_test=true; host->controller_menu_chord_frames=0; }
             else { setup_begin(&host->setup,host->selected_option==1); host->settings_message=""; }
         }
     } else {
@@ -1238,20 +1390,69 @@ static void update_host(struct host *host)
             else if (host->selected_game==host->game_count+1) {
                 host->display_settings=true; host->display_option=0; host->settings_message="";
                 host->saved_safe_x=host->safe_x; host->saved_safe_y=host->safe_y;
+                host->saved_safe_offset_x=host->safe_offset_x;host->saved_safe_offset_y=host->safe_offset_y;
             } else power_down_pi();
         }
     }
+    if(current_screen(host)!=previous_screen)block_transition_input(host);
+    memset(input->button_pressed,0,sizeof(input->button_pressed));
     memset(input->pressed,0,sizeof(input->pressed));
     input->controller_pressed=false; host->inputs.controller_up_pressed=false; host->inputs.controller_down_pressed=false;
 }
 
+static uint64_t monotonic_us(void)
+{
+    struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+    return (uint64_t)now.tv_sec*1000000u+(uint64_t)now.tv_nsec/1000u;
+}
+
+static unsigned int frame_budget_us(const struct host *host)
+{
+    if (host->mode.clock && host->mode.htotal && host->mode.vtotal)
+        return (unsigned int)((uint64_t)host->mode.htotal*host->mode.vtotal*1000u/host->mode.clock);
+    return 1000000u/(host->mode.vrefresh?host->mode.vrefresh:60);
+}
+
+static void draw_frame_timing(struct host *host)
+{
+    const struct frame_timing *t=&host->timing;
+    unsigned int budget=frame_budget_us(host);
+    struct frame_sample last={0};
+    if (t->count) last=t->history[(t->head+FRAME_HISTORY-1)%FRAME_HISTORY];
+    int width=host->api.screen_width,y=host->api.screen_height-18;
+    fill_rect(host,0,y,width,18,10,19,28);
+    char line[80];
+    snprintf(line,sizeof(line),"W %u.%u F %u.%u MS MISS %llu",last.work_us/1000,(last.work_us%1000)/100,
+        last.interval_us/1000,(last.interval_us%1000)/100,(unsigned long long)t->missed_total);
+    menu_text(host,3,y+16,line,1,225,231,219);
+    int bar=width*2/3-8;
+    unsigned int work=last.work_us>budget*2?budget*2:last.work_us;
+    unsigned int interval=last.interval_us>budget*2?budget*2:last.interval_us;
+    fill_rect(host,3,y+2,bar,5,29,42,52);
+    fill_rect(host,3,y+2,(int)((uint64_t)interval*bar/(budget*2)),5,80,103,118);
+    fill_rect(host,3,y+2,(int)((uint64_t)work*bar/(budget*2)),5,
+        work>budget?241:work>budget*8/10?241:91,work>budget?82:work>budget*8/10?190:212,work>budget?92:95);
+    fill_rect(host,3+bar/2,y+1,1,7,244,236,209);
+    int history_width=width-bar-10;
+    for(int column=0;column<history_width;column++) {
+        unsigned int age=(unsigned int)(history_width-1-column);
+        if(age>=t->count)continue;
+        const struct frame_sample *s=&t->history[(t->head+FRAME_HISTORY-1-age)%FRAME_HISTORY];
+        fill_rect(host,bar+7+column,y+2,1,5,s->missed?241:55,s->missed?82:147,s->missed?92:108);
+    }
+}
+
 static void draw_host(struct host *host)
 {
+    host->submitted_rectangles=0;
+    rect_renderer_begin(&host->renderer);
     clear_screen();
     if (host->active_game != NULL) host->game_api->render();
     else if (host->display_settings) draw_display_settings(host);
     else if (host->controller_settings) draw_controller_settings(host);
     else draw_launcher(host);
+    if (host->frame_timing_enabled) draw_frame_timing(host);
+    rect_renderer_flush(&host->renderer);
     glDisable(GL_SCISSOR_TEST);
     if (snapshot_requested) { snapshot_requested = 0; save_snapshot(host); }
 }
@@ -1259,8 +1460,10 @@ static void draw_host(struct host *host)
 static void flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
                          unsigned int tv_usec, void *user_data)
 {
-    (void)fd; (void)sequence; (void)tv_sec; (void)tv_usec;
-    ((struct host *)user_data)->flip_pending = false;
+    (void)fd;
+    struct host *host=user_data;
+    frame_timing_present(&host->timing,sequence,(uint64_t)tv_sec*1000000u+tv_usec);
+    host->flip_pending = false;
 }
 
 static void wait_for_events(struct host *host)
@@ -1296,6 +1499,7 @@ static bool first_frame(struct host *host)
 
 static bool next_frame(struct host *host)
 {
+    uint64_t began=monotonic_us();
     update_host(host);
     draw_host(host);
     host->frame_number++;
@@ -1311,7 +1515,15 @@ static bool next_frame(struct host *host)
         gbm_surface_release_buffer(host->gbm_surface, next);
         return false;
     }
+    host->timing.pending_work_us=(uint32_t)(monotonic_us()-began);
     wait_for_events(host);
+    if (host->timing.count && host->frame_number%300==0) {
+        const struct frame_sample *s=&host->timing.history[(host->timing.head+FRAME_HISTORY-1)%FRAME_HISTORY];
+        printf("Frame timing: work=%uus interval=%uus missed=%llu rects=%u batches=%u\n",
+            s->work_us,s->interval_us,(unsigned long long)host->timing.missed_total,
+            host->renderer.rectangles,host->renderer.batches);
+        fflush(stdout);
+    }
     if (!host->flip_pending) {
         gbm_surface_release_buffer(host->gbm_surface, host->front_bo);
         host->front_bo = next;
@@ -1331,6 +1543,7 @@ static void cleanup(struct host *host)
     if (host->front_bo != NULL && host->gbm_surface != NULL)
         gbm_surface_release_buffer(host->gbm_surface, host->front_bo);
     if (host->egl_display != EGL_NO_DISPLAY) {
+        if (host->egl_context != EGL_NO_CONTEXT) rect_renderer_destroy(&host->renderer);
         eglMakeCurrent(host->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (host->egl_surface != EGL_NO_SURFACE)
             eglDestroySurface(host->egl_display, host->egl_surface);
@@ -1373,7 +1586,7 @@ int main(void)
     host.api = (struct two_forty_host_api){.abi_version=TWO_FORTY_ABI_VERSION,
         .screen_width=host.mode.hdisplay,.screen_height=host.mode.vdisplay,
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
-        .draw_text=draw_text,.action_label=action_label};
+        .draw_text=draw_text,.button_label=button_label};
     update_safe_area(&host);
     open_inputs(&host.inputs);
     mkdir("run", 0755);
@@ -1394,7 +1607,7 @@ int main(void)
         cleanup(&host);
         return EXIT_FAILURE;
     }
-    puts("Two Forty host running. Enter starts, F1/Esc returns, F12 snapshots.");
+    puts("Two Forty host running. SNES B chooses, Select returns, F1 recovers, F12 snapshots.");
     while (host.running && !stop_requested) {
         if (!next_frame(&host)) host.running = false;
     }

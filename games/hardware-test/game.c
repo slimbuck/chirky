@@ -174,12 +174,12 @@ static void game_update(const struct two_forty_input *input)
     const int manual_speed = 3;
     int dx = 0;
     int dy = 0;
-    if (input->actions[TWO_FORTY_ACTION_LEFT]) dx -= manual_speed;
-    if (input->actions[TWO_FORTY_ACTION_RIGHT]) dx += manual_speed;
-    if (input->actions[TWO_FORTY_ACTION_UP]) dy += manual_speed;
-    if (input->actions[TWO_FORTY_ACTION_DOWN]) dy -= manual_speed;
-    if (input->action_pressed[TWO_FORTY_ACTION_CONFIRM]) automatic = !automatic;
-    if (input->action_pressed[TWO_FORTY_ACTION_JUMP])
+    if (input->buttons[TWO_FORTY_BUTTON_LEFT]) dx -= manual_speed;
+    if (input->buttons[TWO_FORTY_BUTTON_RIGHT]) dx += manual_speed;
+    if (input->buttons[TWO_FORTY_BUTTON_UP]) dy += manual_speed;
+    if (input->buttons[TWO_FORTY_BUTTON_DOWN]) dy -= manual_speed;
+    if (input->button_pressed[TWO_FORTY_BUTTON_B]) automatic = !automatic;
+    if (input->button_pressed[TWO_FORTY_BUTTON_Y])
         host->play_sound(host->context, settings.sound_device, settings.sound);
 
     if (dx != 0 || dy != 0) {

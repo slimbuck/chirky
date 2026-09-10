@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "editors": [
+    {
+      "id": "level-01",
+      "name": "Level 1 - The Rose Garden",
+      "type": "tilemap",
+      "file": "assets/level-01.txt",
+      "tileSize": 16,
+      "empty": ".",
+      "viewport": {
+        "width": 18,
+        "height": 11
+      },
+      "palette": [
+        {
+          "value": ".",
+          "name": "Lawn",
+          "color": "#386b4e"
+        },
+        {
+          "value": "S",
+          "name": "Gardener spawn",
+          "color": "#f7d6b4",
+          "minimum": 1,
+          "maximum": 1
+        },
+        {
+          "value": "d",
+          "name": "Dead black rose",
+          "color": "#101320",
+          "minimum": 1
+        },
+        {
+          "value": "r",
+          "name": "Crimson rose",
+          "color": "#da4f6a"
+        },
+        {
+          "value": "p",
+          "name": "Pink rose",
+          "color": "#e591ba"
+        },
+        {
+          "value": "a",
+          "name": "Apricot rose",
+          "color": "#edaa60"
+        },
+        {
+          "value": "w",
+          "name": "Cream rose",
+          "color": "#fff3d6"
+        }
+      ]
+    }
+  ]
+}

@@ -5,25 +5,30 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define TWO_FORTY_ABI_VERSION 5
+#define TWO_FORTY_ABI_VERSION 6
 
-enum two_forty_action {
-    TWO_FORTY_ACTION_LEFT,
-    TWO_FORTY_ACTION_RIGHT,
-    TWO_FORTY_ACTION_UP,
-    TWO_FORTY_ACTION_DOWN,
-    TWO_FORTY_ACTION_JUMP,
-    TWO_FORTY_ACTION_DASH,
-    TWO_FORTY_ACTION_CONFIRM,
-    TWO_FORTY_ACTION_MENU,
-    TWO_FORTY_ACTION_COUNT
+enum two_forty_button {
+    TWO_FORTY_BUTTON_LEFT,
+    TWO_FORTY_BUTTON_RIGHT,
+    TWO_FORTY_BUTTON_UP,
+    TWO_FORTY_BUTTON_DOWN,
+    TWO_FORTY_BUTTON_Y,
+    TWO_FORTY_BUTTON_B,
+    TWO_FORTY_BUTTON_A,
+    TWO_FORTY_BUTTON_X,
+    TWO_FORTY_BUTTON_L,
+    TWO_FORTY_BUTTON_R,
+    TWO_FORTY_BUTTON_START,
+    TWO_FORTY_BUTTON_SELECT,
+    TWO_FORTY_BUTTON_COUNT
 };
 
 struct two_forty_input {
+    /* Raw keyboard state is reserved for host setup/recovery. Games use buttons. */
     bool keys[KEY_MAX + 1];
     bool pressed[KEY_MAX + 1];
-    bool actions[TWO_FORTY_ACTION_COUNT];
-    bool action_pressed[TWO_FORTY_ACTION_COUNT];
+    bool buttons[TWO_FORTY_BUTTON_COUNT];
+    bool button_pressed[TWO_FORTY_BUTTON_COUNT];
     bool controller_pressed;
 };
 
@@ -41,7 +46,7 @@ struct two_forty_host_api {
     void (*draw_text)(void *context, int x, int y, const char *text, int scale,
                       unsigned char red, unsigned char green,
                       unsigned char blue);
-    void (*action_label)(void *context, enum two_forty_action action,
+    void (*button_label)(void *context, enum two_forty_button action,
                          char *text, size_t capacity);
 };
 
