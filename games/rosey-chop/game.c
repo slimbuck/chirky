@@ -174,7 +174,8 @@ static void update_gameplay(const struct two_forty_input *input)
     }
     if (garden.phase != PLAY) {
         garden.result_age++;
-        if ((garden.phase == TITLE || garden.result_age > 40) && input->button_pressed[TWO_FORTY_BUTTON_B]) reset_run();
+        if ((garden.phase == TITLE && two_forty_title_pressed(input)) ||
+            (garden.phase != TITLE && garden.result_age > 40 && input->button_pressed[TWO_FORTY_BUTTON_B])) reset_run();
         return;
     }
     /* A storm or sting takes precedence over a final chop on the same tick. */

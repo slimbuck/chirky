@@ -172,7 +172,8 @@ static void overlay(void)
         center(top+84,"ONE WASP STING ENDS THE RUN",1,0xe9b76a);
         action_line(top+101,TWO_FORTY_BUTTON_B,"CHOP / HOLD TO SWEEP");
         action_line(top+113,TWO_FORTY_BUTTON_Y,"JUMP TO DODGE");
-        action_line(top+135,TWO_FORTY_BUTTON_B,"BEGIN");
+        center(top+125,"SELECT - PAUSE",1,0xaacb9f);
+        center(top+139,"PRESS A BUTTON TO BEGIN",1,0xffedcc);
     } else {
         bool won = garden.phase == WON;
         center(top+18,won ? "GARDEN SAVED" : "GAME OVER",2,won ? 0xffb8c6 : 0xe9b76a);

@@ -325,8 +325,7 @@ static void update_gameplay(const struct two_forty_input *input)
     frame_number++; update_particles();
     if (phase==PHASE_TITLE) {
         title_timer++;
-        if (input->button_pressed[TWO_FORTY_BUTTON_B] ||
-            (settings.title_frames > 0 && title_timer >= settings.title_frames)) new_run();
+        if (two_forty_title_pressed(input)) new_run();
     } else if (phase==PHASE_PLAY) update_play(input);
     else if (phase==PHASE_DEAD) {
         if (--death_timer<=0) respawn();

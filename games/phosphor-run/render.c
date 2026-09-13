@@ -150,10 +150,9 @@ static void render_hud(void)
 
 void render_title(void)
 {
-    char jump[32],dash[32],confirm[32],menu[32],line[96];
+    char jump[32],dash[32],menu[32],line[96];
     controller_label(TWO_FORTY_BUTTON_B,"B",jump,sizeof(jump));
     controller_label(TWO_FORTY_BUTTON_Y,"Y",dash,sizeof(dash));
-    controller_label(TWO_FORTY_BUTTON_B,"B",confirm,sizeof(confirm));
     controller_label(TWO_FORTY_BUTTON_SELECT,"SELECT",menu,sizeof(menu));
     render_background();
     int height=host->screen_height;
@@ -164,9 +163,9 @@ void render_title(void)
     centered_text(height-116,"D-PAD MOVE / L RESTART",1,settings.edge);
     snprintf(line,sizeof(line),"JUMP - %s",jump); centered_text(height-130,line,1,settings.edge);
     snprintf(line,sizeof(line),"DASH - %s",dash); centered_text(height-144,line,1,settings.edge);
-    snprintf(line,sizeof(line),"%s - RETURN TO LAUNCHER",menu); centered_text(height-158,line,1,settings.edge);
+    snprintf(line,sizeof(line),"%s - PAUSE",menu); centered_text(height-158,line,1,settings.edge);
     if ((title_timer/28)&1) {
-        snprintf(line,sizeof(line),"%s - BEGIN",confirm); centered_text(14,line,1,settings.paper);
+        centered_text(14,"PRESS A BUTTON TO BEGIN",1,settings.paper);
     }
 }
 
@@ -181,8 +180,7 @@ void render_game(void)
         centered_text(middle+5,"SIGNAL LOST",2,settings.hazard);
     } else if (phase==PHASE_WIN) {
         char confirm[32],line[96];
-        controller_label(TWO_FORTY_BUTTON_B,"B",confirm,sizeof(confirm));
-        rectangle(8,middle-51,host->screen_width-16,102,settings.background);
+            rectangle(8,middle-51,host->screen_width-16,102,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);
         snprintf(line,sizeof(line),"%s - %s",confirm,current_level+1<content.level_count?"NEXT LEVEL":"RUN AGAIN");

@@ -19,7 +19,7 @@ struct colour { unsigned char r, g, b; };
 struct settings {
     float move_accel, max_run_speed, ground_friction, air_drag;
     float gravity, max_fall_speed, jump_speed, dash_speed, camera_lag;
-    int coyote_frames, jump_buffer_frames, dash_frames, title_frames;
+    int coyote_frames, jump_buffer_frames, dash_frames;
     char content[512], sound_device[128];
     int start_level;
     char jump_sound[512], dash_sound[512], shard_sound[512];

@@ -65,8 +65,11 @@ int main(void)
     game=two_forty_game_entry(); assert(game->abi_version==TWO_FORTY_ABI_VERSION);
     assert(game->init(&test_host,"games/rosey-chop/game.conf"));
     assert(garden.total==18 && garden.rose_count==96 && garden.phase==TITLE);
-    for (int i=0;i<120;i++) game->update(&controls);
-    assert(!garden.elapsed); preview("title"); begin(); preview("garden");
+    for (int i=0;i<3600;i++) game->update(&controls);
+    assert(garden.phase==TITLE && !garden.elapsed); preview("title");
+    controls.button_pressed[TWO_FORTY_BUTTON_START]=true;game->update(&controls);
+    controls.button_pressed[TWO_FORTY_BUTTON_START]=false;assert(garden.phase==PLAY);
+    game->update(&controls);game->update(&controls);preview("garden");
     controls.buttons[TWO_FORTY_BUTTON_LEFT]=true;
     for (int i=0;i<150;i++) game->update(&controls);
     assert(garden.x==10); controls.buttons[TWO_FORTY_BUTTON_LEFT]=false;

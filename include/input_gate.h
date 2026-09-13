@@ -3,6 +3,14 @@
 #include "two_forty.h"
 #include <string.h>
 
+/* A fresh face, shoulder, or Start press begins a title screen. Select pauses. */
+static inline bool two_forty_title_pressed(const struct two_forty_input *input)
+{
+    for(int button=TWO_FORTY_BUTTON_Y;button<=TWO_FORTY_BUTTON_START;button++)
+        if(input->button_pressed[button])return true;
+    return false;
+}
+
 /* Screen transitions consume the opening gesture. Require two neutral updates
    before accepting a fresh press; short release/press bounce cannot cross screens. */
 struct two_forty_input_gate { bool blocked; unsigned int neutral_frames; };

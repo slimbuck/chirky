@@ -34,7 +34,7 @@ is held B, and `input->button_pressed[TWO_FORTY_BUTTON_Y]` is a new Y press.
 The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
 Each game owns what its buttons do. Use `button_label` for SNES names; keyboard
 emulation belongs to the host, so games must not read raw keyboard state.
-The host reserves Select to return to the launcher. Rebuild host and all game
+The host reserves Select for its pause menu; A resumes, B selects an option. Rebuild host and all game
 modules together when upgrading from the previous action-based ABI.
 
 For screen/phase changes, use the shared `include/input_gate.h` helper. Keep a

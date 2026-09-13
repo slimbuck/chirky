@@ -220,7 +220,7 @@ static void game_render(void)
                             rgb[0], rgb[1], rgb[2]);
         }
     }
-    host->draw_text(host->context,10,12,"B MOTION - X SOUND - Y BACK",1,238,240,232);
+    host->draw_text(host->context,10,12,"B MOTION - X SOUND - A BACK",1,238,240,232);
 }
 
 static const struct two_forty_game_api api = {

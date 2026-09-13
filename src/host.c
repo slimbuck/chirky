@@ -238,6 +238,8 @@ struct host {
     struct game_record games[MAX_GAMES];
     int game_count;
     int selected_game;
+    bool paused;
+    int pause_option;
     struct launcher_config launcher;
     void *game_library;
     const struct two_forty_game_api *game_api;
@@ -281,11 +283,11 @@ static void block_transition_input(struct host *host)
     memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
 }
 
-enum host_screen { SCREEN_LAUNCHER,SCREEN_SETTINGS,SCREEN_INPUT,SCREEN_SETUP,SCREEN_TEST,SCREEN_DISPLAY,SCREEN_GAME };
+enum host_screen { SCREEN_LAUNCHER,SCREEN_SETTINGS,SCREEN_INPUT,SCREEN_SETUP,SCREEN_TEST,SCREEN_DISPLAY,SCREEN_GAME,SCREEN_PAUSE };
 static enum host_screen current_screen(const struct host *host)
 {
     if(host->setup.active)return SCREEN_SETUP;
-    if(host->active_game)return SCREEN_GAME;
+    if(host->active_game)return host->paused?SCREEN_PAUSE:SCREEN_GAME;
     if(host->display_settings)return SCREEN_DISPLAY;
     if(host->controller_settings)return host->input_test?SCREEN_TEST:SCREEN_INPUT;
     if(host->settings_menu)return SCREEN_SETTINGS;
@@ -478,7 +480,7 @@ static void write_status(const struct host *host)
     fprintf(file, "{\n  \"pid\": %ld,\n  \"mode\": \"%s\",\n  \"game\": \"%s\",\n"
                   "  \"width\": %u,\n  \"height\": %u,\n  \"refresh\": %u,\n"
                   "  \"viewport_width\": %d,\n  \"viewport_height\": %d\n}\n",
-            (long)getpid(), (const char *[]){"launcher","settings","input","setup","test","display","game"}[current_screen(host)],
+            (long)getpid(), (const char *[]){"launcher","settings","input","setup","test","display","game","paused"}[current_screen(host)],
             host->active_game ? host->active_game->id : "",
             host->mode.hdisplay, host->mode.vdisplay, host->mode.vrefresh,
             host->api.screen_width, host->api.screen_height);
@@ -657,6 +659,7 @@ static bool load_boot_game(struct host *host)
 
 static void unload_game(struct host *host)
 {
+    host->paused=false;host->pause_option=0;
     if (host->game_api != NULL) host->game_api->shutdown();
     host->game_api = NULL;
     host->active_game = NULL;
@@ -861,7 +864,7 @@ static void menu_row(struct host *host, int y, const char *label, bool selected)
 static void menu_footer(struct host *host, bool can_go_back)
 {
     char confirm[32],back[32],line[80]; button_label(host,TWO_FORTY_BUTTON_B,confirm,sizeof(confirm));
-    button_label(host,TWO_FORTY_BUTTON_Y,back,sizeof(back));
+    button_label(host,TWO_FORTY_BUTTON_A,back,sizeof(back));
     if (can_go_back) snprintf(line,sizeof(line),"%s SELECT - %s BACK",confirm,back);
     else snprintf(line,sizeof(line),"%s SELECT - UP DOWN MOVE",confirm);
     menu_text(host,10,14,line,1,112,160,170);
@@ -986,13 +989,13 @@ static void draw_controller_settings(struct host *host)
         menu_text(host,10,height-22,"TEST BUTTONS",2,238,240,232);
         menu_text(host,10,height-49,"PRESS ANY KEYS OR BUTTONS",1,112,180,190);
         menu_text(host,10,height-64,"BOTH SOURCES LIGHT UP BELOW",1,112,180,190);
-        menu_text(host,10,12,"HOLD Y 1 SECOND TO RETURN",1,112,160,170);
+        menu_text(host,10,12,"HOLD A 1 SECOND TO RETURN",1,112,160,170);
     } else {
         menu_text(host,10,height-19,"INPUT SETTINGS",2,238,240,232);
         menu_text(host,10,height-35,host->settings_message?host->settings_message:"",1,244,194,70);
         const char *labels[]={"MAP SNES CONTROLLER","MAP KEYBOARD TO SNES","TEST BUTTONS","BACK"};
         for (int i=0;i<4;i++) menu_row(host,height-48-i*16,labels[i],host->selected_option==i);
-        menu_text(host,10,12,"B SELECT - Y BACK",1,112,160,170);
+        menu_text(host,10,12,"B SELECT - A BACK",1,112,160,170);
     }
     draw_live_inputs(host);
 }
@@ -1419,7 +1422,7 @@ static void update_host(struct host *host)
     if (!host->setup.active && input->pressed[KEY_F12]) snapshot_requested=1;
     int direction=menu_direction(host);
     bool confirm=menu_confirmed(input);
-    bool back=input->pressed[KEY_F1] || input->button_pressed[TWO_FORTY_BUTTON_Y];
+    bool back=input->pressed[KEY_F1] || input->button_pressed[TWO_FORTY_BUTTON_A];
     if (host->ui_wait_release && !input->pressed[KEY_F1]) {
         bool neutral=buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true);
         for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
@@ -1430,10 +1433,18 @@ static void update_host(struct host *host)
         if (recovery_chord(&host->inputs)) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         bool hardware=!strcmp(host->active_game->id,"hardware-test");
-        bool exit_game=input->pressed[KEY_F1] || input->button_pressed[hardware?TWO_FORTY_BUTTON_Y:TWO_FORTY_BUTTON_SELECT];
-        if (exit_game || host->controller_menu_chord_frames>=60) {
+        if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60 || (hardware && back)) {
             unload_game(host); host->controller_settings=false;
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
+        } else if(host->paused) {
+            if(direction)host->pause_option=(host->pause_option+direction+2)%2;
+            else if(back || input->button_pressed[TWO_FORTY_BUTTON_SELECT])host->paused=false;
+            else if(confirm) {
+                if(host->pause_option==0)host->paused=false;
+                else {host->settings_menu=false;unload_game(host);}
+            }
+        } else if(!hardware && input->button_pressed[TWO_FORTY_BUTTON_SELECT]) {
+            host->paused=true;host->pause_option=0;
         } else host->game_api->update(input);
     } else if (host->display_settings) {
         if (direction) host->display_option=(host->display_option+direction+6)%6;
@@ -1455,7 +1466,7 @@ static void update_host(struct host *host)
             else host->settings_message="SAVE FAILED - TRY AGAIN";
         }
     } else if (host->controller_settings && host->input_test) {
-        if (input->buttons[TWO_FORTY_BUTTON_Y]) host->controller_menu_chord_frames++;
+        if (input->buttons[TWO_FORTY_BUTTON_A]) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
             host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
@@ -1531,12 +1542,35 @@ static void draw_frame_timing(struct host *host)
     }
 }
 
+static void draw_pause_menu(struct host *host)
+{
+    const int width=216,height=112;
+    int x=(host->api.screen_width-width)/2,y=(host->api.screen_height-height)/2;
+    fill_rect(host,x+3,y-3,width,height,4,8,11);
+    fill_rect(host,x,y,width,height,40,175,212);
+    fill_rect(host,x+1,y+1,width-2,height-2,12,22,28);
+    menu_text(host,x+12,y+89,"PAUSED",2,238,240,232);
+    fill_rect(host,x+12,y+77,width-24,1,40,75,85);
+    const char *labels[]={"CONTINUE GAME","RETURN TO LAUNCHER"};
+    for(int i=0;i<2;i++) {
+        bool selected=host->pause_option==i;
+        int row=y+61-i*24;
+        fill_rect(host,x+8,row-13,width-16,20,selected?28:14,selected?74:30,selected?84:40);
+        fill_rect(host,x+12,row-9,3,10,selected?244:70,selected?194:110,70);
+        menu_text(host,x+22,row,labels[i],1,selected?250:170,selected?248:185,selected?236:190);
+    }
+    menu_text(host,x+12,y+10,"B SELECT - A BACK",1,112,160,170);
+}
+
 static void draw_host(struct host *host)
 {
     host->submitted_rectangles=0;
     rect_renderer_begin(&host->renderer);
     clear_screen();
-    if (host->active_game != NULL) host->game_api->render();
+    if (host->active_game != NULL) {
+        host->game_api->render();
+        if(host->paused)draw_pause_menu(host);
+    }
     else if (host->display_settings) draw_display_settings(host);
     else if (host->controller_settings) draw_controller_settings(host);
     else if (host->settings_menu) draw_settings_menu(host);
@@ -1698,7 +1732,7 @@ int main(void)
         cleanup(&host);
         return EXIT_FAILURE;
     }
-    puts("Two Forty host running. Menus: B selects, Y goes back. Games: Select returns, F1 recovers, F12 snapshots.");
+    puts("Two Forty host running. Menus: B selects, A goes back. Games: Select pauses, F1 recovers, F12 snapshots.");
     while (host.running && !stop_requested) {
         if (!next_frame(&host)) host.running = false;
     }

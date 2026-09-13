@@ -26,7 +26,6 @@ static void default_settings(void)
         .move_accel=.34f,.max_run_speed=2.35f,.ground_friction=.72f,.air_drag=.95f,
         .gravity=.34f,.max_fall_speed=5.8f,.jump_speed=5.35f,.dash_speed=6.2f,
         .camera_lag=.12f,.coyote_frames=7,.jump_buffer_frames=7,.dash_frames=8,
-        .title_frames=240,
         .background={5,10,20},.deep={9,26,43},.platform={22,60,85},
         .edge={53,215,211},.phosphor={156,255,87},.amber={255,180,59},
         .hazard={255,91,79},.paper={244,241,207}
@@ -66,7 +65,6 @@ bool load_settings(const char *path)
         else if (!strcmp(key,"coyote_frames")) settings.coyote_frames = atoi(value);
         else if (!strcmp(key,"jump_buffer_frames")) settings.jump_buffer_frames = atoi(value);
         else if (!strcmp(key,"dash_frames")) settings.dash_frames = atoi(value);
-        else if (!strcmp(key,"title_frames")) settings.title_frames = atoi(value);
         else if (!strcmp(key,"content")) copy_text(settings.content,sizeof(settings.content),value);
         else if (!strcmp(key,"start_level")) settings.start_level=atoi(value);
         else if (!strcmp(key,"sound_device")) copy_text(settings.sound_device,sizeof(settings.sound_device),value);

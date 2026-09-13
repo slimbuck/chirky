@@ -92,8 +92,8 @@ async function refreshStatus() {
       displayViewport = {width:status.viewport_width, height:status.viewport_height};
     activeGame = status.game || "";
     $("#reloadBtn").disabled=!activeGame;
-    $("#modeTitle").textContent = status.mode === "game" ?
-      (games.find((game) => game.id === status.game)?.name || status.game) : ({input:"Input settings",display:"Display area",settings:"Settings",setup:"Input mapping",test:"Input test"}[status.mode] || "Game launcher");
+    $("#modeTitle").textContent = (status.mode === "game" || status.mode === "paused") ?
+      (games.find((game) => game.id === status.game)?.name || status.game) + (status.mode === "paused" ? " — paused" : "") : ({input:"Input settings",display:"Display area",settings:"Settings",setup:"Input mapping",test:"Input test"}[status.mode] || "Game launcher");
     $("#modePill").textContent = status.mode;
     $("#outputMode").textContent = `${status.width}×${status.height} @ ${status.refresh}Hz`;
     const diagnostics = parseDiagnostics(data.diagnostics);

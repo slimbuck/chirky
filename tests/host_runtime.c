@@ -73,6 +73,52 @@ static void check_timing_toggle(void)
     update_timing_toggle(&h,19000000);assert(!h.frame_timing_enabled);
 }
 
+static struct host *pause_render_host;
+static unsigned int pause_renders;
+static void fake_pause_render(void)
+{
+    pause_renders++;
+    fill_rect(pause_render_host,0,0,pause_render_host->api.screen_width,pause_render_host->api.screen_height,21,42,63);
+}
+
+static void check_pause_menu(const char *output_dir)
+{
+    struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
+    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.mode.hdisplay=320;h.mode.vdisplay=240;h.safe_x=32;h.safe_y=24;update_safe_area(&h);
+    strcpy(h.games[0].id,"phosphor-run");strcpy(h.games[0].name,"Phosphor Run");h.game_count=1;
+    const struct two_forty_game_api fake={.update=fake_update,.shutdown=fake_shutdown,.render=fake_pause_render};
+    pause_render_host=&h;pause_renders=0;
+    h.active_game=&h.games[0];h.game_api=&fake;
+    unsigned int saved_updates=game_updates;
+    event(&h,1,EV_KEY,KEY_ESC,1);update_host(&h);
+    assert(h.paused && h.active_game && current_screen(&h)==SCREEN_PAUSE);
+    for(int i=0;i<600;i++)update_host(&h);
+    assert(h.paused && game_updates==saved_updates);
+    event(&h,1,EV_KEY,KEY_ESC,0);for(int i=0;i<3;i++)update_host(&h);
+    draw_host(&h);
+    assert(pause_renders==1 && game_updates==saved_updates);
+    /* The frozen game remains visible outside the centered pause panel. */
+    assert(framebuffer[h.safe_y+4][h.safe_x+4][0]==21);
+    assert(framebuffer[h.safe_y+4][h.safe_x+4][1]==42);
+    assert(framebuffer[h.safe_y+4][h.safe_x+4][2]==63);
+    int panel_x=h.safe_x+(h.api.screen_width-216)/2;
+    int panel_y=h.safe_y+(h.api.screen_height-112)/2;
+    assert(framebuffer[panel_y][panel_x][1]==175);
+    draw_host(&h);assert(pause_renders==2 && game_updates==saved_updates);
+    char path[512];snprintf(path,sizeof(path),"%s/pause-menu.ppm",output_dir);write_preview(path);
+    event(&h,1,EV_KEY,KEY_X,1);update_host(&h);assert(!h.paused && h.active_game);
+    for(int i=0;i<30;i++)update_host(&h);
+    assert(game_updates==saved_updates);
+    event(&h,1,EV_KEY,KEY_X,0);for(int i=0;i<3;i++)update_host(&h);
+    assert(game_updates==saved_updates+1);
+    tap(&h,1,KEY_ESC);assert(h.paused);
+    tap(&h,1,KEY_C);assert(!h.paused && h.active_game);
+    tap(&h,1,KEY_ESC);tap(&h,1,KEY_DOWN);assert(h.paused && h.pause_option==1);
+    tap(&h,1,KEY_X);assert(!h.active_game && !h.paused && current_screen(&h)==SCREEN_LAUNCHER);
+    game_updates=saved_updates;
+}
+
 static void check_settings_shortcuts(void)
 {
     struct host h={0};h.mode.hdisplay=320;h.mode.vdisplay=240;h.safe_x=16;h.safe_y=12;
@@ -104,15 +150,15 @@ static void check_launcher_menu(void)
     tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.settings_option==2);
     const struct two_forty_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
     h.active_game=&h.games[2];h.game_api=&fake;
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS && h.settings_option==2);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER && h.selected_game==2);
+    tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_SETTINGS && h.settings_option==2);
+    tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_LAUNCHER && h.selected_game==2);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_UP);assert(h.settings_option==3);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_LAUNCHER);
     tap(&h,1,KEY_X);tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_INPUT);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_LAUNCHER);
     tap(&h,1,KEY_DOWN);assert(h.selected_game==3);
     tap(&h,1,KEY_DOWN);assert(h.selected_game==0);
 }
@@ -145,7 +191,7 @@ static void check_transition_gates(void)
     event(&h,0,EV_ABS,ABS_HAT0X,0);update_host(&h);assert(h.setup.step==1);
     event(&h,1,EV_KEY,KEY_F1,1);update_host(&h);assert(!h.setup.active && h.controller_settings);
     event(&h,1,EV_KEY,KEY_F1,0);for(int i=0;i<3;i++)update_host(&h);
-    event(&h,0,EV_KEY,BTN_SOUTH,1);update_host(&h);assert(!h.controller_settings);
+    event(&h,0,EV_KEY,BTN_NORTH,1);update_host(&h);assert(!h.controller_settings);
     for(int i=0;i<4;i++)update_host(&h);
     assert(!h.controller_settings);
     /* The shared game filter suppresses both held and edge-triggered buttons. */
@@ -255,9 +301,9 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"PAD NONE"));
     held_input_names(host,true,name,sizeof(name));assert(!strcmp(name,"KEY NONE"));
     tap(host,0,BTN_TR2);tap(host,0,BTN_TL2);assert(host->input_test);
-    event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<59;i++) update_host(host);assert(host->input_test);
+    event(host,1,EV_KEY,KEY_C,1);for(int i=0;i<59;i++) update_host(host);assert(host->input_test);
     update_host(host);assert(!host->input_test && host->controller_settings);
-    event(host,1,EV_KEY,KEY_R,0);update_host(host);
+    event(host,1,EV_KEY,KEY_C,0);update_host(host);
 }
 
 int main(int argc,char **argv)
@@ -265,6 +311,7 @@ int main(int argc,char **argv)
     assert(argc==2);
     char directory[]="/tmp/two-forty-host-test-XXXXXX";assert(mkdtemp(directory));assert(chdir(directory)==0);
     assert(mkdir("config",0700)==0);
+    check_pause_menu(argv[1]);
     check_settings_shortcuts();
     check_launcher_menu();
     check_transition_gates();
@@ -346,7 +393,7 @@ int main(int argc,char **argv)
     host.controller_settings=false;host.settings_menu=true;host.settings_option=1;
     tap(&host,0,BTN_TR2);assert(host.display_settings);
     tap(&host,1,KEY_D);assert(host.safe_x==17);
-    tap(&host,1,KEY_R);assert(!host.display_settings && host.safe_x==16);
+    tap(&host,1,KEY_C);assert(!host.display_settings && host.safe_x==16);
     tap(&host,0,BTN_TR2);tap(&host,1,KEY_D);tap(&host,1,KEY_S);tap(&host,1,KEY_D);
     assert(host.safe_x==17 && host.safe_y==13);
     tap(&host,1,KEY_S);tap(&host,1,KEY_D); /* horizontal +1 */
@@ -361,7 +408,7 @@ int main(int argc,char **argv)
     tap(&host,0,BTN_TR2);host.display_option=2;tap(&host,1,KEY_A);
     host.display_option=3;tap(&host,1,KEY_A);
     assert(host.safe_offset_x==0 && host.safe_offset_y==0);
-    tap(&host,1,KEY_R);assert(host.safe_offset_x==1 && host.safe_offset_y==1);
+    tap(&host,1,KEY_C);assert(host.safe_offset_x==1 && host.safe_offset_y==1);
     /* Offsets cannot push the logical viewport outside the physical framebuffer. */
     struct host moved={0};moved.mode.hdisplay=320;moved.mode.vdisplay=240;
     moved.safe_x=16;moved.safe_y=12;moved.safe_offset_x=32;moved.safe_offset_y=-24;

@@ -62,9 +62,11 @@ The console exposes the SNES D-pad, **B, Y, A, X, L, R, Start and Select**.
 Games read those buttons directly and choose their gameplay behavior. Labels
 always name SNES buttons, including when playing with a keyboard.
 
-- D-pad moves through the launcher; B selects; Y goes back. Select returns from a game.
+- D-pad moves through the launcher; B selects; A goes back. Select pauses a game.
 - Rosey Chop: B chops and Y jumps. Phosphor Run: B jumps, Y dashes and L restarts.
-- B begins or replays a game. Start is available to games; it does not choose launcher items.
+- Title screens wait indefinitely for a fresh face, shoulder, or Start button press.
+- Select opens Pause: Continue Game or Return to Launcher. A goes back to the game; B selects.
+- Pausing freezes gameplay and resumes the same run. B replays after a game ends.
 - F1 is a keyboard recovery/cancel shortcut; F12 captures a snapshot outside setup.
 - The physical Start + Select recovery chord is retained outside input setup.
 
@@ -100,7 +102,7 @@ controller indicator and a gold keyboard indicator, so simultaneous inputs from
 both sources are visible. The PAD and KEY lines show held raw controller button
 codes/axes and keyboard key names, including unmapped inputs; NONE means released
 and MORE signals overflow. **Test buttons** suspends normal navigation so B and
-Select can be tested too. Hold Y for one second, or press F1, to leave testing.
+Select can be tested too. Hold A for one second, or press F1, to leave testing.
 
 Choose **Settings > Display Area** to calibrate CRT overscan. Up/Down selects Side Margin,
 Top/Bottom Margin, Horizontal, Vertical, Save or Back; Left/Right adjusts the selected value. Keep all
@@ -116,7 +118,7 @@ without changing its dimensions. Positive values move right/up; negative values
 move left/down. The full region stays inside the 320×240 output: horizontal
 movement is limited to ±Side Margin and vertical movement to ±Top/Bottom Margin.
 Reducing a margin clamps the corresponding position if necessary. Save persists
-size and position; Back or Y restores both. Old configurations are centred
+size and position; Back or A restores both. Old configurations are centred
 by default. Position is saved as `safe_offset_x` / `safe_offset_y`; drawing adds
 these offsets to the existing margins, with no scaling or additional render pass.
 
@@ -172,8 +174,8 @@ a dedicated editing page for each.
 **Edit launcher** changes menu names, order, and visibility. **Apply to console**
 saves `config/launcher.conf` on both the laptop and Pi and reloads the menu without
 restarting the running game. Each section must retain at least one visible item. Settings always includes a Back row,
-selected with B; Y also goes back. Hardware Test uses B for motion, X for sound,
-and Y to return.
+selected with B; A also goes back. Hardware Test uses B for motion, X for sound,
+and A to return.
 Names support up to 24 characters using the CRT font. Cancel discards the draft.
 Deployment preserves the Pi’s existing launcher configuration; use Apply to console
 to change it. Missing or invalid configuration falls back to the default menu.

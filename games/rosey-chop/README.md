@@ -11,7 +11,7 @@ timer expires. A wasp sting immediately ends the run.
 - Y: jump.
   The middle of the jump clears a wasp; takeoff and landing are vulnerable.
 - B on the title or result screen: begin or replay the same first level.
-- Select: return to the host launcher.
+- Select: pause; choose Continue Game or Return to Launcher.
 
 The game code reads SNES B and Y directly. The host maps controller and keyboard
 inputs to SNES buttons; default keyboard keys are X for B, Z for Y, arrow keys

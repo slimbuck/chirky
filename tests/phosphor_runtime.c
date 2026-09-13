@@ -29,8 +29,10 @@ int main(void)
     struct two_forty_input input={0};
     assert(api->init(&host_api,"games/phosphor-run/game.conf"));
     assert(content.level_count==3 && content.sprite_count==20);
+    for(int i=0;i<3600;i++)api->update(&input);
+    assert(phase==PHASE_TITLE);
     api->render(); assert(draws>0 && draws<2000);
-    input.button_pressed[TWO_FORTY_BUTTON_B]=true; api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_B]=false;
+    input.button_pressed[TWO_FORTY_BUTTON_START]=true; api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_START]=false;
     assert(current_level==0 && phase==PHASE_PLAY);
     const struct animation *shard=content_animation(&content,"shard");
     assert(shard && shard->count==3);
@@ -58,7 +60,7 @@ int main(void)
             expected_shards+=tile_at(x,y)=='o';
             if (tile_at(x,y)=='E') {exit_x=x;exit_y=y;}
         }
-        assert(level.total_shards==expected_shards);
+        assert(level.total_shards==expected_shards+collected_shards);
         collected_shards=level.total_shards;
         player_x=exit_x*TILE; player_y=exit_y*TILE;
         velocity_x=velocity_y=0;

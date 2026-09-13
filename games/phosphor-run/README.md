@@ -8,7 +8,7 @@ A 320×240, 60 Hz platformer for the Two Forty CRT host.
 - B: jump; wall-jump while touching a wall; begin, advance, or replay on the corresponding screens
 - Y: air dash
 - L: respawn at the current checkpoint
-- Select: return to the launcher
+- Select: pause; choose Continue Game or Return to Launcher
 
 The game reads SNES buttons directly. Keyboard emulation is configured in the
 host's Input Settings; the default keys are arrows, Z for Y, X for B, A for L
