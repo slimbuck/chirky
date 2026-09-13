@@ -90,6 +90,19 @@ int main(void)
         host_api.screen_width=sizes[i][0];host_api.screen_height=sizes[i][1];
         phase=PHASE_TITLE;api->render();phase=PHASE_PLAY;api->render();
         phase=PHASE_DEAD;api->render();phase=PHASE_WIN;api->render();
+        /* A jump above the map remains below the HUD despite camera lag. */
+        memset(&input,0,sizeof(input));input.buttons[TWO_FORTY_BUTTON_B]=true;
+        phase=PHASE_PLAY;player_x=level.width*TILE/2;player_y=level.height*TILE+8;
+        velocity_x=0;velocity_y=settings.jump_speed;dash_timer=0;
+        on_ground=touching_left=touching_right=false;
+        float old_ceiling=fmax_zero(level.height*TILE-host_api.screen_height);
+        camera_y=old_ceiling;
+        for(int frame=0;frame<20;frame++) {
+            api->update(&input);
+            assert(player_y+PLAYER_HEIGHT-camera_y<=host_api.screen_height-40+.001f);
+            assert(camera_y>=0 && phase==PHASE_PLAY);
+        }
+        assert(camera_y>old_ceiling);api->render();
     }
     api->shutdown(); api->shutdown();
     assert(api->init(&host_api,"games/phosphor-run/game.conf")); api->shutdown();

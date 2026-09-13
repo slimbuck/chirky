@@ -286,8 +286,15 @@ static void update_play(const struct two_forty_input *input)
     float maximum_camera = fmax_zero(level.width * TILE - host->screen_width);
     float target = clampf(player_x - host->screen_width*.42f, 0, maximum_camera);
     camera_x += (target-camera_x)*settings.camera_lag;
-    target=clampf(player_y-host->screen_height*.42f,0,fmax_zero(level.height*TILE-host->screen_height));
+    /* Leave room above the level and below the HUD, even during an upward jump.
+       Smooth ordinary tracking, but never let camera lag hide the player's head. */
+    const float top_margin=40;
+    float minimum_camera_y=fmax_zero(player_y+PLAYER_HEIGHT+top_margin-host->screen_height);
+    float maximum_camera_y=fmax_zero(level.height*TILE+top_margin-host->screen_height);
+    if(minimum_camera_y>maximum_camera_y)maximum_camera_y=minimum_camera_y;
+    target=clampf(player_y-host->screen_height*.42f,0,maximum_camera_y);
     camera_y += (target-camera_y)*settings.camera_lag;
+    if(camera_y<minimum_camera_y)camera_y=minimum_camera_y;
 }
 
 static void game_shutdown(void)
