@@ -11,46 +11,48 @@
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      <div><h1>Two Forty</h1><p>Development control room</p></div>
+      <div><h1>Two Forty</h1><p>CRT console</p></div>
     </div>
     <div class="connection"><span id="statusDot" class="status-dot"></span><span id="connectionText">Checking Pi…</span></div>
   </header>
 
+  <nav class="page-nav" aria-label="Dashboard"><a href="#console" data-page-link="console">Console</a><a href="#launcher" data-page-link="launcher">Launcher</a><a href="#edit" data-page-link="edit">Edit</a></nav>
   <main>
-    <section class="hero-grid">
-      <article class="panel monitor-panel">
-        <div class="panel-head"><div><span class="eyebrow">CRT output</span><h2>Live snapshot</h2></div><button id="snapshotBtn" class="button primary">Take snapshot</button></div>
+    <p id="actionStatus" class="action-status" role="status" aria-live="polite">Ready.</p>
+    <div data-page="console" class="dashboard-page">
+      <div class="page-heading"><h2>Console</h2><p>See and control what’s running on the Pi.</p></div>
+      <div class="hero-grid">      <article class="panel monitor-panel">
+        <div class="panel-head"><div><span class="eyebrow">CRT output</span><h2>CRT snapshot</h2></div><button id="snapshotBtn" class="button primary">Take snapshot</button></div>
         <div class="monitor-shell"><div class="screen"><canvas id="snapshotCanvas" width="320" height="240"></canvas><div id="screenEmpty" class="screen-empty">No capture yet</div></div></div>
-        <div class="monitor-meta"><span id="captureName">Dashboard captures appear here</span><a id="downloadCapture" class="text-link hidden" download>Download PPM</a></div>
+        <div class="monitor-meta"><span id="captureName">Still image · update with Take snapshot</span><a id="downloadCapture" class="text-link hidden" download>Download PPM</a></div>
       </article>
 
-      <article class="panel console-panel">
-        <div class="panel-head"><div><span class="eyebrow">Session</span><h2 id="modeTitle">Connecting…</h2></div><span id="modePill" class="pill">offline</span></div>
-        <dl class="metrics">
+<article class="panel"><div class="panel-head"><div><span class="eyebrow">Current state</span><h2 id="modeTitle">Connecting…</h2></div><span id="modePill" class="pill">offline</span></div>        <dl class="metrics">
           <div><dt>Output</dt><dd id="outputMode">—</dd></div>
           <div><dt>Temperature</dt><dd id="temperature">—</dd></div>
           <div><dt>Health</dt><dd id="powerState">—</dd></div>
           <div><dt>Uptime</dt><dd id="uptime">—</dd></div>
-        </dl>
-        <label class="boot-target"><span>Boot directly into</span><select id="bootGameSelect"><option value="launcher">Game launcher</option></select></label>
-        <div class="button-row">
-          <button id="menuBtn" class="button">Return to menu</button>
-          <button id="reloadBtn" class="button">Reload game</button>
-        </div>
-        <div class="button-row">
-          <button id="deployBtn" class="button accent">Deploy + build</button>
-          <button id="restartBtn" class="button">Restart host</button>
-        </div>
-        <button id="poweroffBtn" class="button danger wide">Power down Pi</button>
-        <p id="actionStatus" class="action-status">Ready.</p>
-      </article>
-    </section>
-
-    <section class="panel games-panel">
-      <div class="panel-head"><div><span class="eyebrow">Library</span><h2>Games</h2></div><span class="hint">Each card maps directly to one folder under games/</span></div>
-      <div id="games" class="games-grid"></div>
-    </section>
-
+        </dl></article></div>
+      <div class="page-heading"><h2>System</h2><p>Startup, installation, and power.</p></div><div class="console-grid">
+        <section class="panel"><div class="panel-head"><h2>Startup</h2></div>        <label class="boot-target"><span>Start with</span><select id="bootGameSelect"><option value="launcher">Game launcher</option></select></label>
+<p class="help-text">Applies on the next boot or console restart. Your current session continues.</p></section>
+        <section class="panel"><div class="panel-head"><h2>Install changes</h2></div><p class="help-text">Copy this laptop’s project to the Pi, build it, and restart the console. This ends the current game.</p><button id="deployBtn" class="button accent">Install project on Pi</button></section>
+        <section class="panel"><div class="panel-head"><h2>Restart console</h2></div><p class="help-text">Restart the game and launcher software already installed on the Pi. Opens your startup selection.</p><button id="restartBtn" class="button">Restart console software</button></section>
+        <section class="panel"><div class="panel-head"><h2>Power</h2></div><p class="help-text">Shut down the Pi. You’ll need to power it back on to reconnect.</p><button id="poweroffBtn" class="button danger">Power down Pi</button></section>
+      </div>
+    <details class="panel log-panel"><summary>Diagnostics &amp; logs</summary>
+      <div class="panel-head"><div><span class="eyebrow">Runtime</span><h2>Host log</h2></div><button id="refreshLogsBtn" class="button compact">Refresh</button></div>
+      <pre id="logs">Choose Refresh to read the console log.</pre>
+    </details>
+</div>
+    <div data-page="launcher" class="dashboard-page hidden">
+      <div class="page-heading"><h2>Launcher</h2><p>The console menu, controlled from here. Select an item to open it on the Pi.</p></div>
+      <div class="launcher-layout"><section class="panel remote-menu"><div class="panel-head"><h2 id="remoteMenuTitle">Two Forty</h2></div><div id="launcherItems"><p class="help-text">Loading menu…</p></div></section>
+      <aside class="panel"><h2>Remote controls</h2><div class="session-actions"><button id="menuBtn" class="button">Show launcher on CRT</button><p>Exit the current game or settings screen.</p></div><div class="session-actions"><button id="reloadBtn" class="button">Restart current game</button></div><div class="session-actions"><button id="configureLauncher" class="button" disabled>Edit launcher</button><p>Names, order, and visibility apply here and on the CRT.</p><p id="launcherSource" class="help-text"></p></div></aside></div>
+      <section id="launcherEditor" class="panel hidden"><div class="panel-head"><h2>Edit launcher</h2><button id="cancelLauncher" class="button">Cancel</button></div><p class="help-text">Move items within each menu, rename them, or hide them. Keep at least one item visible in each menu. Back is always available in Settings.</p><div id="launcherFields"></div><div class="editor-footer"><span id="launcherSaveStatus" role="status"></span><button id="saveLauncher" class="button primary">Apply to console</button></div></section>
+    </div>
+    <div data-page="edit" class="dashboard-page hidden"><div class="page-heading"><h2>Edit</h2><p>Select a game to edit its levels, artwork, and settings on this laptop.</p></div><div id="editGames" class="games-grid"></div></div>
+    <div data-page="game" class="dashboard-page hidden"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="#edit">Edit</a><span aria-hidden="true"> / </span><span id="gameBreadcrumb"></span></nav><div class="page-heading"><h2 id="gameTitle"></h2><p>Save locally to keep changes on the laptop, or save and play to try them on the Pi.</p></div><div id="gameTools"></div>
     <section id="editorPanel" class="panel editor-panel hidden">
       <div class="panel-head"><div><span class="eyebrow">Plain-text settings</span><h2 id="editorTitle">Game configuration</h2></div><button id="closeEditor" class="icon-button" aria-label="Close editor">×</button></div>
       <textarea id="configEditor" spellcheck="false" aria-label="Game configuration"></textarea>
@@ -101,12 +103,11 @@
       </div>
     </section>
 
-    <section class="panel log-panel">
-      <div class="panel-head"><div><span class="eyebrow">Runtime</span><h2>Host log</h2></div><button id="refreshLogsBtn" class="button compact">Refresh</button></div>
-      <pre id="logs">No service log yet. The current foreground test remains controllable.</pre>
-    </section>
+</div>
   </main>
+  <script src="/ppm.js"></script>
   <script src="/app.js"></script>
   <script src="/asset-editor.js"></script>
+  <script src="/launcher.js"></script>
 </body>
 </html>

@@ -113,6 +113,35 @@ function listGames() {
     }).filter(Boolean);
 }
 
+const launcherConfig=require("./launcher");
+const LAUNCHER_CONFIG=path.join(ROOT,"config","launcher.conf");
+let launcherSaving=false;
+async function readLauncher() {
+  const available=listGames();
+  let text,source="pi";
+  try {text=(await ssh(`cat ${config.remoteRoot}/config/launcher.conf`)).stdout;}
+  catch {source="local";text=fs.existsSync(LAUNCHER_CONFIG)?fs.readFileSync(LAUNCHER_CONFIG,"utf8"):"";}
+  try {return {items:launcherConfig.parse(text,available),source};}
+  catch {return {items:launcherConfig.defaults(available),source,defaults:true};}
+}
+async function saveLauncher(request,response) {
+  if(launcherSaving)return json(response,409,{error:"A launcher update is already in progress."});
+  launcherSaving=true;
+  try {
+    const body=await requestBody(request);let text;
+    try {text=launcherConfig.serialize(body.items,listGames());}
+    catch(error){return json(response,400,{error:error.message});}
+    // Upload separately, then atomically replace the Pi's configuration.
+    const temporary=path.join(ROOT,"build","launcher-upload.conf");
+    fs.mkdirSync(path.dirname(temporary),{recursive:true});fs.writeFileSync(temporary,text);
+    await command("scp",[...scpArgs(),temporary,`${config.user}@${config.host}:${config.remoteRoot}/config/launcher.conf.next`]);
+    await ssh(`cd ${config.remoteRoot} && mv config/launcher.conf.next config/launcher.conf`);
+    writeAtomic(LAUNCHER_CONFIG,text);
+    await sendControl("launcher-reload");
+    json(response,200,{ok:true,items:launcherConfig.parse(text,listGames()),source:"pi"});
+  } finally {launcherSaving=false;}
+}
+
 function readBootGame() {
   if (!fs.existsSync(HOST_CONFIG)) return "launcher";
   return parseConfig(fs.readFileSync(HOST_CONFIG, "utf8")).boot_game || "launcher";
@@ -160,7 +189,7 @@ function sendFile(response, file) {
 }
 
 async function sendControl(commandText) {
-  if (!/^(menu|snapshot|reload|quit|poweroff|launch [a-z0-9-]+)$/.test(commandText))
+  if (!/^(menu|snapshot|reload|quit|poweroff|launcher-reload|settings (input|display|hardware)|launch [a-z0-9-]+)$/.test(commandText))
     throw new Error("invalid control command");
   return ssh(`cd ${config.remoteRoot} && printf '%s\\n' '${commandText}' > run/control.fifo`);
 }
@@ -217,7 +246,10 @@ const routes = {
       await command("scp", [...scpArgs(), HOST_CONFIG,
         `${config.user}@${config.host}:${config.remoteRoot}/config/host.conf`]);
     }
-    const built = await ssh(`cd ${config.remoteRoot} && make && if sudo -n systemctl cat two-forty.service >/dev/null 2>&1; then sudo -n systemctl restart two-forty.service; else (printf 'quit\\n' > run/control.fifo 2>/dev/null || true); sleep 1; setsid -f ./build/two-forty-host > run/two-forty.log 2>&1 </dev/null; fi`, 60_000);
+    // scp overlays files, so explicitly retire the removed diagnostic package.
+    const hasLauncher=(await ssh(`test -f ${config.remoteRoot}/config/launcher.conf && printf yes || true`)).stdout==="yes";
+    if(!hasLauncher)await command("scp",[...scpArgs(),LAUNCHER_CONFIG,`${config.user}@${config.host}:${config.remoteRoot}/config/launcher.conf`]);
+    const built = await ssh(`cd ${config.remoteRoot} && rm -rf -- games/latency-test && rm -f -- build/games/latency-test.so include/frame_probe.h && make && if sudo -n systemctl cat two-forty.service >/dev/null 2>&1; then sudo -n systemctl restart two-forty.service; else (printf 'quit\\n' > run/control.fifo 2>/dev/null || true); sleep 1; setsid -f ./build/two-forty-host > run/two-forty.log 2>&1 </dev/null; fi`, 60_000);
     json(response, 200, { ok: true, output: built.stdout || "Build is up to date." });
   },
 
@@ -274,6 +306,8 @@ async function playEditedGame(id, editor) {
 async function handle(request, response) {
   const url = new URL(request.url, "http://localhost");
   try {
+    if (request.method === "GET" && url.pathname === "/api/launcher") return json(response,200,await readLauncher());
+    if (request.method === "PUT" && url.pathname === "/api/launcher") return await saveLauncher(request,response);
     if (request.method === "GET" && url.pathname === "/api/status") return routes.status(request, response);
     if (request.method === "GET" && url.pathname === "/api/games") return routes.games(request, response);
     if (request.method === "PUT" && url.pathname === "/api/boot") return routes.boot(request, response);

@@ -14,7 +14,7 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
 all: $(TARGET) $(GAME_TARGETS)
 
-$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/two_forty.h include/input_gate.h
+$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/two_forty.h include/input_gate.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@.next $(LDLIBS)
 	mv $@.next $@
@@ -34,8 +34,10 @@ benchmark: build/games/rosey-chop.so
 	./build/render-benchmark
 
 test:
-	$(NODE) --test dashboard/editors.test.js
+	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js
 	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/launcher_runtime.c -o /tmp/launcher-runtime-test
+	/tmp/launcher-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tests/host_runtime.c src/input_bindings.c src/rect_renderer.c -Wl,--gc-sections -ldl -l:libGLESv2.so.2 -o /tmp/host-runtime-test
 	/tmp/host-runtime-test $(CURDIR)/build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Igames/phosphor-run tests/phosphor_runtime.c games/phosphor-run/*.c -o /tmp/phosphor-runtime-test

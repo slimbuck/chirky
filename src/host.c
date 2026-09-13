@@ -3,6 +3,7 @@
 #include "rect_renderer.h"
 #include "frame_timing.h"
 #include "input_gate.h"
+#include "launcher_config.h"
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -237,6 +238,7 @@ struct host {
     struct game_record games[MAX_GAMES];
     int game_count;
     int selected_game;
+    struct launcher_config launcher;
     void *game_library;
     const struct two_forty_game_api *game_api;
     const struct game_record *active_game;
@@ -257,9 +259,9 @@ struct host {
     struct controller_binding bindings[TWO_FORTY_BUTTON_COUNT];
     struct controller_binding keyboard_bindings[TWO_FORTY_BUTTON_COUNT];
     struct binding_setup setup;
-    bool controller_settings, display_settings, input_test, ui_wait_release, last_keyboard;
+    bool settings_menu, controller_settings, display_settings, input_test, ui_wait_release, last_keyboard;
     struct two_forty_input_gate transition_gate;
-    int selected_option, display_option, safe_x, safe_y, saved_safe_x, saved_safe_y;
+    int settings_option, selected_option, display_option, safe_x, safe_y, saved_safe_x, saved_safe_y;
     int safe_offset_x,safe_offset_y,saved_safe_offset_x,saved_safe_offset_y;
     const char *settings_message;
     unsigned int controller_menu_chord_frames;
@@ -279,13 +281,14 @@ static void block_transition_input(struct host *host)
     memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
 }
 
-enum host_screen { SCREEN_LAUNCHER,SCREEN_INPUT,SCREEN_SETUP,SCREEN_TEST,SCREEN_DISPLAY,SCREEN_GAME };
+enum host_screen { SCREEN_LAUNCHER,SCREEN_SETTINGS,SCREEN_INPUT,SCREEN_SETUP,SCREEN_TEST,SCREEN_DISPLAY,SCREEN_GAME };
 static enum host_screen current_screen(const struct host *host)
 {
     if(host->setup.active)return SCREEN_SETUP;
     if(host->active_game)return SCREEN_GAME;
     if(host->display_settings)return SCREEN_DISPLAY;
     if(host->controller_settings)return host->input_test?SCREEN_TEST:SCREEN_INPUT;
+    if(host->settings_menu)return SCREEN_SETTINGS;
     return SCREEN_LAUNCHER;
 }
 
@@ -475,7 +478,7 @@ static void write_status(const struct host *host)
     fprintf(file, "{\n  \"pid\": %ld,\n  \"mode\": \"%s\",\n  \"game\": \"%s\",\n"
                   "  \"width\": %u,\n  \"height\": %u,\n  \"refresh\": %u,\n"
                   "  \"viewport_width\": %d,\n  \"viewport_height\": %d\n}\n",
-            (long)getpid(), host->active_game ? "game" : "launcher",
+            (long)getpid(), (const char *[]){"launcher","settings","input","setup","test","display","game"}[current_screen(host)],
             host->active_game ? host->active_game->id : "",
             host->mode.hdisplay, host->mode.vdisplay, host->mode.vrefresh,
             host->api.screen_width, host->api.screen_height);
@@ -508,6 +511,40 @@ static bool load_manifest(const char *directory, struct game_record *game)
     return game->id[0] && game->name[0] && game->module_path[0];
 }
 
+static int compare_games(const void *left, const void *right)
+{
+    const struct game_record *a=left,*b=right;
+    int hardware_a=!strcmp(a->id,"hardware-test"),hardware_b=!strcmp(b->id,"hardware-test");
+    if(hardware_a!=hardware_b)return hardware_a-hardware_b;
+    return strcmp(a->name,b->name);
+}
+
+/* Discovery places the settings utility after all playable games. */
+static int launcher_game_count(const struct host *host)
+{
+    int count=host->game_count;
+    if(count && !strcmp(host->games[count-1].id,"hardware-test"))count--;
+    return count;
+}
+
+static void load_launcher(struct host *host)
+{
+    host->launcher=(struct launcher_config){0};
+    for(int i=0;i<launcher_game_count(host);i++)launcher_add(&host->launcher,host->games[i].id,host->games[i].name,i,false);
+    launcher_add(&host->launcher,"settings","Settings",-1,false);
+    launcher_add(&host->launcher,"power","Power Down",-2,false);
+    launcher_add(&host->launcher,"input","Input Settings",-3,true);
+    launcher_add(&host->launcher,"display","Display Area",-4,true);
+    launcher_add(&host->launcher,"hardware","Hardware Test",-5,true);
+    launcher_read(&host->launcher,"config/launcher.conf");
+    host->selected_game=host->settings_option=0;
+}
+static void ensure_launcher(struct host *host) {
+    if(!host->launcher.count)load_launcher(host);
+    if(host->selected_game<0 || host->selected_game>=launcher_count(&host->launcher,false))host->selected_game=0;
+    if(host->settings_option<0 || host->settings_option>launcher_count(&host->launcher,true))host->settings_option=0;
+}
+
 static void discover_games(struct host *host)
 {
     DIR *games = opendir("games");
@@ -520,6 +557,7 @@ static void discover_games(struct host *host)
             host->games[host->game_count++] = candidate;
     }
     closedir(games);
+    qsort(host->games,host->game_count,sizeof(host->games[0]),compare_games);
     printf("Discovered %d game(s).\n", host->game_count);
 }
 
@@ -633,7 +671,7 @@ static bool load_game(struct host *host, int index)
     if (host->display_settings) {
         restore_display_area(host);
     }
-    host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
+    host->settings_menu=host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
     block_transition_input(host);
     host->controller_menu_chord_frames=0;
     unload_game(host);
@@ -668,6 +706,31 @@ static bool load_game(struct host *host, int index)
     return true;
 }
 
+static void open_settings_screen(struct host *host, int option)
+{
+    if(host->display_settings)restore_display_area(host);
+    host->settings_menu=host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
+    unload_game(host);
+    host->settings_menu=true;host->settings_option=option;
+    ensure_launcher(host);
+    host->selected_game=0;
+    for(int i=0;i<launcher_count(&host->launcher,false);i++)if(launcher_at(&host->launcher,false,i)->action==-1)host->selected_game=i;
+    for(int i=0;i<launcher_count(&host->launcher,true);i++)if(launcher_at(&host->launcher,true,i)->action==-3-option)host->settings_option=i;
+    host->settings_message="";host->controller_menu_chord_frames=0;
+    if(option==0) { host->controller_settings=true;host->selected_option=0; }
+    else if(option==1) {
+        host->display_settings=true;host->display_option=0;
+        host->saved_safe_x=host->safe_x;host->saved_safe_y=host->safe_y;
+        host->saved_safe_offset_x=host->safe_offset_x;host->saved_safe_offset_y=host->safe_offset_y;
+    } else {
+        int hardware=launcher_game_count(host);
+        if(hardware<host->game_count)load_game(host,hardware);
+        host->settings_menu=true;
+    }
+    block_transition_input(host);
+    write_status(host);
+}
+
 static void process_control(struct host *host)
 {
     char command[256];
@@ -682,9 +745,17 @@ static void process_control(struct host *host)
         if (host->display_settings) {
             restore_display_area(host);
         }
-        host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
+        host->settings_menu=host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
         block_transition_input(host);
         unload_game(host);
+    } else if (!strcmp(line,"launcher-reload")) {
+        load_launcher(host);block_transition_input(host);
+    } else if (!strcmp(line,"settings input")) {
+        open_settings_screen(host,0);
+    } else if (!strcmp(line,"settings display")) {
+        open_settings_screen(host,1);
+    } else if (!strcmp(line,"settings hardware")) {
+        open_settings_screen(host,2);
     } else if (strcmp(line, "poweroff") == 0) {
         power_down_pi();
     } else if (strcmp(line, "snapshot") == 0) {
@@ -790,9 +861,9 @@ static void menu_row(struct host *host, int y, const char *label, bool selected)
 static void menu_footer(struct host *host, bool can_go_back)
 {
     char confirm[32],back[32],line[80]; button_label(host,TWO_FORTY_BUTTON_B,confirm,sizeof(confirm));
-    button_label(host,TWO_FORTY_BUTTON_SELECT,back,sizeof(back));
-    if (can_go_back) snprintf(line,sizeof(line),"%s CHOOSE - %s BACK",confirm,back);
-    else snprintf(line,sizeof(line),"%s CHOOSE - UP DOWN MOVE",confirm);
+    button_label(host,TWO_FORTY_BUTTON_Y,back,sizeof(back));
+    if (can_go_back) snprintf(line,sizeof(line),"%s SELECT - %s BACK",confirm,back);
+    else snprintf(line,sizeof(line),"%s SELECT - UP DOWN MOVE",confirm);
     menu_text(host,10,14,line,1,112,160,170);
 }
 
@@ -803,16 +874,29 @@ static void draw_launcher(struct host *host)
     fill_rect(host,8,height-7,host->api.screen_width-16,3,40,175,212);
     menu_text(host,10,height-23,"TWO FORTY",3,238,240,232);
     menu_text(host,10,height-55,"GAMES AND SETTINGS",1,112,160,170);
-    int count=host->game_count+3, first=host->selected_game<4?0:host->selected_game-3;
+    ensure_launcher(host);
+    int count=launcher_count(&host->launcher,false), first=host->selected_game<4?0:host->selected_game-3;
     for (int row=0;row<4 && first+row<count;row++) {
         int index=first+row;
-        const char *label=index<host->game_count?host->games[index].name:
-            index==host->game_count?"INPUT SETTINGS":index==host->game_count+1?"DISPLAY AREA":"POWER OFF";
+        const char *label=launcher_at(&host->launcher,false,index)->label;
         menu_row(host,height-83-row*24,label,index==host->selected_game);
     }
     if (first+4<count) menu_text(host,10,30,"MORE BELOW",1,112,160,170);
     else if (first>0) menu_text(host,10,30,"MORE ABOVE",1,112,160,170);
     menu_footer(host,false);
+}
+
+static void draw_settings_menu(struct host *host)
+{
+    clear_screen();
+    int height=host->api.screen_height;
+    fill_rect(host,8,height-7,host->api.screen_width-16,3,40,175,212);
+    menu_text(host,10,height-23,"SETTINGS",3,238,240,232);
+    ensure_launcher(host);
+    for(int i=0;i<launcher_count(&host->launcher,true);i++)menu_row(host,height-83-i*24,launcher_at(&host->launcher,true,i)->label,i==host->settings_option);
+    int back_index=launcher_count(&host->launcher,true);
+    menu_row(host,height-83-back_index*24,"BACK",host->settings_option==back_index);
+    menu_footer(host,true);
 }
 
 static bool binding_down(const struct input_set *inputs, const struct controller_binding *binding, bool keyboard);
@@ -902,13 +986,13 @@ static void draw_controller_settings(struct host *host)
         menu_text(host,10,height-22,"TEST BUTTONS",2,238,240,232);
         menu_text(host,10,height-49,"PRESS ANY KEYS OR BUTTONS",1,112,180,190);
         menu_text(host,10,height-64,"BOTH SOURCES LIGHT UP BELOW",1,112,180,190);
-        menu_text(host,10,12,"HOLD SELECT 1 SECOND TO RETURN",1,112,160,170);
+        menu_text(host,10,12,"HOLD Y 1 SECOND TO RETURN",1,112,160,170);
     } else {
         menu_text(host,10,height-19,"INPUT SETTINGS",2,238,240,232);
         menu_text(host,10,height-35,host->settings_message?host->settings_message:"",1,244,194,70);
         const char *labels[]={"MAP SNES CONTROLLER","MAP KEYBOARD TO SNES","TEST BUTTONS","BACK"};
         for (int i=0;i<4;i++) menu_row(host,height-48-i*16,labels[i],host->selected_option==i);
-        menu_text(host,10,12,"B CHOOSE - SELECT BACK",1,112,160,170);
+        menu_text(host,10,12,"B SELECT - Y BACK",1,112,160,170);
     }
     draw_live_inputs(host);
 }
@@ -927,7 +1011,7 @@ static void draw_display_settings(struct host *host)
     snprintf(line,sizeof(line),"HORIZONTAL - %d",host->safe_offset_x); menu_row(host,height-102,line,host->display_option==2);
     snprintf(line,sizeof(line),"VERTICAL - %d",host->safe_offset_y); menu_row(host,height-118,line,host->display_option==3);
     menu_row(host,height-134,"SAVE",host->display_option==4);
-    menu_row(host,height-150,"CANCEL",host->display_option==5);
+    menu_row(host,height-150,"BACK",host->display_option==5);
     menu_text(host,10,25,host->settings_message && *host->settings_message?host->settings_message:"LEFT RIGHT ADJUST - UP DOWN MOVE",1,112,160,170);
     menu_footer(host,true);
 }
@@ -1327,6 +1411,7 @@ static void update_timing_toggle(struct host *host,uint64_t now_us)
 
 static void update_host(struct host *host)
 {
+    ensure_launcher(host);
     enum host_screen previous_screen=current_screen(host);
     struct two_forty_input *input=&host->inputs.state;
     update_controller_buttons(host);
@@ -1334,7 +1419,7 @@ static void update_host(struct host *host)
     if (!host->setup.active && input->pressed[KEY_F12]) snapshot_requested=1;
     int direction=menu_direction(host);
     bool confirm=menu_confirmed(input);
-    bool back=input->pressed[KEY_F1] || input->button_pressed[TWO_FORTY_BUTTON_SELECT];
+    bool back=input->pressed[KEY_F1] || input->button_pressed[TWO_FORTY_BUTTON_Y];
     if (host->ui_wait_release && !input->pressed[KEY_F1]) {
         bool neutral=buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true);
         for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
@@ -1344,7 +1429,9 @@ static void update_host(struct host *host)
     else if (host->active_game) {
         if (recovery_chord(&host->inputs)) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
-        if (back || host->controller_menu_chord_frames>=60) {
+        bool hardware=!strcmp(host->active_game->id,"hardware-test");
+        bool exit_game=input->pressed[KEY_F1] || input->button_pressed[hardware?TWO_FORTY_BUTTON_Y:TWO_FORTY_BUTTON_SELECT];
+        if (exit_game || host->controller_menu_chord_frames>=60) {
             unload_game(host); host->controller_settings=false;
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         } else host->game_api->update(input);
@@ -1368,7 +1455,7 @@ static void update_host(struct host *host)
             else host->settings_message="SAVE FAILED - TRY AGAIN";
         }
     } else if (host->controller_settings && host->input_test) {
-        if (input->buttons[TWO_FORTY_BUTTON_SELECT]) host->controller_menu_chord_frames++;
+        if (input->buttons[TWO_FORTY_BUTTON_Y]) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
             host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
@@ -1381,20 +1468,22 @@ static void update_host(struct host *host)
             else if (host->selected_option==2) { host->input_test=true; host->controller_menu_chord_frames=0; }
             else { setup_begin(&host->setup,host->selected_option==1); host->settings_message=""; }
         }
+    } else if (host->settings_menu) {
+        int count=launcher_count(&host->launcher,true)+1;
+        if(direction)host->settings_option=(host->settings_option+direction+count)%count;
+        else if(back || (confirm && host->settings_option==count-1))host->settings_menu=false;
+        else if(confirm)open_settings_screen(host,-3-launcher_at(&host->launcher,true,host->settings_option)->action);
     } else {
-        int count=host->game_count+3;
-        if (direction) host->selected_game=(host->selected_game+direction+count)%count;
-        else if (confirm) {
-            if (host->selected_game<host->game_count) load_game(host,host->selected_game);
-            else if (host->selected_game==host->game_count) { host->controller_settings=true; host->selected_option=0; host->settings_message=""; }
-            else if (host->selected_game==host->game_count+1) {
-                host->display_settings=true; host->display_option=0; host->settings_message="";
-                host->saved_safe_x=host->safe_x; host->saved_safe_y=host->safe_y;
-                host->saved_safe_offset_x=host->safe_offset_x;host->saved_safe_offset_y=host->safe_offset_y;
-            } else power_down_pi();
+        int count=launcher_count(&host->launcher,false);
+        if(direction)host->selected_game=(host->selected_game+direction+count)%count;
+        else if(confirm) {
+            int action=launcher_at(&host->launcher,false,host->selected_game)->action;
+            if(action>=0)load_game(host,action);
+            else if(action==-1){host->settings_menu=true;host->settings_option=0;}
+            else power_down_pi();
         }
     }
-    if(current_screen(host)!=previous_screen)block_transition_input(host);
+    if(current_screen(host)!=previous_screen) { block_transition_input(host);write_status(host); }
     memset(input->button_pressed,0,sizeof(input->button_pressed));
     memset(input->pressed,0,sizeof(input->pressed));
     input->controller_pressed=false; host->inputs.controller_up_pressed=false; host->inputs.controller_down_pressed=false;
@@ -1450,6 +1539,7 @@ static void draw_host(struct host *host)
     if (host->active_game != NULL) host->game_api->render();
     else if (host->display_settings) draw_display_settings(host);
     else if (host->controller_settings) draw_controller_settings(host);
+    else if (host->settings_menu) draw_settings_menu(host);
     else draw_launcher(host);
     if (host->frame_timing_enabled) draw_frame_timing(host);
     rect_renderer_flush(&host->renderer);
@@ -1575,6 +1665,7 @@ int main(void)
     signal(SIGUSR1, on_snapshot);
 
     discover_games(&host);
+    load_launcher(&host);
     load_host_config(&host);
     host.drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     if (host.drm_fd < 0 || (drmSetMaster(host.drm_fd) != 0 && errno != EINVAL) ||
@@ -1607,7 +1698,7 @@ int main(void)
         cleanup(&host);
         return EXIT_FAILURE;
     }
-    puts("Two Forty host running. SNES B chooses, Select returns, F1 recovers, F12 snapshots.");
+    puts("Two Forty host running. Menus: B selects, Y goes back. Games: Select returns, F1 recovers, F12 snapshots.");
     while (host.running && !stop_requested) {
         if (!next_frame(&host)) host.running = false;
     }

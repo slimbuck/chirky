@@ -60,7 +60,7 @@ $("#previewAnimation").addEventListener("click",()=> {
   renderLevel();
 });
 function animatePreview(now) {
-  if (levelState?.preview && !$("#levelEditorPanel").classList.contains("hidden")) {
+  if (levelState?.preview && !$("#levelEditorPanel").closest(".hidden")) {
     syncFrame();
     const tick=Math.floor((now-levelState.previewStart)*60/1000);
     const rows=levelState.frames[Math.floor(tick/levelState.ticks)%levelState.frames.length];
@@ -308,6 +308,7 @@ async function openLevelEditor(gameId, editorId) {
   renderLevelPalette();
   renderLevel();
   $("#levelEditorPanel").classList.remove("hidden");
+  location.hash=`edit/${gameId}`;showPage(`edit/${gameId}`);
   $("#levelEditorPanel").scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
@@ -459,7 +460,7 @@ function finishLevelStroke(event) {
 levelCanvas.addEventListener("pointerup", finishLevelStroke);
 levelCanvas.addEventListener("pointercancel", finishLevelStroke);
 window.addEventListener("keydown", (event) => {
-  if (!levelState || $("#levelEditorPanel").classList.contains("hidden") || !(event.ctrlKey || event.metaKey)) return;
+  if (!levelState || $("#levelEditorPanel").closest(".hidden") || !(event.ctrlKey || event.metaKey)) return;
   if (event.key.toLowerCase() === "z") { event.preventDefault(); changeHistory(event.shiftKey ? "redo" : "undo", event.shiftKey ? "undo" : "redo"); }
   else if (event.key.toLowerCase() === "y") { event.preventDefault(); changeHistory("redo", "undo"); }
 });

@@ -62,7 +62,7 @@ The console exposes the SNES D-pad, **B, Y, A, X, L, R, Start and Select**.
 Games read those buttons directly and choose their gameplay behavior. Labels
 always name SNES buttons, including when playing with a keyboard.
 
-- D-pad moves through the launcher; B chooses; Select goes back or returns from a game.
+- D-pad moves through the launcher; B selects; Y goes back. Select returns from a game.
 - Rosey Chop: B chops and Y jumps. Phosphor Run: B jumps, Y dashes and L restarts.
 - B begins or replays a game. Start is available to games; it does not choose launcher items.
 - F1 is a keyboard recovery/cancel shortcut; F12 captures a snapshot outside setup.
@@ -82,7 +82,10 @@ Default keyboard emulation:
 | Start | Enter |
 | Select | Escape |
 
-Choose **Input Settings**, then **Map SNES controller** or **Map keyboard to SNES**.
+The launcher lists Phosphor Run, Rosey Chop, **Settings**, then **Power Down**.
+Settings contains **Input Settings**, **Display Area**, and **Hardware Test**.
+
+Choose **Settings > Input Settings**, then **Map SNES controller** or **Map keyboard to SNES**.
 Both wizards ask for Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
 Screen changes consume the opening press and wait for two neutral frames before
 accepting another. Holding B cannot open a submenu and activate its first item.
@@ -97,15 +100,15 @@ controller indicator and a gold keyboard indicator, so simultaneous inputs from
 both sources are visible. The PAD and KEY lines show held raw controller button
 codes/axes and keyboard key names, including unmapped inputs; NONE means released
 and MORE signals overflow. **Test buttons** suspends normal navigation so B and
-Select can be tested too. Hold Select for one second, or press F1, to leave testing.
+Select can be tested too. Hold Y for one second, or press F1, to leave testing.
 
-Choose **Display Area** to calibrate CRT overscan. Up/Down selects Side Margin,
-Top/Bottom Margin, Horizontal, Vertical, Save or Cancel; Left/Right adjusts the selected value. Keep all
+Choose **Settings > Display Area** to calibrate CRT overscan. Up/Down selects Side Margin,
+Top/Bottom Margin, Horizontal, Vertical, Save or Back; Left/Right adjusts the selected value. Keep all
 four cyan edges visible. The defaults reserve 16 pixels per side and 12 at the top
 and bottom, leaving a 288×216 playable area inside the physical 320×240 output.
 Margins can be 0–32 horizontally and 0–24 vertically. All drawing is translated
 and clipped to this area at native pixel size; game cameras and UI use its logical
-dimensions. Cancel restores the previous area; Save persists it across restarts.
+dimensions. Back restores the previous area; Save persists it across restarts.
 The dashboard's level editor uses the connected Pi's viewport for its guides.
 
 Horizontal and Vertical move the whole safe region one native pixel per step
@@ -113,7 +116,7 @@ without changing its dimensions. Positive values move right/up; negative values
 move left/down. The full region stays inside the 320×240 output: horizontal
 movement is limited to ±Side Margin and vertical movement to ±Top/Bottom Margin.
 Reducing a margin clamps the corresponding position if necessary. Save persists
-size and position; Cancel or Select restores both. Old configurations are centred
+size and position; Back or Y restores both. Old configurations are centred
 by default. Position is saved as `safe_offset_x` / `safe_offset_y`; drawing adds
 these offsets to the existing margins, with no scaling or additional render pass.
 
@@ -160,13 +163,27 @@ cd dashboard
 npm start
 ```
 
-Open `http://127.0.0.1:3030`. It can deploy and build the project, start games,
-return to the launcher, reload edited settings, read logs and diagnostics, and
-take CRT framebuffer snapshots. Put local SSH key paths in
+Open `http://127.0.0.1:3030`. **Console** shows the snapshot, current state,
+health, startup, installation, restart, power, and logs. **Launcher** mirrors the
+CRT menu: games, Settings, and Power Down. Browsing its Settings submenu does
+not change the CRT until a screen is selected. **Edit** lists the games and opens
+a dedicated editing page for each.
+
+**Edit launcher** changes menu names, order, and visibility. **Apply to console**
+saves `config/launcher.conf` on both the laptop and Pi and reloads the menu without
+restarting the running game. Each section must retain at least one visible item. Settings always includes a Back row,
+selected with B; Y also goes back. Hardware Test uses B for motion, X for sound,
+and Y to return.
+Names support up to 24 characters using the CRT font. Cancel discards the draft.
+Deployment preserves the Pi’s existing launcher configuration; use Apply to console
+to change it. Missing or invalid configuration falls back to the default menu.
+
+**Install project on Pi** copies and builds the laptop project, then restarts the
+console. **Restart console software** uses the existing Pi build. Put local SSH key paths in
 `dashboard/config.local.json`; that file is intentionally ignored by Git.
 
 The dashboard and CRT launcher both include a deliberate Pi power-down action.
-The dashboard asks for confirmation; the launcher keeps `POWER OFF` separate
+The dashboard asks for confirmation; the launcher keeps `POWER DOWN` separate
 from the game list and activates it with B.
 
 ## Included games

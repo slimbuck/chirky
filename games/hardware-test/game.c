@@ -179,7 +179,7 @@ static void game_update(const struct two_forty_input *input)
     if (input->buttons[TWO_FORTY_BUTTON_UP]) dy += manual_speed;
     if (input->buttons[TWO_FORTY_BUTTON_DOWN]) dy -= manual_speed;
     if (input->button_pressed[TWO_FORTY_BUTTON_B]) automatic = !automatic;
-    if (input->button_pressed[TWO_FORTY_BUTTON_Y])
+    if (input->button_pressed[TWO_FORTY_BUTTON_X])
         host->play_sound(host->context, settings.sound_device, settings.sound);
 
     if (dx != 0 || dy != 0) {
@@ -220,6 +220,7 @@ static void game_render(void)
                             rgb[0], rgb[1], rgb[2]);
         }
     }
+    host->draw_text(host->context,10,12,"B MOTION - X SOUND - Y BACK",1,238,240,232);
 }
 
 static const struct two_forty_game_api api = {

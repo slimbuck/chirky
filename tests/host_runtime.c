@@ -73,13 +73,57 @@ static void check_timing_toggle(void)
     update_timing_toggle(&h,19000000);assert(!h.frame_timing_enabled);
 }
 
+static void check_settings_shortcuts(void)
+{
+    struct host h={0};h.mode.hdisplay=320;h.mode.vdisplay=240;h.safe_x=16;h.safe_y=12;
+    open_settings_screen(&h,1);
+    assert(current_screen(&h)==SCREEN_DISPLAY && h.settings_menu && h.ui_wait_release);
+    h.safe_x=20;h.safe_offset_x=2;
+    open_settings_screen(&h,0);
+    assert(current_screen(&h)==SCREEN_INPUT && h.safe_x==16 && h.safe_offset_x==0);
+    assert(h.selected_option==0 && !h.setup.active);
+    h.setup.active=true;
+    open_settings_screen(&h,1);
+    assert(!h.setup.active && current_screen(&h)==SCREEN_DISPLAY && h.saved_safe_x==16);
+}
+
+static void check_launcher_menu(void)
+{
+    struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
+    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.game_count=3;
+    strcpy(h.games[0].id,"hardware-test");strcpy(h.games[0].name,"Hardware Test");
+    strcpy(h.games[1].id,"rosey-chop");strcpy(h.games[1].name,"Rosey Chop");
+    strcpy(h.games[2].id,"phosphor-run");strcpy(h.games[2].name,"Phosphor Run");
+    qsort(h.games,h.game_count,sizeof(h.games[0]),compare_games);
+    assert(launcher_game_count(&h)==2);
+    assert(!strcmp(h.games[0].id,"phosphor-run") && !strcmp(h.games[1].id,"rosey-chop"));
+    tap(&h,1,KEY_DOWN);assert(h.selected_game==1);
+    tap(&h,1,KEY_DOWN);assert(h.selected_game==2);
+    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.settings_option==2);
+    const struct two_forty_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
+    h.active_game=&h.games[2];h.game_api=&fake;
+    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS && h.settings_option==2);
+    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER && h.selected_game==2);
+    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_UP);assert(h.settings_option==3);
+    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_X);tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_INPUT);
+    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_DOWN);assert(h.selected_game==3);
+    tap(&h,1,KEY_DOWN);assert(h.selected_game==0);
+}
+
 static void check_transition_gates(void)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
     h.inputs.count=2;h.inputs.devices[0].controller=true;
     h.inputs.devices[0].abs_minimums[ABS_HAT0X]=-1;h.inputs.devices[0].abs_maximums[ABS_HAT0X]=1;
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);
-    assert(h.controller_settings && !h.setup.active && h.ui_wait_release);
+    assert(h.settings_menu && !h.controller_settings && h.ui_wait_release);
     for(int i=0;i<30;i++){event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);}
     assert(!h.setup.active);
     /* A brief release followed by bounce, or a second input source, must
@@ -91,6 +135,8 @@ static void check_transition_gates(void)
     event(&h,1,EV_KEY,KEY_X,0);update_host(&h);assert(h.ui_wait_release);
     update_host(&h);assert(!h.ui_wait_release && !h.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);assert(!h.setup.active);
+    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.controller_settings && !h.setup.active);
+    event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.setup.active && h.setup.step==0);
     for(int i=0;i<5;i++)update_host(&h);
     assert(!h.setup.ready);
@@ -99,7 +145,7 @@ static void check_transition_gates(void)
     event(&h,0,EV_ABS,ABS_HAT0X,0);update_host(&h);assert(h.setup.step==1);
     event(&h,1,EV_KEY,KEY_F1,1);update_host(&h);assert(!h.setup.active && h.controller_settings);
     event(&h,1,EV_KEY,KEY_F1,0);for(int i=0;i<3;i++)update_host(&h);
-    event(&h,0,EV_KEY,BTN_TL2,1);update_host(&h);assert(!h.controller_settings);
+    event(&h,0,EV_KEY,BTN_SOUTH,1);update_host(&h);assert(!h.controller_settings);
     for(int i=0;i<4;i++)update_host(&h);
     assert(!h.controller_settings);
     /* The shared game filter suppresses both held and edge-triggered buttons. */
@@ -209,9 +255,9 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"PAD NONE"));
     held_input_names(host,true,name,sizeof(name));assert(!strcmp(name,"KEY NONE"));
     tap(host,0,BTN_TR2);tap(host,0,BTN_TL2);assert(host->input_test);
-    event(host,1,EV_KEY,KEY_ESC,1);for(int i=0;i<59;i++) update_host(host);assert(host->input_test);
+    event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<59;i++) update_host(host);assert(host->input_test);
     update_host(host);assert(!host->input_test && host->controller_settings);
-    event(host,1,EV_KEY,KEY_ESC,0);update_host(host);
+    event(host,1,EV_KEY,KEY_R,0);update_host(host);
 }
 
 int main(int argc,char **argv)
@@ -219,6 +265,8 @@ int main(int argc,char **argv)
     assert(argc==2);
     char directory[]="/tmp/two-forty-host-test-XXXXXX";assert(mkdtemp(directory));assert(chdir(directory)==0);
     assert(mkdir("config",0700)==0);
+    check_settings_shortcuts();
+    check_launcher_menu();
     check_transition_gates();
     check_timing_toggle();
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
@@ -239,6 +287,7 @@ int main(int argc,char **argv)
     /* Every launcher item uses exactly the same confirmation policy. */
     tap(&host,0,BTN_TR2);assert(!host.controller_settings);
     tap(&host,0,BTN_SOUTH);assert(!host.controller_settings);
+    tap(&host,0,BTN_EAST);assert(host.settings_menu && !host.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.setup.active && !host.setup.keyboard);
     update_host(&host);assert(!host.setup.wait_release);
@@ -294,10 +343,10 @@ int main(int argc,char **argv)
     default_keyboard_bindings(host.setup.pending);update_host(&host);
     assert(!host.setup.active && host.keyboard_bindings[TWO_FORTY_BUTTON_Y].code==KEY_R);
     assert(rmdir(HOST_CONFIG_PATH)==0);assert(rename("config/saved.conf",HOST_CONFIG_PATH)==0);update_host(&host);
-    host.controller_settings=false;host.selected_game=1;
+    host.controller_settings=false;host.settings_menu=true;host.settings_option=1;
     tap(&host,0,BTN_TR2);assert(host.display_settings);
     tap(&host,1,KEY_D);assert(host.safe_x==17);
-    tap(&host,1,KEY_ESC);assert(!host.display_settings && host.safe_x==16);
+    tap(&host,1,KEY_R);assert(!host.display_settings && host.safe_x==16);
     tap(&host,0,BTN_TR2);tap(&host,1,KEY_D);tap(&host,1,KEY_S);tap(&host,1,KEY_D);
     assert(host.safe_x==17 && host.safe_y==13);
     tap(&host,1,KEY_S);tap(&host,1,KEY_D); /* horizontal +1 */
@@ -312,7 +361,7 @@ int main(int argc,char **argv)
     tap(&host,0,BTN_TR2);host.display_option=2;tap(&host,1,KEY_A);
     host.display_option=3;tap(&host,1,KEY_A);
     assert(host.safe_offset_x==0 && host.safe_offset_y==0);
-    tap(&host,1,KEY_ESC);assert(host.safe_offset_x==1 && host.safe_offset_y==1);
+    tap(&host,1,KEY_R);assert(host.safe_offset_x==1 && host.safe_offset_y==1);
     /* Offsets cannot push the logical viewport outside the physical framebuffer. */
     struct host moved={0};moved.mode.hdisplay=320;moved.mode.vdisplay=240;
     moved.safe_x=16;moved.safe_y=12;moved.safe_offset_x=32;moved.safe_offset_y=-24;
@@ -336,7 +385,7 @@ int main(int argc,char **argv)
     host.active_game=NULL;host.game_api=NULL;
     /* Render fixtures at the maximum margins as well as the default. */
     host.safe_offset_x=host.safe_offset_y=0;
-    host.safe_x=32;host.safe_y=24;update_safe_area(&host);host.game_count=6;host.selected_game=8;
+    host.safe_x=32;host.safe_y=24;update_safe_area(&host);host.game_count=6;host.selected_game=7;
     for(int i=0;i<6;i++) snprintf(host.games[i].name,sizeof(host.games[i].name),"GAME %d",i+1);
     draw_launcher(&host);char output[512];snprintf(output,sizeof(output),"%s/launcher.ppm",argv[1]);write_preview(output);
     host.settings_message="";host.selected_option=2;
@@ -346,6 +395,8 @@ int main(int argc,char **argv)
     draw_controller_settings(&host);snprintf(output,sizeof(output),"%s/button-setup.ppm",argv[1]);write_preview(output);
     host.settings_message="";
     draw_display_settings(&host);snprintf(output,sizeof(output),"%s/display-area.ppm",argv[1]);write_preview(output);
+    host.setup.active=false;host.controller_settings=false;
+    draw_settings_menu(&host);snprintf(output,sizeof(output),"%s/settings.ppm",argv[1]);write_preview(output);
     check_frame_timing(&host,argv[1]);
     assert(remove(HOST_CONFIG_PATH)==0);assert(rmdir("config")==0);
     assert(remove("run/status.json")==0);assert(rmdir("run")==0);

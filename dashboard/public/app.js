@@ -7,6 +7,37 @@ let editingGame = "";
 let bootGame = "launcher";
 let levelState = null;
 let displayViewport = null;
+let renderedGames = "";
+
+let gamePageId="";
+function showPage(route) {
+  if(route==="play" || !route)route="console";
+  if(route==="games")route="edit";
+  if(route.startsWith("games/"))route="edit/"+route.slice(6);
+  const id=route.startsWith("edit/")?route.slice(5):"";
+  const game=games.find(game=>game.id===id && game.id!=="hardware-test");
+  const page=game?"game":route==="edit" || id?"edit":route==="launcher"?"launcher":"console";
+  if(game) {
+    $("#gameTitle").textContent=game.name;$("#gameBreadcrumb").textContent=game.name;
+    if(gamePageId!==id) {
+      $("#editorPanel").classList.add("hidden");$("#levelEditorPanel").classList.add("hidden");
+      gamePageId=id;
+    }
+    renderGameTools(game);
+  }
+  document.querySelectorAll("[data-page]").forEach(element=>element.classList.toggle("hidden",element.dataset.page!==page));
+  document.querySelectorAll("[data-page-link]").forEach(element=>{
+    if(element.dataset.pageLink===(page==="game"?"edit":page))element.setAttribute("aria-current","page");
+    else element.removeAttribute("aria-current");
+  });
+}
+function renderGameTools(game) {
+  $("#gameTools").innerHTML=`<div class="button-row">${(game.editors || []).filter((editor,index,all)=>all.findIndex(e=>e.type===editor.type)===index).map(editor=>`<button class="button" data-level-editor="${editor.id}">${editor.type==="sprite"?"Sprites & animations":"Levels"}</button>`).join("")}<button class="button" data-edit="${game.id}">Game settings</button></div><details class="asset-files"><summary>Browse asset files</summary><div class="assets">${game.assets.map(asset=>`<a class="asset" href="${asset.url}" target="_blank" rel="noopener">${escapeHtml(asset.name)}</a>`).join("")}</div></details>`;
+  $("#gameTools [data-edit]").onclick=()=>openEditor(game.id).catch(error=>setAction(error.message,true));
+  document.querySelectorAll("#gameTools [data-level-editor]").forEach(button=>button.onclick=()=>openLevelEditor(game.id,button.dataset.levelEditor).catch(error=>setAction(error.message,true)));
+}
+window.addEventListener("hashchange",()=>showPage(location.hash.slice(1)));
+showPage(location.hash.slice(1));
 
 async function api(url, options = {}) {
   const response = await fetch(url, options);
@@ -55,13 +86,14 @@ async function refreshStatus() {
     $("#statusDot").classList.toggle("online", data.online);
     $("#connectionText").textContent = data.online ? "Pi online · 192.168.137.2" : "Pi unreachable";
     $("#modePill").classList.toggle("online", data.online);
-    if (!data.online) return;
+    if (!data.online) { $("#modeTitle").textContent="Pi unavailable"; $("#modePill").textContent="offline"; $("#reloadBtn").disabled=true; return; }
     const status = data.status;
     if (Number.isInteger(status.viewport_width) && Number.isInteger(status.viewport_height))
       displayViewport = {width:status.viewport_width, height:status.viewport_height};
     activeGame = status.game || "";
+    $("#reloadBtn").disabled=!activeGame;
     $("#modeTitle").textContent = status.mode === "game" ?
-      (games.find((game) => game.id === status.game)?.name || status.game) : "Game launcher";
+      (games.find((game) => game.id === status.game)?.name || status.game) : ({input:"Input settings",display:"Display area",settings:"Settings",setup:"Input mapping",test:"Input test"}[status.mode] || "Game launcher");
     $("#modePill").textContent = status.mode;
     $("#outputMode").textContent = `${status.width}×${status.height} @ ${status.refresh}Hz`;
     const diagnostics = parseDiagnostics(data.diagnostics);
@@ -76,29 +108,12 @@ async function refreshStatus() {
 }
 
 function renderGames() {
-  const root = $("#games");
-  if (!games.length) { root.innerHTML = '<p class="hint">No game folders found.</p>'; return; }
-  root.innerHTML = games.map((game) => `
-    <article class="game-card ${activeGame === game.id ? "active" : ""}">
-      <h3>${escapeHtml(game.name)}</h3>
-      <p>${escapeHtml(game.description || "No description yet.")}</p>
-      <div class="assets">${game.assets.map((asset) =>
-        `<a class="asset" href="${asset.url}" target="_blank" title="${asset.size} bytes">${escapeHtml(asset.name)}</a>`).join("")}</div>
-      <div class="button-row">
-        <button class="button primary" data-launch="${game.id}">Launch</button>
-        ${(game.editors || []).filter((editor, index, all) => all.findIndex(e => e.type === editor.type) === index).map((editor) => `<button class="button" data-level-game="${game.id}" data-level-editor="${editor.id}">${editor.type === "sprite" ? "Edit sprites & animations" : "Edit levels"}</button>`).join("")}
-        <button class="button" data-edit="${game.id}">Edit settings</button>
-      </div>
-    </article>`).join("");
-  root.querySelectorAll("[data-launch]").forEach((button) => button.addEventListener("click", () =>
-    act(button, "Launching", async () => {
-      await api("/api/control", { method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ action:"launch", game:button.dataset.launch }) });
-      await new Promise((resolve) => setTimeout(resolve, 250)); await refreshStatus();
-    })));
-  root.querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", () => openEditor(button.dataset.edit)));
-  root.querySelectorAll("[data-level-editor]").forEach((button) => button.addEventListener("click", () =>
-    openLevelEditor(button.dataset.levelGame, button.dataset.levelEditor).catch(error=>setAction(error.message,true))));
+  const signature=JSON.stringify([games,activeGame]);
+  if(signature===renderedGames)return;
+  renderedGames=signature;
+  const playable=games.filter(game=>game.id!=="hardware-test");
+  $("#editGames").innerHTML=playable.map(game=>`<a class="game-card game-link" href="#edit/${game.id}"><h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.description || "")}</p><span class="text-link">Open game editor →</span></a>`).join("");
+
 }
 
 function escapeHtml(text) {
@@ -114,6 +129,7 @@ async function loadGames() {
     `<option value="${game.id}">${escapeHtml(game.name)}</option>`).join("");
   select.value = bootGame;
   renderGames();
+  showPage(location.hash.slice(1));
 }
 
 async function openEditor(id) {
@@ -123,6 +139,7 @@ async function openEditor(id) {
   $("#configEditor").value = data.text;
   $("#levelEditorPanel").classList.add("hidden");
   $("#editorPanel").classList.remove("hidden");
+  location.hash=`edit/${id}`;showPage(`edit/${id}`);
   $("#editorPanel").scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
@@ -137,28 +154,15 @@ async function saveConfig(deploy) {
 
 async function drawPpm(url) {
   const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-  let position = 0;
-  const token = () => {
-    while (position < bytes.length) {
-      if (bytes[position] === 35) while (position < bytes.length && bytes[position++] !== 10) {}
-      else if (bytes[position] <= 32) position++;
-      else break;
-    }
-    const start = position;
-    while (position < bytes.length && bytes[position] > 32 && bytes[position] !== 35) position++;
-    return new TextDecoder().decode(bytes.slice(start, position));
-  };
-  if (token() !== "P6") throw new Error("Unsupported snapshot format");
-  const width = Number(token()); const height = Number(token()); const maximum = Number(token());
-  while (bytes[position] <= 32) position++;
-  if (maximum !== 255) throw new Error("Unsupported snapshot depth");
+  const {width,height,pixels}=decodePpm(bytes);
   const canvas = $("#snapshotCanvas");
   canvas.width = width; canvas.height = height;
+  canvas.parentElement.style.aspectRatio = `${width} / ${height}`;
   const context = canvas.getContext("2d");
   const image = context.createImageData(width, height);
-  for (let source = position, target = 0; target < image.data.length; source += 3, target += 4) {
-    image.data[target] = bytes[source]; image.data[target + 1] = bytes[source + 1];
-    image.data[target + 2] = bytes[source + 2]; image.data[target + 3] = 255;
+  for (let source = 0, target = 0; target < image.data.length; source += 3, target += 4) {
+    image.data[target] = pixels[source]; image.data[target + 1] = pixels[source + 1];
+    image.data[target + 2] = pixels[source + 2]; image.data[target + 3] = 255;
   }
   context.putImageData(image, 0, 0);
   $("#screenEmpty").classList.add("hidden");
