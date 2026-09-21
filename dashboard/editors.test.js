@@ -8,7 +8,7 @@ const editors=require("./editors");
 
 test("all campaign levels and animations use valid shared definitions",()=> {
   const all=editors.loadEditors("phosphor-run");
-  assert.equal(all.filter(e=>e.type==="tilemap").length,3);
+  assert.equal(all.filter(e=>e.type==="tilemap").length,4);
   assert.equal(all.filter(e=>e.type==="sprite").length,20);
   for (const editor of all) {
     const text=fs.readFileSync(editors.editorAssetPath(editors.gameDirectory("phosphor-run"),editor.file),"utf8");
@@ -58,6 +58,22 @@ test("duplicate assets register immediately and campaign ordering persists",()=>
     assert.equal(fs.readFileSync(path.join(directory,"assets/sprites/walk.sprite"),"utf8"),"# ticks=9\nc\n---\ng\n");
     editors.createEditor(id,{source:"sprite-idle",id:"a".repeat(63)});
     assert.equal(editors.loadEditors(id).length,5);
+    const blankId=editors.createEditor(id,{source:"level-one",id:"new-level",name:"Furnace Shaft",blank:true});
+    const blank=editors.findEditor(id,blankId);
+    const blankFile=editors.editorAssetPath(directory,blank.file);
+    const blankText=fs.readFileSync(blankFile,"utf8");
+    assert.equal(blank.name,"Furnace Shaft");
+    assert.equal(editors.validateEditorText(blank,blankText).valid,true);
+    assert.equal(blankText.includes("^"),false);
+    assert.throws(()=>editors.renameLevel(id,blankId,"Renamed","stale"));
+    assert.throws(()=>editors.renameLevel(id,blankId,"bad\nname",editors.textHash(blankText)));
+    editors.renameLevel(id,blankId,"Fire & Ice",editors.textHash(blankText));
+    assert.equal(editors.findEditor(id,blankId).name,"Fire & Ice");
+    assert.equal(fs.readFileSync(blankFile,"utf8").split("\n").slice(1).join("\n"),blankText.split("\n").slice(1).join("\n"));
+    const copyId=editors.createEditor(id,{source:blankId,id:"copy-level",name:"Second Furnace"});
+    assert.equal(editors.findEditor(id,copyId).name,"Second Furnace");
+    editors.reorderLevels(id,["copy-level","two","one","new-level"]);
+    assert.deepEqual(editors.loadEditors(id).filter(e=>e.type==="tilemap").map(e=>e.name),["Second Furnace","two","one","Fire & Ice"]);
   } finally {
     // Only this uniquely named test directory, created above, is disposable.
     fs.rmSync(directory,{recursive:true,force:true});

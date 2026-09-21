@@ -85,7 +85,7 @@ function parseConfig(text) {
 }
 
 const {gameDirectory, editorAssetPath, loadEditors, findEditor, textHash, validateEditorText,
-  writeAtomic, readCatalog, createEditor, reorderLevels} = require("./editors");
+  writeAtomic, readCatalog, createEditor, reorderLevels, renameLevel} = require("./editors");
 
 function listGames() {
   const root = path.join(ROOT, "games");
@@ -338,6 +338,12 @@ async function handle(request, response) {
       return json(response, 200, { ok: true });
     }
 
+    match = /^\/api\/games\/([^/]+)\/editors\/([^/]+)\/name$/.exec(url.pathname);
+    if (match && request.method === "PUT") {
+      const body=await requestBody(request);
+      renameLevel(decodeURIComponent(match[1]),decodeURIComponent(match[2]),body.name,body.hash);
+      return json(response,200,{ok:true});
+    }
     match = /^\/api\/games\/([^/]+)\/editors$/.exec(url.pathname);
     if (match && request.method === "POST") {
       const editorId = createEditor(decodeURIComponent(match[1]), await requestBody(request));

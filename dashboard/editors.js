@@ -47,7 +47,7 @@ function loadEditors(id) {
   const catalog = document.catalog ? readCatalog(directory, document.catalog) : [];
   const definitions = [...document.editors, ...catalog.map((entry) => ({
     ...document.templates?.[entry.kind], id: `${entry.kind}-${entry.id}`,
-    name: entry.id.replace(/-/g, " "), file: entry.file, catalogKind: entry.kind,
+    name: entry.kind === "level" ? (fs.readFileSync(editorAssetPath(directory, entry.file), "utf8").match(/^# ([^\r\n]+)/)?.[1] || entry.id.replace(/-/g, " ")) : entry.id.replace(/-/g, " "), file: entry.file, catalogKind: entry.kind,
     catalogId: entry.id,
   }))];
   return definitions.map((editor) => {
@@ -176,6 +176,18 @@ function catalogDocument(id) {
   return {directory, document, entries:readCatalog(directory, document.catalog)};
 }
 
+function namedLevelText(text, name) {
+  if (typeof name !== "string" || !name.trim() || name.trim().length > 80 || /[\x00-\x1f\x7f]/.test(name))
+    throw Object.assign(new Error("Use a level name of 1–80 characters on one line"), {status:400});
+  return "# " + name.trim() + "\n" + text.replace(/^# [^\r\n]*\r?\n/, "");
+}
+function renameLevel(id, editorId, name, hash) {
+  const editor=findEditor(id,editorId);
+  if (editor.catalogKind !== "level") throw Object.assign(new Error("Select a campaign level"),{status:400});
+  const file=editorAssetPath(gameDirectory(id),editor.file), text=fs.readFileSync(file,"utf8");
+  if (hash !== textHash(text)) throw Object.assign(new Error("Level changed; refresh and try again"),{status:409});
+  writeAtomic(file,namedLevelText(text,name));
+}
 function createEditor(id, body) {
   const {directory, document, entries} = catalogDocument(id);
   if (!validGameId(body.id)) throw Object.assign(new Error("Use 1–63 lowercase letters, digits or hyphens for the name"), {status:400});
@@ -187,7 +199,12 @@ function createEditor(id, body) {
   const asset = `assets/${kind === "level" ? "levels" : "sprites"}/${body.id}.${kind === "level" ? "txt" : "sprite"}`;
   const base = path.posix.dirname(document.catalog);
   const file = editorAssetPath(directory, base === "." ? asset : `${base}/${asset}`);
-  const text = fs.readFileSync(editorAssetPath(directory, source.file), "utf8");
+  let text = fs.readFileSync(editorAssetPath(directory, source.file), "utf8");
+  if (body.blank) {
+    if (kind !== "level") throw Object.assign(new Error("Only levels can start blank"), {status:400});
+    text = Array(25).fill(".".repeat(80)).join("\n") + "\n..S" + ".".repeat(74) + "E..\n" + "#".repeat(80) + "\n";
+  }
+  if (kind === "level" && body.name !== undefined) text = namedLevelText(text, body.name);
   const validation=validateEditorText(source,text);
   if (!validation.valid) throw Object.assign(new Error(validation.errors.join(" ")),{status:400});
   fs.mkdirSync(path.dirname(file), {recursive:true});
@@ -215,4 +232,4 @@ function reorderLevels(id, ids) {
 }
 
 module.exports = {gameDirectory, editorAssetPath, loadEditors, findEditor, textHash,
-  validateEditorText, writeAtomic, readCatalog, createEditor, reorderLevels};
+  validateEditorText, writeAtomic, readCatalog, createEditor, reorderLevels, renameLevel};

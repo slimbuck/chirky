@@ -35,6 +35,7 @@ function renderGameTools(game) {
   $("#gameTools").innerHTML=`<div class="button-row">${(game.editors || []).filter((editor,index,all)=>all.findIndex(e=>e.type===editor.type)===index).map(editor=>`<button class="button" data-level-editor="${editor.id}">${editor.type==="sprite"?"Sprites & animations":"Levels"}</button>`).join("")}<button class="button" data-edit="${game.id}">Game settings</button></div><details class="asset-files"><summary>Browse asset files</summary><div class="assets">${game.assets.map(asset=>`<a class="asset" href="${asset.url}" target="_blank" rel="noopener">${escapeHtml(asset.name)}</a>`).join("")}</div></details>`;
   $("#gameTools [data-edit]").onclick=()=>openEditor(game.id).catch(error=>setAction(error.message,true));
   document.querySelectorAll("#gameTools [data-level-editor]").forEach(button=>button.onclick=()=>openLevelEditor(game.id,button.dataset.levelEditor).catch(error=>setAction(error.message,true)));
+  if (game.id === "phosphor-run") renderCampaign(game);
 }
 window.addEventListener("hashchange",()=>showPage(location.hash.slice(1)));
 showPage(location.hash.slice(1));
