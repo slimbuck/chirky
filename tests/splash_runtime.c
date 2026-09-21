@@ -6,7 +6,7 @@
 static unsigned char screen[240][320][3];
 static void paint(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
-    const struct two_forty_host_api *api=ctx;
+    const struct chirky_host_api *api=ctx;
     assert(x>=0 && y>=0 && w>0 && h>0 && x+w<=api->screen_width && y+h<=api->screen_height);
     for(int yy=y;yy<y+h;yy++)for(int xx=x;xx<x+w;xx++) {
         screen[yy][xx][0]=r;screen[yy][xx][1]=g;screen[yy][xx][2]=b;
@@ -21,7 +21,7 @@ int main(void)
         assert(art.width==288 && art.height==216);
         const int sizes[][2]={{320,240},{288,216},{256,192}};
         for(int i=0;i<3;i++) {
-            struct two_forty_host_api api={.screen_width=sizes[i][0],.screen_height=sizes[i][1],.fill_rect=paint};
+            struct chirky_host_api api={.screen_width=sizes[i][0],.screen_height=sizes[i][1],.fill_rect=paint};
             api.context=&api;
             assert(splash_draw(&art,&api));
             /* Integer edge scaling maps each destination pixel to the last
@@ -33,7 +33,7 @@ int main(void)
             }
         }
     }
-    char dir[]="/tmp/two-forty-art-XXXXXX",path[256],config[256];
+    char dir[]="/tmp/chirky-art-XXXXXX",path[256],config[256];
     assert(mkdtemp(dir));
     snprintf(path,sizeof(path),"%s/assets",dir);assert(!mkdir(path,0700));
     snprintf(path,sizeof(path),"%s/assets/artwork",dir);assert(!mkdir(path,0700));

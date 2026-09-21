@@ -25,14 +25,14 @@ int main(int argc,char **argv)
     h.egl_surface=eglCreatePbufferSurface(h.egl_display,config,surface_attributes);
     assert(eglMakeCurrent(h.egl_display,h.egl_surface,h.egl_surface,h.egl_context));
     glViewport(0,0,320,240);
-    h.api=(struct two_forty_host_api){.abi_version=TWO_FORTY_ABI_VERSION,.context=&h,
+    h.api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,.context=&h,
         .fill_rect=fill_rect,.draw_text=draw_text,.play_sound=quiet_sound,.button_label=button_label};
     update_safe_area(&h);
     void *library=dlopen(module,RTLD_NOW);if(!library){fprintf(stderr,"%s\n",dlerror());return 1;}
-    two_forty_game_entry_fn entry=NULL;void *symbol=dlsym(library,"two_forty_game_entry");memcpy(&entry,&symbol,sizeof(entry));assert(entry);
-    const struct two_forty_game_api *game=entry();assert(game->abi_version==TWO_FORTY_ABI_VERSION);
+    chirky_game_entry_fn entry=NULL;void *symbol=dlsym(library,"chirky_game_entry");memcpy(&entry,&symbol,sizeof(entry));assert(entry);
+    const struct chirky_game_api *game=entry();assert(game->abi_version==CHIRKY_ABI_VERSION);
     assert(game->init(&h.api,"games/rosey-chop/game.conf"));
-    struct two_forty_input input={0};input.button_pressed[TWO_FORTY_BUTTON_B]=true;game->update(&input);
+    struct chirky_input input={0};input.button_pressed[CHIRKY_BUTTON_B]=true;game->update(&input);
     /* RGBA/UNSIGNED_BYTE is the guaranteed GLES2 readback pair. RGB is not. */
     unsigned char baseline[320*240*4],result[320*240*4];
     for(int mode=0;mode<2;mode++) {

@@ -1,6 +1,6 @@
 #ifndef PHOSPHOR_GAME_STATE_H
 #define PHOSPHOR_GAME_STATE_H
-#include "two_forty.h"
+#include "chirky.h"
 #include "assets.h"
 
 /* Internal runtime boundary. Gameplay owns mutable state; settings initializes
@@ -41,7 +41,7 @@ struct particle {
     struct colour colour;
 };
 
-extern const struct two_forty_host_api *host;
+extern const struct chirky_host_api *host;
 extern struct settings settings;
 extern struct level level;
 extern struct content content;

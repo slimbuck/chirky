@@ -1,6 +1,6 @@
 # Phosphor Run
 
-A 320×240, 60 Hz platformer for the Two Forty CRT host.
+A 320×240, 60 Hz platformer for the Chirky CRT host.
 
 ## Playing
 
@@ -96,7 +96,7 @@ both the renderer and dashboard.
 - `game.c`: lifecycle, campaign progression, player movement/collision, interactions,
   checkpoints, particles and fixed-tick updates. This module owns mutable state.
 - `game_state.h`: internal state/types shared by the game modules; the host ABI
-  remains in `include/two_forty.h`.
+  remains in `include/chirky.h`.
 - `settings.c`: defaults and configuration parsing.
 - `assets.h` / `assets.c`: catalog, strict grid/animation loaders, frame sampling
   and memory ownership. Independent of input, gameplay and graphics APIs.

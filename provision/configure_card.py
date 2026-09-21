@@ -14,9 +14,9 @@ RGBERRY_BLOCK = (ROOT / "provision" / "rgbberry-config.txt").read_text(encoding=
 
 
 def arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Prepare a Two Forty Trixie SD card.")
+    parser = argparse.ArgumentParser(description="Prepare a Chirky Trixie SD card.")
     parser.add_argument("--drive", "-d", default="E:", help="Mounted boot partition (default: E:)")
-    parser.add_argument("--hostname", default="twoforty")
+    parser.add_argument("--hostname", default="chirky")
     parser.add_argument("--user", default="retro")
     parser.add_argument("--address", default="192.168.137.2/24")
     parser.add_argument("--ssh-key", default=os.path.expanduser("~/.ssh/id_ed25519.pub"))
@@ -27,11 +27,12 @@ def arguments() -> argparse.Namespace:
 def configure_boot(boot: Path) -> None:
     path = boot / "config.txt"
     text = path.read_text(encoding="utf-8")
-    begin, end = "# BEGIN TWO FORTY RGBERRY", "# END TWO FORTY RGBERRY"
-    if begin in text and end in text:
-        before, remainder = text.split(begin, 1)
-        _, after = remainder.split(end, 1)
-        text = before.rstrip() + "\n" + after.lstrip("\r\n")
+    for brand in ("CHIRKY", "TWO FORTY"):
+        begin, end = f"# BEGIN {brand} RGBERRY", f"# END {brand} RGBERRY"
+        if begin in text and end in text:
+            before, remainder = text.split(begin, 1)
+            _, after = remainder.split(end, 1)
+            text = before.rstrip() + "\n" + after.lstrip("\r\n")
     owned = {
         "dtoverlay=audremap,pins_18_19",
         "dtoverlay=vc4-kms-dpi-generic,hactive=320,hfp=16",

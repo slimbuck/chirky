@@ -8,7 +8,7 @@ async function loadRemoteLauncher() {
   } catch(error){setAction(error.message,true);}
 }
 function renderRemoteLauncher() {
-  $("#remoteMenuTitle").textContent=launcherSection==="root"?"Two Forty":launcherItems.find(e=>e.id==="settings" && e.section==="root")?.label || "Settings";
+  $("#remoteMenuTitle").textContent=launcherSection==="root"?"Chirky":launcherItems.find(e=>e.id==="settings" && e.section==="root")?.label || "Settings";
   $("#launcherItems").innerHTML=launcherItems.filter(e=>e.section===launcherSection && e.visible).map(e=>`<button class="remote-item" data-menu-id="${e.id}"><span>${escapeHtml(e.label)}</span><span aria-hidden="true">${e.id==="settings"?"›":"↗"}</span></button>`).join("");
   if(launcherSection==="settings")$("#launcherItems").insertAdjacentHTML("beforeend",'<button class="remote-item" data-menu-id="back"><span>Back</span><span aria-hidden="true">‹</span></button>');
   document.querySelectorAll("[data-menu-id]").forEach(button=>button.onclick=()=>{

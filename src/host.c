@@ -1,4 +1,4 @@
-#include "two_forty.h"
+#include "chirky.h"
 #include "input_bindings.h"
 #include "rect_renderer.h"
 #include "frame_timing.h"
@@ -209,11 +209,11 @@ struct framebuffer { int drm_fd; uint32_t fb_id; };
 struct input_set {
     struct input_device devices[MAX_INPUTS];
     int count;
-    bool previous_buttons[TWO_FORTY_BUTTON_COUNT];
-    bool pending_buttons[TWO_FORTY_BUTTON_COUNT];
+    bool previous_buttons[CHIRKY_BUTTON_COUNT];
+    bool pending_buttons[CHIRKY_BUTTON_COUNT];
     bool controller_up_pressed;
     bool controller_down_pressed;
-    struct two_forty_input state;
+    struct chirky_input state;
 };
 
 struct game_record {
@@ -244,9 +244,9 @@ struct host {
     int pause_option;
     struct launcher_config launcher;
     void *game_library;
-    const struct two_forty_game_api *game_api;
+    const struct chirky_game_api *game_api;
     const struct game_record *active_game;
-    struct two_forty_host_api api;
+    struct chirky_host_api api;
     int control_fd;
     bool flip_pending;
     bool running;
@@ -260,11 +260,11 @@ struct host {
     bool timing_start_held, timing_start_toggled;
     uint64_t timing_start_us;
     char boot_game_id[64];
-    struct controller_binding bindings[TWO_FORTY_BUTTON_COUNT];
-    struct controller_binding keyboard_bindings[TWO_FORTY_BUTTON_COUNT];
+    struct controller_binding bindings[CHIRKY_BUTTON_COUNT];
+    struct controller_binding keyboard_bindings[CHIRKY_BUTTON_COUNT];
     struct binding_setup setup;
     bool settings_menu, controller_settings, display_settings, input_test, ui_wait_release, last_keyboard;
-    struct two_forty_input_gate transition_gate;
+    struct chirky_input_gate transition_gate;
     int settings_option, selected_option, display_option, safe_x, safe_y, saved_safe_x, saved_safe_y;
     int safe_offset_x,safe_offset_y,saved_safe_offset_x,saved_safe_offset_y;
     const char *settings_message;
@@ -279,7 +279,7 @@ static uint64_t monotonic_us(void);
 static void block_transition_input(struct host *host)
 {
     host->ui_wait_release=true;
-    two_forty_gate_begin(&host->transition_gate);
+    chirky_gate_begin(&host->transition_gate);
     memset(host->inputs.pending_buttons,0,sizeof(host->inputs.pending_buttons));
     memset(host->inputs.state.button_pressed,0,sizeof(host->inputs.state.button_pressed));
     memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
@@ -314,25 +314,25 @@ static void copy_text(char *destination, size_t capacity, const char *source)
     if (capacity > 0) snprintf(destination, capacity, "%s", source);
 }
 
-static const char *const button_config_keys[TWO_FORTY_BUTTON_COUNT] = {
+static const char *const button_config_keys[CHIRKY_BUTTON_COUNT] = {
     "bind_left", "bind_right", "bind_up", "bind_down",
     "bind_y", "bind_b", "bind_a", "bind_x", "bind_l", "bind_r", "bind_start", "bind_select"
 };
 
-static const char *const button_names[TWO_FORTY_BUTTON_COUNT] = {
+static const char *const button_names[CHIRKY_BUTTON_COUNT] = {
     "LEFT", "RIGHT", "UP", "DOWN", "Y", "B", "A", "X", "L", "R", "START", "SELECT"
 };
 
-static const char *const keyboard_config_keys[TWO_FORTY_BUTTON_COUNT] = {
+static const char *const keyboard_config_keys[CHIRKY_BUTTON_COUNT] = {
     "key_left", "key_right", "key_up", "key_down",
     "key_y", "key_b", "key_a", "key_x", "key_l", "key_r", "key_start", "key_select"
 };
 
 static int binding_button_for_key(const char *key)
 {
-    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         if (!strcmp(key,button_config_keys[i])) return i;
-        if (!strcmp(key,keyboard_config_keys[i])) return i+TWO_FORTY_BUTTON_COUNT;
+        if (!strcmp(key,keyboard_config_keys[i])) return i+CHIRKY_BUTTON_COUNT;
     }
     return -1;
 }
@@ -371,7 +371,7 @@ static bool save_bindings(const struct host *host)
     fputs("\ninput_version=3\n",target);
     fprintf(target,"safe_x=%d\nsafe_y=%d\n",host->safe_x,host->safe_y);
     fprintf(target,"safe_offset_x=%d\nsafe_offset_y=%d\n",host->safe_offset_x,host->safe_offset_y);
-    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         write_binding(target,button_config_keys[i],&host->bindings[i]);
         write_binding(target,keyboard_config_keys[i],&host->keyboard_bindings[i]);
     }
@@ -423,11 +423,11 @@ static void keyboard_name(const struct controller_binding *binding, char *name, 
     snprintf(name,capacity,"KEY %u",binding->code);
 }
 
-static void button_label(void *context, enum two_forty_button button,
+static void button_label(void *context, enum chirky_button button,
                          char *text, size_t capacity)
 {
     (void)context;
-    copy_text(text,capacity,button>=0 && button<TWO_FORTY_BUTTON_COUNT ? button_names[button] : "UNBOUND");
+    copy_text(text,capacity,button>=0 && button<CHIRKY_BUTTON_COUNT ? button_names[button] : "UNBOUND");
 }
 
 static void fill_rect(void *context, int x, int y, int width, int height,
@@ -588,7 +588,7 @@ static void load_host_config(struct host *host)
     host->timing_start_held=host->timing_start_toggled=false;
     int input_version=0;
     struct controller_binding legacy[8]={0};
-    bool supplied[2*TWO_FORTY_BUTTON_COUNT]={0}, old_supplied[8]={0};
+    bool supplied[2*CHIRKY_BUTTON_COUNT]={0}, old_supplied[8]={0};
     FILE *file=fopen(HOST_CONFIG_PATH,"r");
     if (!file) return;
     char line[512];
@@ -606,9 +606,9 @@ static void load_host_config(struct host *host)
             int button=binding_button_for_key(key), old=legacy_binding_for_key(key);
             struct controller_binding parsed;
             if (!parse_binding(value,&parsed)) continue;
-            if (button>=0 && (button<TWO_FORTY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
-                if (button<TWO_FORTY_BUTTON_COUNT) host->bindings[button]=parsed;
-                else host->keyboard_bindings[button-TWO_FORTY_BUTTON_COUNT]=parsed;
+            if (button>=0 && (button<CHIRKY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
+                if (button<CHIRKY_BUTTON_COUNT) host->bindings[button]=parsed;
+                else host->keyboard_bindings[button-CHIRKY_BUTTON_COUNT]=parsed;
                 supplied[button]=true;
             } else if (old>=0 && (old<4 || keyboard_binding_valid(parsed))) {
                 legacy[old]=parsed; old_supplied[old]=true;
@@ -617,28 +617,28 @@ static void load_host_config(struct host *host)
     }
     fclose(file);
     if (input_version<3) {
-        const int targets[]={TWO_FORTY_BUTTON_Y,TWO_FORTY_BUTTON_B,-1,TWO_FORTY_BUTTON_SELECT,
-            TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_Y,TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_B,
-            TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_START,TWO_FORTY_BUTTON_COUNT+TWO_FORTY_BUTTON_SELECT};
+        const int targets[]={CHIRKY_BUTTON_Y,CHIRKY_BUTTON_B,-1,CHIRKY_BUTTON_SELECT,
+            CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_Y,CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_B,
+            CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_START,CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_SELECT};
         for (int i=0;i<8;i++) {
             int target=targets[i];
             if (target<0 || !old_supplied[i] || supplied[target]) continue;
-            if (target<TWO_FORTY_BUTTON_COUNT) host->bindings[target]=legacy[i];
-            else host->keyboard_bindings[target-TWO_FORTY_BUTTON_COUNT]=legacy[i];
+            if (target<CHIRKY_BUTTON_COUNT) host->bindings[target]=legacy[i];
+            else host->keyboard_bindings[target-CHIRKY_BUTTON_COUNT]=legacy[i];
             supplied[target]=true;
         }
         /* A legacy Confirm has no separate game button. Dash owns B; if Dash
            was absent, retain custom Confirm as B except the obsolete Start default. */
-        if (!supplied[TWO_FORTY_BUTTON_B] && old_supplied[2] &&
+        if (!supplied[CHIRKY_BUTTON_B] && old_supplied[2] &&
             !(input_version<2 && legacy[2].kind==BINDING_KEY && legacy[2].code==BTN_TR2)) {
-            host->bindings[TWO_FORTY_BUTTON_B]=legacy[2]; supplied[TWO_FORTY_BUTTON_B]=true;
+            host->bindings[CHIRKY_BUTTON_B]=legacy[2]; supplied[CHIRKY_BUTTON_B]=true;
         }
         /* New defaults must not turn a retained custom input into two buttons. */
         for (int source=0;source<2;source++) {
             struct controller_binding *map=source?host->keyboard_bindings:host->bindings;
-            bool *explicit=supplied+source*TWO_FORTY_BUTTON_COUNT;
-            for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) if (!explicit[i])
-                for (int j=0;j<TWO_FORTY_BUTTON_COUNT;j++)
+            bool *explicit=supplied+source*CHIRKY_BUTTON_COUNT;
+            for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) if (!explicit[i])
+                for (int j=0;j<CHIRKY_BUTTON_COUNT;j++)
                     if (explicit[j] && same_binding(map[i],map[j])) map[i]=(struct controller_binding){0};
         }
     }
@@ -687,8 +687,8 @@ static bool load_game(struct host *host, int index)
         return false;
     }
     dlerror();
-    void *symbol = dlsym(host->game_library, "two_forty_game_entry");
-    two_forty_game_entry_fn entry = NULL;
+    void *symbol = dlsym(host->game_library, "chirky_game_entry");
+    chirky_game_entry_fn entry = NULL;
     memcpy(&entry, &symbol, sizeof(entry));
     const char *error = dlerror();
     if (error != NULL || entry == NULL) {
@@ -699,7 +699,7 @@ static bool load_game(struct host *host, int index)
     }
     host->game_api = entry();
     if (host->game_api == NULL ||
-        host->game_api->abi_version != TWO_FORTY_ABI_VERSION ||
+        host->game_api->abi_version != CHIRKY_ABI_VERSION ||
         !host->game_api->init(&host->api, game->config_path)) {
         fprintf(stderr, "Game initialization failed: %s\n", game->id);
         unload_game(host);
@@ -865,8 +865,8 @@ static void menu_row(struct host *host, int y, const char *label, bool selected)
 
 static void menu_footer(struct host *host, bool can_go_back)
 {
-    char confirm[32],back[32],line[80]; button_label(host,TWO_FORTY_BUTTON_B,confirm,sizeof(confirm));
-    button_label(host,TWO_FORTY_BUTTON_A,back,sizeof(back));
+    char confirm[32],back[32],line[80]; button_label(host,CHIRKY_BUTTON_B,confirm,sizeof(confirm));
+    button_label(host,CHIRKY_BUTTON_A,back,sizeof(back));
     if (can_go_back) snprintf(line,sizeof(line),"%s SELECT - %s BACK",confirm,back);
     else snprintf(line,sizeof(line),"%s SELECT - UP DOWN MOVE",confirm);
     menu_text(host,10,14,line,1,112,160,170);
@@ -878,8 +878,8 @@ static void draw_launcher(struct host *host)
     splash_draw(&host->launcher_art,&host->api);
     int height=host->api.screen_height;
     fill_rect(host,8,height-7,host->api.screen_width-16,3,40,175,212);
-    menu_text(host,10,height-23,"GAME LIBRARY",2,238,240,232);
-    menu_text(host,10,height-55,"GAMES AND SETTINGS",1,112,160,170);
+    menu_text(host,10,height-23,"CHIRKY",3,238,240,232);
+    menu_text(host,10,height-55,"THE CHIRKY JOYBOX",1,112,160,170);
     ensure_launcher(host);
     int count=launcher_count(&host->launcher,false), first=host->selected_game<4?0:host->selected_game-3;
     for (int row=0;row<4 && first+row<count;row++) {
@@ -966,7 +966,7 @@ static void draw_live_inputs(struct host *host)
 {
     int cell=(host->api.screen_width-20)/6;
     menu_text(host,10,87,"PAD GREEN / KEY GOLD",1,155,175,180);
-    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         bool pad=binding_down(&host->inputs,&host->bindings[i],false);
         bool key=binding_down(&host->inputs,&host->keyboard_bindings[i],true);
         int x=10+(i%6)*cell, y=61-(i/6)*21;
@@ -988,10 +988,10 @@ static void draw_controller_settings(struct host *host)
     if (host->setup.active) {
         struct binding_setup *setup=&host->setup;
         menu_text(host,10,height-18,setup->keyboard?"MAP KEYBOARD":"MAP CONTROLLER",2,238,240,232);
-        int step=setup->step<TWO_FORTY_BUTTON_COUNT?setup->step:TWO_FORTY_BUTTON_COUNT-1;
+        int step=setup->step<CHIRKY_BUTTON_COUNT?setup->step:CHIRKY_BUTTON_COUNT-1;
         menu_text(host,10,height-47,button_names[step],3,244,194,70);
         char line[80];
-        snprintf(line,sizeof(line),"%d OF %d - %s",step+1,TWO_FORTY_BUTTON_COUNT,
+        snprintf(line,sizeof(line),"%d OF %d - %s",step+1,CHIRKY_BUTTON_COUNT,
             setup->wait_release?"RELEASE ALL INPUTS":"PRESS NOW");
         menu_text(host,10,height-74,line,1,112,180,190);
         menu_text(host,10,99,setup->message,1,244,160,70);
@@ -1043,7 +1043,7 @@ static void save_snapshot(struct host *host)
     struct tm timestamp;
     localtime_r(&now, &timestamp);
     char path[512];
-    snprintf(path, sizeof(path), "snapshots/two-forty-%04d%02d%02d-%02d%02d%02d-%03u.ppm",
+    snprintf(path, sizeof(path), "snapshots/chirky-%04d%02d%02d-%02d%02d%02d-%03u.ppm",
              timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday,
              timestamp.tm_hour, timestamp.tm_min, timestamp.tm_sec,
              host->snapshot_sequence++);
@@ -1298,7 +1298,7 @@ static bool button_down(const struct host *host, int action)
 
 static void update_controller_buttons(struct host *host)
 {
-    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         bool down=button_down(host,i);
         host->inputs.state.buttons[i]=down;
         host->inputs.state.button_pressed[i]=host->inputs.pending_buttons[i] || (down && !host->inputs.previous_buttons[i]);
@@ -1311,8 +1311,8 @@ static void process_input_event(struct host *host, struct input_device *device, 
 {
     /* Linux autorepeat is not a physical press or release. */
     if(event->type==EV_KEY && event->value==2)return;
-    bool before[TWO_FORTY_BUTTON_COUNT];
-    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) before[i]=button_down(host,i);
+    bool before[CHIRKY_BUTTON_COUNT];
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) before[i]=button_down(host,i);
     if (event->type==EV_KEY && event->code<=KEY_MAX) {
         bool pressed=event->value==1 && !device->keys[event->code];
         device->keys[event->code]=event->value!=0;
@@ -1347,10 +1347,10 @@ static void process_input_event(struct host *host, struct input_device *device, 
                 setup_offer(&host->setup,(struct controller_binding){BINDING_ABS,event->code,direction});
         }
     }
-    for (int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++)
         if (!before[i] && button_down(host,i)) host->inputs.pending_buttons[i]=true;
     /* A release followed by a new press may both arrive between frames. */
-    if(before[TWO_FORTY_BUTTON_START] && !button_down(host,TWO_FORTY_BUTTON_START))
+    if(before[CHIRKY_BUTTON_START] && !button_down(host,CHIRKY_BUTTON_START))
         host->timing_start_held=host->timing_start_toggled=false;
 }
 
@@ -1364,16 +1364,16 @@ static void process_input(struct host *host, int fd)
         for (size_t i=0;i<(size_t)bytes/sizeof(events[0]);i++) process_input_event(host,device,&events[i]);
 }
 
-static bool menu_confirmed(const struct two_forty_input *input)
+static bool menu_confirmed(const struct chirky_input *input)
 {
-    return input->button_pressed[TWO_FORTY_BUTTON_B];
+    return input->button_pressed[CHIRKY_BUTTON_B];
 }
 
 static int menu_direction(const struct host *host)
 {
-    const struct two_forty_input *input=&host->inputs.state;
-    bool up=input->button_pressed[TWO_FORTY_BUTTON_UP];
-    bool down=input->button_pressed[TWO_FORTY_BUTTON_DOWN];
+    const struct chirky_input *input=&host->inputs.state;
+    bool up=input->button_pressed[CHIRKY_BUTTON_UP];
+    bool down=input->button_pressed[CHIRKY_BUTTON_DOWN];
     return (int)down-(int)up;
 }
 
@@ -1398,7 +1398,7 @@ static void update_setup(struct host *host)
     setup_release(&host->setup,buttons_released(&host->inputs,host->setup.keyboard));
     if (host->setup.complete) {
         struct controller_binding *target=host->setup.keyboard?host->keyboard_bindings:host->bindings;
-        struct controller_binding original[TWO_FORTY_BUTTON_COUNT];
+        struct controller_binding original[CHIRKY_BUTTON_COUNT];
         memcpy(original,target,sizeof(original)); memcpy(target,host->setup.pending,sizeof(original));
         if (save_bindings(host)) host->settings_message="BUTTONS SAVED";
         else { memcpy(target,original,sizeof(original)); host->settings_message="SAVE FAILED - NOTHING CHANGED"; }
@@ -1410,7 +1410,7 @@ static void update_setup(struct host *host)
    elapsed time so a slow frame cannot turn two seconds into a longer hold. */
 static void update_timing_toggle(struct host *host,uint64_t now_us)
 {
-    if(!host->inputs.state.buttons[TWO_FORTY_BUTTON_START]) {
+    if(!host->inputs.state.buttons[CHIRKY_BUTTON_START]) {
         host->timing_start_held=host->timing_start_toggled=false;
         return;
     }
@@ -1427,17 +1427,17 @@ static void update_host(struct host *host)
 {
     ensure_launcher(host);
     enum host_screen previous_screen=current_screen(host);
-    struct two_forty_input *input=&host->inputs.state;
+    struct chirky_input *input=&host->inputs.state;
     update_controller_buttons(host);
     update_timing_toggle(host,monotonic_us());
     if (!host->setup.active && input->pressed[KEY_F12]) snapshot_requested=1;
     int direction=menu_direction(host);
     bool confirm=menu_confirmed(input);
-    bool back=input->pressed[KEY_F1] || input->button_pressed[TWO_FORTY_BUTTON_A];
+    bool back=input->pressed[KEY_F1] || input->button_pressed[CHIRKY_BUTTON_A];
     if (host->ui_wait_release && !input->pressed[KEY_F1]) {
         bool neutral=buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true);
-        for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
-        two_forty_gate_accept(&host->transition_gate,neutral);
+        for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
+        chirky_gate_accept(&host->transition_gate,neutral);
         host->ui_wait_release=host->transition_gate.blocked;
     } else if (host->setup.active) update_setup(host);
     else if (host->active_game) {
@@ -1449,18 +1449,18 @@ static void update_host(struct host *host)
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         } else if(host->paused) {
             if(direction)host->pause_option=(host->pause_option+direction+2)%2;
-            else if(back || input->button_pressed[TWO_FORTY_BUTTON_SELECT])host->paused=false;
+            else if(back || input->button_pressed[CHIRKY_BUTTON_SELECT])host->paused=false;
             else if(confirm) {
                 if(host->pause_option==0)host->paused=false;
                 else {host->settings_menu=false;unload_game(host);}
             }
-        } else if(!hardware && input->button_pressed[TWO_FORTY_BUTTON_SELECT]) {
+        } else if(!hardware && input->button_pressed[CHIRKY_BUTTON_SELECT]) {
             host->paused=true;host->pause_option=0;
         } else host->game_api->update(input);
     } else if (host->display_settings) {
         if (direction) host->display_option=(host->display_option+direction+6)%6;
-        int delta=(int)input->button_pressed[TWO_FORTY_BUTTON_RIGHT]-
-                  (int)input->button_pressed[TWO_FORTY_BUTTON_LEFT];
+        int delta=(int)input->button_pressed[CHIRKY_BUTTON_RIGHT]-
+                  (int)input->button_pressed[CHIRKY_BUTTON_LEFT];
         int *values[]={&host->safe_x,&host->safe_y,&host->safe_offset_x,&host->safe_offset_y};
         int maximums[]={32,24,host->safe_x,host->safe_y};
         if (host->display_option<4 && delta) {
@@ -1477,7 +1477,7 @@ static void update_host(struct host *host)
             else host->settings_message="SAVE FAILED - TRY AGAIN";
         }
     } else if (host->controller_settings && host->input_test) {
-        if (input->buttons[TWO_FORTY_BUTTON_A]) host->controller_menu_chord_frames++;
+        if (input->buttons[CHIRKY_BUTTON_A]) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
             host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
@@ -1716,11 +1716,11 @@ int main(void)
     host.drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     if (host.drm_fd < 0 || (drmSetMaster(host.drm_fd) != 0 && errno != EINVAL) ||
         !choose_display(&host) || !init_graphics(&host)) {
-        fprintf(stderr, "Two Forty host initialization failed: %s\n", strerror(errno));
+        fprintf(stderr, "Chirky host initialization failed: %s\n", strerror(errno));
         cleanup(&host);
         return EXIT_FAILURE;
     }
-    host.api = (struct two_forty_host_api){.abi_version=TWO_FORTY_ABI_VERSION,
+    host.api = (struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,
         .screen_width=host.mode.hdisplay,.screen_height=host.mode.vdisplay,
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
         .draw_text=draw_text,.button_label=button_label};
@@ -1745,7 +1745,7 @@ int main(void)
         cleanup(&host);
         return EXIT_FAILURE;
     }
-    puts("Two Forty host running. Menus: B selects, A goes back. Games: Select pauses, F1 recovers, F12 snapshots.");
+    puts("Chirky host running. Menus: B selects, A goes back. Games: Select pauses, F1 recovers, F12 snapshots.");
     while (host.running && !stop_requested) {
         if (!next_frame(&host)) host.running = false;
     }

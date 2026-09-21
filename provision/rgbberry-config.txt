@@ -1,4 +1,4 @@
-# BEGIN TWO FORTY RGBERRY
+# BEGIN CHIRKY RGBERRY
 # Audio is routed to GPIO18/19 and into the RGBerry SCART connector.
 dtparam=audio=on
 dtoverlay=audremap,pins_18_19
@@ -13,4 +13,4 @@ dtparam=hsync=32,hbp=39
 dtparam=vactive=240,vfp=3,vsync=3,vbp=16
 dtparam=clock-frequency=6400000,rgb666-padhi
 dtparam=hsync-invert,vsync-invert
-# END TWO FORTY RGBERRY
+# END CHIRKY RGBERRY

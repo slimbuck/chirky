@@ -1,4 +1,19 @@
-# Rebuilding a Two Forty Pi
+# Rebuilding a Chirky Pi
+
+## Upgrading an existing installation
+
+The Chirky rename changes the host binary to `chirky-host`, the service to
+`chirky.service`, and the C module entry point to `chirky_game_entry` (ABI 7).
+Rebuild the host and all game modules together. The dashboard's **Install project
+on Pi** action installs into `/home/retro/chirky`, first copying the previous
+installation when present to preserve calibration, configuration and remote assets.
+The service installer disables the previous service before starting Chirky.
+Old-name references in migration code are intentional.
+
+For an existing checkout on the Pi, `make` followed by
+`sh deploy/install-service.sh` also works: the service uses the actual checkout
+directory. Full provisioning sets the hostname to `chirky`; software-only
+deployment leaves the current hostname and networking intact.
 
 The laptop repository is the source of truth. Nothing configured interactively
 on the Pi is required to recreate it.
@@ -15,7 +30,7 @@ py -3 provision/configure_card.py --drive E: --ssh-key $env:USERPROFILE\.ssh\id_
 
 This writes only first-boot concerns:
 
-- hostname `twoforty`
+- hostname `chirky`
 - user `retro`, required hardware groups, passwordless administrative access
 - key-based SSH
 - static Ethernet `192.168.137.2/24`
@@ -33,7 +48,7 @@ Once SSH responds:
 
 The installer copies the reproducible source/assets, validates Trixie, applies
 the same OS configuration idempotently, installs required Debian packages,
-builds the host and every game module, enables `two-forty.service`, and reboots.
+builds the host and every game module, enables `chirky.service`, and reboots.
 
 On a Pi that already has all packages and no internet route:
 
@@ -48,7 +63,7 @@ Phosphor Run instead of the default launcher.
 ## 3. Autonomous operation
 
 No laptop or dashboard is needed after installation. Systemd starts
-`two-forty-host` during normal multi-user boot and restarts it after a failure.
+`chirky-host` during normal multi-user boot and restarts it after a failure.
 `config/host.conf` chooses the startup destination:
 
 ```ini
@@ -71,10 +86,10 @@ stacked repeatedly.
 On the Pi:
 
 ```sh
-cd /home/retro/two-forty
+cd /home/retro/chirky
 sudo sh provision/provision-pi.sh --check --boot-game launcher
-systemctl status two-forty.service
+systemctl status chirky.service
 ```
 
 The first provisioning run preserves the original firmware configuration as
-`/boot/firmware/config.txt.pre-two-forty`.
+`/boot/firmware/config.txt.pre-chirky`.

@@ -1,4 +1,4 @@
-#include "two_forty.h"
+#include "chirky.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -21,7 +21,7 @@ struct image {
     unsigned char *pixels;
 };
 
-static const struct two_forty_host_api *host;
+static const struct chirky_host_api *host;
 static struct settings settings;
 static struct image image;
 static int x;
@@ -148,7 +148,7 @@ static bool read_image(const char *path)
     return true;
 }
 
-static bool game_init(const struct two_forty_host_api *host_api, const char *config_path)
+static bool game_init(const struct chirky_host_api *host_api, const char *config_path)
 {
     host = host_api;
     if (!read_settings(config_path) || !read_image(settings.pattern)) return false;
@@ -169,17 +169,17 @@ static void game_shutdown(void)
     host = NULL;
 }
 
-static void game_update(const struct two_forty_input *input)
+static void game_update(const struct chirky_input *input)
 {
     const int manual_speed = 3;
     int dx = 0;
     int dy = 0;
-    if (input->buttons[TWO_FORTY_BUTTON_LEFT]) dx -= manual_speed;
-    if (input->buttons[TWO_FORTY_BUTTON_RIGHT]) dx += manual_speed;
-    if (input->buttons[TWO_FORTY_BUTTON_UP]) dy += manual_speed;
-    if (input->buttons[TWO_FORTY_BUTTON_DOWN]) dy -= manual_speed;
-    if (input->button_pressed[TWO_FORTY_BUTTON_B]) automatic = !automatic;
-    if (input->button_pressed[TWO_FORTY_BUTTON_X])
+    if (input->buttons[CHIRKY_BUTTON_LEFT]) dx -= manual_speed;
+    if (input->buttons[CHIRKY_BUTTON_RIGHT]) dx += manual_speed;
+    if (input->buttons[CHIRKY_BUTTON_UP]) dy += manual_speed;
+    if (input->buttons[CHIRKY_BUTTON_DOWN]) dy -= manual_speed;
+    if (input->button_pressed[CHIRKY_BUTTON_B]) automatic = !automatic;
+    if (input->button_pressed[CHIRKY_BUTTON_X])
         host->play_sound(host->context, settings.sound_device, settings.sound);
 
     if (dx != 0 || dy != 0) {
@@ -223,15 +223,15 @@ static void game_render(void)
     host->draw_text(host->context,10,12,"B MOTION - X SOUND - A BACK",1,238,240,232);
 }
 
-static const struct two_forty_game_api api = {
-    .abi_version = TWO_FORTY_ABI_VERSION,
+static const struct chirky_game_api api = {
+    .abi_version = CHIRKY_ABI_VERSION,
     .init = game_init,
     .shutdown = game_shutdown,
     .update = game_update,
     .render = game_render,
 };
 
-const struct two_forty_game_api *two_forty_game_entry(void)
+const struct chirky_game_api *chirky_game_entry(void)
 {
     return &api;
 }

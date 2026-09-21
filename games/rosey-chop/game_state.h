@@ -1,6 +1,6 @@
 #ifndef ROSEY_CHOP_STATE_H
 #define ROSEY_CHOP_STATE_H
-#include "two_forty.h"
+#include "chirky.h"
 
 #define GARDEN_COLS 24
 #define GARDEN_ROWS 16
@@ -26,7 +26,7 @@ struct garden_state {
     char sound_root[512], sound_device[128];
 };
 extern struct garden_state garden;
-extern const struct two_forty_host_api *host;
+extern const struct chirky_host_api *host;
 float clamp_value(float value, float low, float high);
 void garden_render(void);
 void title_art_load(const char *config);

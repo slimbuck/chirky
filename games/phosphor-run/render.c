@@ -29,7 +29,7 @@ static void text(int x, int y, const char *value, int scale, struct colour colou
     host->draw_text(host->context,x,y,value,scale,colour.r,colour.g,colour.b);
 }
 
-static void controller_label(enum two_forty_button action, const char *fallback,
+static void controller_label(enum chirky_button action, const char *fallback,
                              char *label, size_t capacity)
 {
     if (host->button_label != NULL)
@@ -156,9 +156,9 @@ static void render_hud(void)
 void render_title(void)
 {
     char jump[32],dash[32],menu[32],line[96];
-    controller_label(TWO_FORTY_BUTTON_B,"B",jump,sizeof(jump));
-    controller_label(TWO_FORTY_BUTTON_Y,"Y",dash,sizeof(dash));
-    controller_label(TWO_FORTY_BUTTON_SELECT,"SELECT",menu,sizeof(menu));
+    controller_label(CHIRKY_BUTTON_B,"B",jump,sizeof(jump));
+    controller_label(CHIRKY_BUTTON_Y,"Y",dash,sizeof(dash));
+    controller_label(CHIRKY_BUTTON_SELECT,"SELECT",menu,sizeof(menu));
     if (splash_draw(&title_art,host)) {
         rectangle(0,0,host->screen_width,48,settings.background);
         centered_text(39,"RESTORE THE LAST SIGNAL",1,settings.paper);
@@ -193,7 +193,7 @@ void render_game(void)
         centered_text(middle+5,"SIGNAL LOST",2,settings.hazard);
     } else if (phase==PHASE_WIN) {
         char confirm[32],line[96];
-        controller_label(TWO_FORTY_BUTTON_B,"B",confirm,sizeof(confirm));
+        controller_label(CHIRKY_BUTTON_B,"B",confirm,sizeof(confirm));
             rectangle(8,middle-51,host->screen_width-16,102,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);

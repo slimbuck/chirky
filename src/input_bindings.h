@@ -1,6 +1,6 @@
 #ifndef INPUT_BINDINGS_H
 #define INPUT_BINDINGS_H
-#include "two_forty.h"
+#include "chirky.h"
 
 enum binding_kind { BINDING_NONE, BINDING_KEY, BINDING_ABS };
 struct controller_binding { enum binding_kind kind; unsigned int code; int direction; };
@@ -9,7 +9,7 @@ struct controller_binding { enum binding_kind kind; unsigned int code; int direc
 struct binding_setup {
     bool active, keyboard, wait_release, ready, complete;
     int step;
-    struct controller_binding candidate, pending[TWO_FORTY_BUTTON_COUNT];
+    struct controller_binding candidate, pending[CHIRKY_BUTTON_COUNT];
     const char *message;
 };
 void default_bindings(struct controller_binding *bindings);

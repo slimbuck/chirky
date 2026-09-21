@@ -15,7 +15,9 @@ const config = {
   ...JSON.parse(fs.readFileSync(path.join(DASHBOARD, "config.json"), "utf8")),
   ...readOptionalJson(path.join(DASHBOARD, "config.local.json")),
 };
-if (process.env.TWO_FORTY_DASHBOARD_PORT) config.port=Number(process.env.TWO_FORTY_DASHBOARD_PORT);
+const configuredRemoteRoot=config.remoteRoot;
+let legacyInstallation=false;
+if (process.env.CHIRKY_DASHBOARD_PORT) config.port=Number(process.env.CHIRKY_DASHBOARD_PORT);
 fs.mkdirSync(CAPTURES, { recursive: true });
 
 function readOptionalJson(file) {
@@ -234,33 +236,41 @@ const routes = {
   },
 
   async deploy(_request, response) {
-    await ssh(`mkdir -p ${config.remoteRoot}`);
-    const hasHostConfig = (await ssh(
-      `test -f ${config.remoteRoot}/config/host.conf && printf yes || true`)).stdout === "yes";
-    const sources = ["Makefile", "README.md", "include", "src", "assets", "games", "tools", "deploy", "provision"]
-      .map((item) => path.join(ROOT, item));
-    await command("scp", [...scpArgs(), "-r", ...sources,
-      `${config.user}@${config.host}:${config.remoteRoot}/`], 60_000);
-    if (!hasHostConfig) {
-      await ssh(`mkdir -p ${config.remoteRoot}/config`);
-      await command("scp", [...scpArgs(), HOST_CONFIG,
-        `${config.user}@${config.host}:${config.remoteRoot}/config/host.conf`]);
-    }
-    // scp overlays files, so explicitly retire the removed diagnostic package.
-    const hasLauncher=(await ssh(`test -f ${config.remoteRoot}/config/launcher.conf && printf yes || true`)).stdout==="yes";
-    if(!hasLauncher)await command("scp",[...scpArgs(),LAUNCHER_CONFIG,`${config.user}@${config.host}:${config.remoteRoot}/config/launcher.conf`]);
-    const built = await ssh(`cd ${config.remoteRoot} && rm -rf -- games/latency-test && rm -f -- build/games/latency-test.so include/frame_probe.h && make && if sudo -n systemctl cat two-forty.service >/dev/null 2>&1; then sudo -n systemctl restart two-forty.service; else (printf 'quit\\n' > run/control.fifo 2>/dev/null || true); sleep 1; setsid -f ./build/two-forty-host > run/two-forty.log 2>&1 </dev/null; fi`, 60_000);
-    json(response, 200, { ok: true, output: built.stdout || "Build is up to date." });
+    const previousRoot=config.remoteRoot;
+    config.remoteRoot=configuredRemoteRoot;
+    try {
+      // Preserve calibration, launcher labels and remote assets on the first rename deploy.
+      const legacyRoot=`/home/${config.user}/two-forty`;
+      await ssh(`mkdir -p ${config.remoteRoot}; if [ ! -f ${config.remoteRoot}/config/host.conf ] && [ -f ${legacyRoot}/config/host.conf ]; then cp -a ${legacyRoot}/. ${config.remoteRoot}/; fi`);
+      const hasHostConfig = (await ssh(
+        `test -f ${config.remoteRoot}/config/host.conf && printf yes || true`)).stdout === "yes";
+      const sources = ["Makefile", "README.md", "include", "src", "assets", "games", "tools", "deploy", "provision"]
+        .map((item) => path.join(ROOT, item));
+      await command("scp", [...scpArgs(), "-r", ...sources,
+        `${config.user}@${config.host}:${config.remoteRoot}/`], 60_000);
+      if (!hasHostConfig) {
+        await ssh(`mkdir -p ${config.remoteRoot}/config`);
+        await command("scp", [...scpArgs(), HOST_CONFIG,
+          `${config.user}@${config.host}:${config.remoteRoot}/config/host.conf`]);
+      }
+      // scp overlays files, so explicitly retire the removed diagnostic package.
+      const hasLauncher=(await ssh(`test -f ${config.remoteRoot}/config/launcher.conf && printf yes || true`)).stdout==="yes";
+      if(!hasLauncher)await command("scp",[...scpArgs(),LAUNCHER_CONFIG,`${config.user}@${config.host}:${config.remoteRoot}/config/launcher.conf`]);
+      const built = await ssh(`cd ${config.remoteRoot} && rm -rf -- games/latency-test && rm -f -- build/games/latency-test.so include/frame_probe.h && make && sudo -n sh deploy/install-service.sh --user ${config.user}`, 60_000);
+      legacyInstallation=false;
+      json(response, 200, { ok: true, output: built.stdout || "Build is up to date." });
+    } catch(error) { config.remoteRoot=previousRoot; throw error; }
   },
 
   async restart(_request, response) {
-    await ssh(`cd ${config.remoteRoot} && if sudo -n systemctl cat two-forty.service >/dev/null 2>&1; then sudo -n systemctl restart two-forty.service; else (printf 'quit\\n' > run/control.fifo 2>/dev/null || true); sleep 1; mkdir -p run; setsid -f ./build/two-forty-host > run/two-forty.log 2>&1 </dev/null; fi`);
+    if(legacyInstallation) return json(response,409,{error:"Use Install project on Pi to finish the Chirky upgrade first."});
+    await ssh(`cd ${config.remoteRoot} && if sudo -n systemctl cat chirky.service >/dev/null 2>&1; then sudo -n systemctl restart chirky.service; else (printf 'quit\\n' > run/control.fifo 2>/dev/null || true); sleep 1; mkdir -p run; setsid -f ./build/chirky-host > run/chirky.log 2>&1 </dev/null; fi`);
     json(response, 200, { ok: true });
   },
 
   async logs(_request, response) {
     try {
-      const result = await ssh(`cd ${config.remoteRoot} && tail -n 160 run/two-forty.log 2>/dev/null || true`);
+      const result = await ssh(`cd ${config.remoteRoot} && tail -n 160 run/${legacyInstallation?"two-forty":"chirky"}.log 2>/dev/null || true`);
       json(response, 200, { logs: result.stdout });
     } catch (error) { json(response, 502, { error: error.message }); }
   },
@@ -280,6 +290,7 @@ const routes = {
 // A playtest deploys one coherent game package and launches the selected level.
 // The temporary start level is remote-only; local campaign settings stay intact.
 async function playEditedGame(id, editor) {
+  if(legacyInstallation)throw new Error("Use Install project on Pi to upgrade the host to Chirky before playtesting.");
   const directory=gameDirectory(id);
   let configText=fs.readFileSync(path.join(directory,"game.conf"),"utf8");
   if (editor.catalogKind === "level") {
@@ -288,7 +299,7 @@ async function playEditedGame(id, editor) {
     configText=configText.replace(/^start_level=.*\r?$/m, "");
     configText+=`\nstart_level=${index}\n`;
   }
-  const temporary=fs.mkdtempSync(path.join(os.tmpdir(),"two-forty-play-"));
+  const temporary=fs.mkdtempSync(path.join(os.tmpdir(),"chirky-play-"));
   try {
     const configFile=path.join(temporary,"game.conf");
     fs.writeFileSync(configFile,configText);
@@ -419,6 +430,15 @@ async function handle(request, response) {
   }
 }
 
-http.createServer(handle).listen(config.port, "127.0.0.1", () => {
-  console.log(`Two Forty dashboard: http://127.0.0.1:${config.port}`);
-});
+async function startServer() {
+  // Keep an existing console reachable until the first Chirky installation.
+  const legacyRoot=`/home/${config.user}/two-forty`;
+  try {
+    const result=await ssh(`if [ -f ${configuredRemoteRoot}/build/chirky-host ]; then printf current; elif [ -f ${legacyRoot}/build/two-forty-host ]; then printf legacy; fi`);
+    if(result.stdout==="legacy") {config.remoteRoot=legacyRoot;legacyInstallation=true;}
+  } catch { /* The editing portal also works while the Pi is offline. */ }
+  http.createServer(handle).listen(config.port,"127.0.0.1",()=>{
+    console.log(`Chirky dashboard: http://127.0.0.1:${config.port}`);
+  });
+}
+startServer();

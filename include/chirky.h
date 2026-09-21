@@ -1,38 +1,38 @@
-#ifndef TWO_FORTY_H
-#define TWO_FORTY_H
+#ifndef CHIRKY_H
+#define CHIRKY_H
 
 #include <linux/input.h>
 #include <stdbool.h>
 #include <stddef.h>
 
-#define TWO_FORTY_ABI_VERSION 6
+#define CHIRKY_ABI_VERSION 7
 
-enum two_forty_button {
-    TWO_FORTY_BUTTON_LEFT,
-    TWO_FORTY_BUTTON_RIGHT,
-    TWO_FORTY_BUTTON_UP,
-    TWO_FORTY_BUTTON_DOWN,
-    TWO_FORTY_BUTTON_Y,
-    TWO_FORTY_BUTTON_B,
-    TWO_FORTY_BUTTON_A,
-    TWO_FORTY_BUTTON_X,
-    TWO_FORTY_BUTTON_L,
-    TWO_FORTY_BUTTON_R,
-    TWO_FORTY_BUTTON_START,
-    TWO_FORTY_BUTTON_SELECT,
-    TWO_FORTY_BUTTON_COUNT
+enum chirky_button {
+    CHIRKY_BUTTON_LEFT,
+    CHIRKY_BUTTON_RIGHT,
+    CHIRKY_BUTTON_UP,
+    CHIRKY_BUTTON_DOWN,
+    CHIRKY_BUTTON_Y,
+    CHIRKY_BUTTON_B,
+    CHIRKY_BUTTON_A,
+    CHIRKY_BUTTON_X,
+    CHIRKY_BUTTON_L,
+    CHIRKY_BUTTON_R,
+    CHIRKY_BUTTON_START,
+    CHIRKY_BUTTON_SELECT,
+    CHIRKY_BUTTON_COUNT
 };
 
-struct two_forty_input {
+struct chirky_input {
     /* Raw keyboard state is reserved for host setup/recovery. Games use buttons. */
     bool keys[KEY_MAX + 1];
     bool pressed[KEY_MAX + 1];
-    bool buttons[TWO_FORTY_BUTTON_COUNT];
-    bool button_pressed[TWO_FORTY_BUTTON_COUNT];
+    bool buttons[CHIRKY_BUTTON_COUNT];
+    bool button_pressed[CHIRKY_BUTTON_COUNT];
     bool controller_pressed;
 };
 
-struct two_forty_host_api {
+struct chirky_host_api {
     unsigned int abi_version;
     /* Logical playable viewport, excluding the CRT-safe border. Drawing is
        clipped to these bounds and translated to physical output by the host. */
@@ -46,18 +46,18 @@ struct two_forty_host_api {
     void (*draw_text)(void *context, int x, int y, const char *text, int scale,
                       unsigned char red, unsigned char green,
                       unsigned char blue);
-    void (*button_label)(void *context, enum two_forty_button action,
+    void (*button_label)(void *context, enum chirky_button action,
                          char *text, size_t capacity);
 };
 
-struct two_forty_game_api {
+struct chirky_game_api {
     unsigned int abi_version;
-    bool (*init)(const struct two_forty_host_api *host, const char *config_path);
+    bool (*init)(const struct chirky_host_api *host, const char *config_path);
     void (*shutdown)(void);
-    void (*update)(const struct two_forty_input *input);
+    void (*update)(const struct chirky_input *input);
     void (*render)(void);
 };
 
-typedef const struct two_forty_game_api *(*two_forty_game_entry_fn)(void);
+typedef const struct chirky_game_api *(*chirky_game_entry_fn)(void);
 
 #endif

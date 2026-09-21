@@ -5,8 +5,8 @@
 #include <string.h>
 
 struct garden_state garden;
-const struct two_forty_host_api *host;
-static struct two_forty_input_gate transition_gate;
+const struct chirky_host_api *host;
+static struct chirky_input_gate transition_gate;
 
 float clamp_value(float v, float low, float high) { return v < low ? low : v > high ? high : v; }
 static float absolute(float v) { return v < 0 ? -v : v; }
@@ -68,11 +68,11 @@ static void reset_run(void)
     for (int i = 0; i < garden.rose_count; i++) garden.roses[i].cut = false;
 }
 
-static bool game_init(const struct two_forty_host_api *api, const char *config)
+static bool game_init(const struct chirky_host_api *api, const char *config)
 {
-    if (!api || api->abi_version != TWO_FORTY_ABI_VERSION || !api->fill_rect || !api->draw_text) return false;
+    if (!api || api->abi_version != CHIRKY_ABI_VERSION || !api->fill_rect || !api->draw_text) return false;
     host = api;
-    transition_gate=(struct two_forty_input_gate){0};
+    transition_gate=(struct chirky_input_gate){0};
     memset(&garden, 0, sizeof(garden));
     garden.storm_ticks = 75*60; garden.wasp_interval = 8*60; garden.wasp_duration = 6*60;
     char directory[512], level[640];
@@ -166,7 +166,7 @@ static void update_wasp(void)
     if (!--garden.wasp_life) garden.next_wasp = garden.elapsed+garden.wasp_interval;
 }
 
-static void update_gameplay(const struct two_forty_input *input)
+static void update_gameplay(const struct chirky_input *input)
 {
     garden.tick++;
     for (int i = 0; i < MAX_PETALS; i++) {
@@ -175,21 +175,21 @@ static void update_gameplay(const struct two_forty_input *input)
     }
     if (garden.phase != PLAY) {
         garden.result_age++;
-        if ((garden.phase == TITLE && two_forty_title_pressed(input)) ||
-            (garden.phase != TITLE && garden.result_age > 40 && input->button_pressed[TWO_FORTY_BUTTON_B])) reset_run();
+        if ((garden.phase == TITLE && chirky_title_pressed(input)) ||
+            (garden.phase != TITLE && garden.result_age > 40 && input->button_pressed[CHIRKY_BUTTON_B])) reset_run();
         return;
     }
     /* A storm or sting takes precedence over a final chop on the same tick. */
     if (++garden.elapsed >= garden.storm_ticks) { finish(STORM); return; }
-    int dx = input->buttons[TWO_FORTY_BUTTON_RIGHT]-input->buttons[TWO_FORTY_BUTTON_LEFT];
-    int dy = input->buttons[TWO_FORTY_BUTTON_DOWN]-input->buttons[TWO_FORTY_BUTTON_UP];
+    int dx = input->buttons[CHIRKY_BUTTON_RIGHT]-input->buttons[CHIRKY_BUTTON_LEFT];
+    int dy = input->buttons[CHIRKY_BUTTON_DOWN]-input->buttons[CHIRKY_BUTTON_UP];
     float speed = dx && dy ? 1.18f : 1.67f;
     garden.moving = dx || dy;
     if (dx) garden.facing = dx;
     garden.x = clamp_value(garden.x+dx*speed, 10, WORLD_W-10);
     garden.y = clamp_value(garden.y+dy*speed, 16, WORLD_H-10);
     if (garden.jump_cooldown) garden.jump_cooldown--;
-    if (input->button_pressed[TWO_FORTY_BUTTON_Y] && garden.z == 0 && !garden.jump_cooldown) {
+    if (input->button_pressed[CHIRKY_BUTTON_Y] && garden.z == 0 && !garden.jump_cooldown) {
         garden.vz = 3.5f; garden.jump_cooldown = 36; sound("jump");
     }
     if (garden.vz || garden.z) {
@@ -199,22 +199,22 @@ static void update_gameplay(const struct two_forty_input *input)
     update_wasp();
     if (garden.phase != PLAY) return;
     if (garden.chop) garden.chop--;
-    if (!garden.chop && (input->buttons[TWO_FORTY_BUTTON_B] || input->button_pressed[TWO_FORTY_BUTTON_B])) chop();
+    if (!garden.chop && (input->buttons[CHIRKY_BUTTON_B] || input->button_pressed[CHIRKY_BUTTON_B])) chop();
     if (!garden.remaining) finish(WON);
 }
 
-static void game_update(const struct two_forty_input *input)
+static void game_update(const struct chirky_input *input)
 {
     enum phase before=garden.phase;
-    struct two_forty_input filtered;
-    two_forty_gate_filter(&transition_gate,input,&filtered);
+    struct chirky_input filtered;
+    chirky_gate_filter(&transition_gate,input,&filtered);
     update_gameplay(&filtered);
-    if(garden.phase!=before)two_forty_gate_begin(&transition_gate);
+    if(garden.phase!=before)chirky_gate_begin(&transition_gate);
 }
 
 static void game_shutdown(void) { title_art_free(); memset(&garden, 0, sizeof(garden)); host = NULL; }
-static const struct two_forty_game_api api = {
-    .abi_version = TWO_FORTY_ABI_VERSION, .init = game_init, .shutdown = game_shutdown,
+static const struct chirky_game_api api = {
+    .abi_version = CHIRKY_ABI_VERSION, .init = game_init, .shutdown = game_shutdown,
     .update = game_update, .render = garden_render
 };
-const struct two_forty_game_api *two_forty_game_entry(void) { return &api; }
+const struct chirky_game_api *chirky_game_entry(void) { return &api; }

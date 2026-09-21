@@ -193,7 +193,7 @@ $("#restartBtn").addEventListener("click", () => act($("#restartBtn"), "Restarti
   await api("/api/restart", { method:"POST" }); await new Promise((resolve) => setTimeout(resolve, 900)); await refreshStatus();
 }));
 $("#poweroffBtn").addEventListener("click", async () => {
-  if (!confirm("Power down the Two Forty Pi?\n\nThe CRT output and dashboard connection will stop. A physical power cycle is required to start it again.")) return;
+  if (!confirm("Power down the Chirky Pi?\n\nThe CRT output and dashboard connection will stop. A physical power cycle is required to start it again.")) return;
   await act($("#poweroffBtn"), "Powering down", async () => {
     await api("/api/control", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"poweroff"}) });
     $("#connectionText").textContent = "Power-down requested";

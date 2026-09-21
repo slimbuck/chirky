@@ -44,7 +44,7 @@ static void write_preview(const char *path)
     fclose(file);
 }
 static unsigned int game_updates;
-static void fake_update(const struct two_forty_input *input) { (void)input;game_updates++; }
+static void fake_update(const struct chirky_input *input) { (void)input;game_updates++; }
 static void fake_shutdown(void) {}
 
 static void check_timing_toggle(void)
@@ -87,7 +87,7 @@ static void check_pause_menu(const char *output_dir)
     h.inputs.count=2;h.inputs.devices[0].controller=true;
     h.mode.hdisplay=320;h.mode.vdisplay=240;h.safe_x=32;h.safe_y=24;update_safe_area(&h);
     strcpy(h.games[0].id,"phosphor-run");strcpy(h.games[0].name,"Phosphor Run");h.game_count=1;
-    const struct two_forty_game_api fake={.update=fake_update,.shutdown=fake_shutdown,.render=fake_pause_render};
+    const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown,.render=fake_pause_render};
     pause_render_host=&h;pause_renders=0;
     h.active_game=&h.games[0];h.game_api=&fake;
     unsigned int saved_updates=game_updates;
@@ -148,7 +148,7 @@ static void check_launcher_menu(void)
     tap(&h,1,KEY_DOWN);assert(h.selected_game==2);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.settings_option==2);
-    const struct two_forty_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
+    const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
     h.active_game=&h.games[2];h.game_api=&fake;
     tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_SETTINGS && h.settings_option==2);
     tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_LAUNCHER && h.selected_game==2);
@@ -195,14 +195,14 @@ static void check_transition_gates(void)
     for(int i=0;i<4;i++)update_host(&h);
     assert(!h.controller_settings);
     /* The shared game filter suppresses both held and edge-triggered buttons. */
-    struct two_forty_input_gate gate={0};struct two_forty_input in={0},out;
-    two_forty_gate_begin(&gate);in.buttons[TWO_FORTY_BUTTON_B]=true;
-    in.button_pressed[TWO_FORTY_BUTTON_Y]=true;
-    two_forty_gate_filter(&gate,&in,&out);
-    assert(!out.buttons[TWO_FORTY_BUTTON_B] && !out.button_pressed[TWO_FORTY_BUTTON_Y]);
-    memset(&in,0,sizeof(in));two_forty_gate_filter(&gate,&in,&out);assert(gate.blocked);
-    two_forty_gate_filter(&gate,&in,&out);assert(!gate.blocked);
-    in.button_pressed[TWO_FORTY_BUTTON_B]=true;two_forty_gate_filter(&gate,&in,&out);assert(out.button_pressed[TWO_FORTY_BUTTON_B]);
+    struct chirky_input_gate gate={0};struct chirky_input in={0},out;
+    chirky_gate_begin(&gate);in.buttons[CHIRKY_BUTTON_B]=true;
+    in.button_pressed[CHIRKY_BUTTON_Y]=true;
+    chirky_gate_filter(&gate,&in,&out);
+    assert(!out.buttons[CHIRKY_BUTTON_B] && !out.button_pressed[CHIRKY_BUTTON_Y]);
+    memset(&in,0,sizeof(in));chirky_gate_filter(&gate,&in,&out);assert(gate.blocked);
+    chirky_gate_filter(&gate,&in,&out);assert(!gate.blocked);
+    in.button_pressed[CHIRKY_BUTTON_B]=true;chirky_gate_filter(&gate,&in,&out);assert(out.button_pressed[CHIRKY_BUTTON_B]);
 }
 
 static void check_frame_timing(struct host *host,const char *output_dir)
@@ -246,55 +246,55 @@ static void check_migration(void)
     FILE *f=fopen(HOST_CONFIG_PATH,"w");assert(f);
     fputs("input_version=2\nbind_jump=key:307\nbind_dash=key:305\nbind_confirm=key:313\nbind_menu=key:312\nkey_jump=key:19\nkey_confirm=key:28\n",f);fclose(f);
     struct host migrated={0};load_host_config(&migrated);
-    assert(migrated.bindings[TWO_FORTY_BUTTON_Y].code==BTN_NORTH);
-    assert(migrated.bindings[TWO_FORTY_BUTTON_B].code==BTN_EAST);
-    assert(migrated.bindings[TWO_FORTY_BUTTON_A].kind==BINDING_NONE);
-    assert(migrated.keyboard_bindings[TWO_FORTY_BUTTON_Y].code==KEY_R);
-    assert(migrated.keyboard_bindings[TWO_FORTY_BUTTON_START].code==KEY_ENTER);
+    assert(migrated.bindings[CHIRKY_BUTTON_Y].code==BTN_NORTH);
+    assert(migrated.bindings[CHIRKY_BUTTON_B].code==BTN_EAST);
+    assert(migrated.bindings[CHIRKY_BUTTON_A].kind==BINDING_NONE);
+    assert(migrated.keyboard_bindings[CHIRKY_BUTTON_Y].code==KEY_R);
+    assert(migrated.keyboard_bindings[CHIRKY_BUTTON_START].code==KEY_ENTER);
     assert(save_bindings(&migrated));
     char saved[4096]={0};f=fopen(HOST_CONFIG_PATH,"r");assert(f);assert(fread(saved,1,sizeof(saved)-1,f)>0);fclose(f);
     assert(strstr(saved,"input_version=3") && strstr(saved,"bind_a=none"));
     assert(!strstr(saved,"bind_jump=") && !strstr(saved,"bind_confirm=") && !strstr(saved,"key_confirm="));
     struct host reloaded={0};load_host_config(&reloaded);
-    assert(reloaded.bindings[TWO_FORTY_BUTTON_A].kind==BINDING_NONE);
+    assert(reloaded.bindings[CHIRKY_BUTTON_A].kind==BINDING_NONE);
     f=fopen(HOST_CONFIG_PATH,"w");assert(f);
     fputs("input_version=2\nbind_y=key:304\nbind_jump=key:307\nkey_y=key:44\nkey_jump=key:19\n",f);fclose(f);
     load_host_config(&migrated);
-    assert(migrated.bindings[TWO_FORTY_BUTTON_Y].code==BTN_SOUTH);
-    assert(migrated.keyboard_bindings[TWO_FORTY_BUTTON_Y].code==KEY_Z);
+    assert(migrated.bindings[CHIRKY_BUTTON_Y].code==BTN_SOUTH);
+    assert(migrated.keyboard_bindings[CHIRKY_BUTTON_Y].code==KEY_Z);
     assert(remove(HOST_CONFIG_PATH)==0);
     assert(rename("config/before-migration.conf",HOST_CONFIG_PATH)==0);
 }
 
 static void check_live_inputs(struct host *host,const char *output_dir)
 {
-    assert(TWO_FORTY_BUTTON_COUNT==12);
+    assert(CHIRKY_BUTTON_COUNT==12);
     host->controller_settings=true;host->selected_option=2;
     tap(host,1,KEY_X);assert(host->input_test);
     /* Every keyboard key addresses one SNES button, independent of UI behavior. */
-    for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) {
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         unsigned int key=host->keyboard_bindings[i].code;
         event(host,1,EV_KEY,key,1);update_controller_buttons(host);assert(host->inputs.state.buttons[i]);
         event(host,1,EV_KEY,key,0);update_controller_buttons(host);assert(!host->inputs.state.buttons[i]);
     }
     update_host(host);
     char name[96];host->last_keyboard=true;
-    button_label(host,TWO_FORTY_BUTTON_Y,name,sizeof(name));assert(!strcmp(name,"Y"));
+    button_label(host,CHIRKY_BUTTON_Y,name,sizeof(name));assert(!strcmp(name,"Y"));
     host->last_keyboard=false;
-    button_label(host,TWO_FORTY_BUTTON_Y,name,sizeof(name));assert(!strcmp(name,"Y"));
+    button_label(host,CHIRKY_BUTTON_Y,name,sizeof(name));assert(!strcmp(name,"Y"));
     event(host,0,EV_KEY,BTN_SOUTH,1);event(host,1,EV_KEY,KEY_R,1);
     event(host,0,EV_KEY,BTN_MODE,1);event(host,1,EV_KEY,KEY_T,1);
     event(host,0,EV_ABS,ABS_HAT0X,-1);update_host(host);
-    assert(host->input_test && host->inputs.state.buttons[TWO_FORTY_BUTTON_Y]);
+    assert(host->input_test && host->inputs.state.buttons[CHIRKY_BUTTON_Y]);
     held_input_names(host,false,name,sizeof(name));assert(strstr(name,"304") && strstr(name,"316") && strstr(name,"AX16NEG"));
     held_input_names(host,true,name,sizeof(name));assert(strstr(name," R") && strstr(name," T"));
     draw_controller_settings(host);
     char output[512];snprintf(output,sizeof(output),"%s/input-test.ppm",output_dir);write_preview(output);
-    int cell=(host->api.screen_width-20)/6,x=host->safe_x+10+TWO_FORTY_BUTTON_Y*cell;
+    int cell=(host->api.screen_width-20)/6,x=host->safe_x+10+CHIRKY_BUTTON_Y*cell;
     assert(framebuffer[host->safe_y+63][x+2][1]==220);
     assert(framebuffer[host->safe_y+63][x+cell/2][0]==250);
     event(host,1,EV_KEY,KEY_R,0);update_host(host);draw_controller_settings(host);
-    assert(host->inputs.state.buttons[TWO_FORTY_BUTTON_Y]);
+    assert(host->inputs.state.buttons[CHIRKY_BUTTON_Y]);
     assert(framebuffer[host->safe_y+63][x+cell/2][0]==60);
     event(host,0,EV_KEY,BTN_SOUTH,0);event(host,0,EV_KEY,BTN_MODE,0);event(host,1,EV_KEY,KEY_T,0);
     event(host,0,EV_ABS,ABS_HAT0X,0);update_host(host);
@@ -309,7 +309,7 @@ static void check_live_inputs(struct host *host,const char *output_dir)
 int main(int argc,char **argv)
 {
     assert(argc==2);
-    char directory[]="/tmp/two-forty-host-test-XXXXXX";assert(mkdtemp(directory));assert(chdir(directory)==0);
+    char directory[]="/tmp/chirky-host-test-XXXXXX";assert(mkdtemp(directory));assert(chdir(directory)==0);
     assert(mkdir("config",0700)==0);
     check_pause_menu(argv[1]);
     check_settings_shortcuts();
@@ -325,7 +325,7 @@ int main(int argc,char **argv)
     host.mode.hdisplay=320;host.mode.vdisplay=240;
     load_host_config(&host);update_safe_area(&host);
     assert(!host.frame_timing_enabled);
-    assert(host.bindings[TWO_FORTY_BUTTON_B].code==BTN_EAST);
+    assert(host.bindings[CHIRKY_BUTTON_B].code==BTN_EAST);
     assert(host.api.screen_width==288 && host.api.screen_height==216);
     host.inputs.count=2;host.inputs.devices[0].controller=true;
     strcpy(host.inputs.devices[0].name,"GP2040");
@@ -358,40 +358,40 @@ int main(int argc,char **argv)
     for(int i=0;i<5;i++) tap(&host,0,remaining[i]);
     assert(host.setup.step==11 && host.setup.active);
     tap(&host,0,BTN_TL2);assert(!host.setup.active && host.controller_settings);
-    assert(host.bindings[TWO_FORTY_BUTTON_B].code==BTN_TR2);
+    assert(host.bindings[CHIRKY_BUTTON_B].code==BTN_TR2);
     update_host(&host);
     /* Keyboard setup captures Escape as a mapping; only F1 cancels. */
     host.selected_option=1;tap(&host,1,KEY_X);update_host(&host);
     assert(host.setup.active && host.setup.keyboard);
     const int keyboard[]={KEY_A,KEY_D,KEY_W,KEY_S,KEY_R,KEY_X,KEY_C,KEY_V,KEY_Q,KEY_E,KEY_ENTER,KEY_ESC};
-    for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++) tap(&host,1,keyboard[i]);
-    assert(!host.setup.active && host.keyboard_bindings[TWO_FORTY_BUTTON_Y].code==KEY_R);
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) tap(&host,1,keyboard[i]);
+    assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_Y].code==KEY_R);
     update_host(&host);
     /* Keyboard and controller states are independent; quick taps survive polling. */
     event(&host,1,EV_KEY,KEY_R,1);event(&host,1,EV_KEY,KEY_R,0);update_controller_buttons(&host);
-    assert(host.inputs.state.button_pressed[TWO_FORTY_BUTTON_Y]);
+    assert(host.inputs.state.button_pressed[CHIRKY_BUTTON_Y]);
     event(&host,0,EV_KEY,KEY_ESC,1);assert(!host.inputs.state.pressed[KEY_ESC]);event(&host,0,EV_KEY,KEY_ESC,0);
     update_host(&host);
     tap(&host,1,KEY_X);update_host(&host);tap(&host,1,KEY_Q);tap(&host,1,KEY_F1);
-    assert(!host.setup.active && host.keyboard_bindings[TWO_FORTY_BUTTON_LEFT].code==KEY_A);
+    assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_LEFT].code==KEY_A);
     update_host(&host);
     struct host reloaded={0};load_host_config(&reloaded);
-    assert(reloaded.keyboard_bindings[TWO_FORTY_BUTTON_Y].code==KEY_R);
-    assert(reloaded.bindings[TWO_FORTY_BUTTON_B].code==BTN_TR2);
+    assert(reloaded.keyboard_bindings[CHIRKY_BUTTON_Y].code==KEY_R);
+    assert(reloaded.bindings[CHIRKY_BUTTON_B].code==BTN_TR2);
     check_migration();
     check_live_inputs(&host,argv[1]);
     /* A controller-only user can cancel without consuming Start/Select as back. */
     setup_begin(&host.setup,false);update_host(&host);
     event(&host,0,EV_KEY,BTN_EAST,1);event(&host,0,EV_KEY,BTN_SOUTH,1);
     for(int i=0;i<60;i++) update_host(&host);
-    assert(!host.setup.active && host.bindings[TWO_FORTY_BUTTON_B].code==BTN_TR2);
+    assert(!host.setup.active && host.bindings[CHIRKY_BUTTON_B].code==BTN_TR2);
     event(&host,0,EV_KEY,BTN_EAST,0);event(&host,0,EV_KEY,BTN_SOUTH,0);update_host(&host);
     /* Failed persistence must not change the live mappings. */
     for(int i=0;i<3;i++)update_host(&host);
     assert(rename(HOST_CONFIG_PATH,"config/saved.conf")==0);assert(mkdir(HOST_CONFIG_PATH,0700)==0);
     setup_begin(&host.setup,true);host.setup.complete=true;
     default_keyboard_bindings(host.setup.pending);update_host(&host);
-    assert(!host.setup.active && host.keyboard_bindings[TWO_FORTY_BUTTON_Y].code==KEY_R);
+    assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_Y].code==KEY_R);
     assert(rmdir(HOST_CONFIG_PATH)==0);assert(rename("config/saved.conf",HOST_CONFIG_PATH)==0);update_host(&host);
     host.controller_settings=false;host.settings_menu=true;host.settings_option=1;
     tap(&host,0,BTN_TR2);assert(host.display_settings);
@@ -426,7 +426,7 @@ int main(int argc,char **argv)
     moved.safe_x=moved.safe_y=0;update_safe_area(&moved);
     assert(!moved.safe_offset_x && !moved.safe_offset_y);
     /* Gameplay chord is Start+Select, not ordinary jump+dash. */
-    const struct two_forty_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
+    const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
     host.active_game=&host.games[0];host.game_api=&fake;
     event(&host,0,EV_KEY,BTN_SOUTH,1);event(&host,0,EV_KEY,BTN_EAST,1);
     for(int i=0;i<65;i++) update_host(&host);

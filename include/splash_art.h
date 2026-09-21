@@ -1,6 +1,6 @@
-#ifndef TWO_FORTY_SPLASH_ART_H
-#define TWO_FORTY_SPLASH_ART_H
-#include "two_forty.h"
+#ifndef CHIRKY_SPLASH_ART_H
+#define CHIRKY_SPLASH_ART_H
+#include "chirky.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +41,7 @@ static inline bool splash_load(struct splash_art *art, const char *config)
     if (snprintf(path,sizeof(path),"%.*s/assets/artwork/splash.ppm",length,slash?config:".") >= (int)sizeof(path)) { splash_free(art); return false; }
     return splash_load_file(art,path);
 }
-static inline bool splash_draw(const struct splash_art *art, const struct two_forty_host_api *api)
+static inline bool splash_draw(const struct splash_art *art, const struct chirky_host_api *api)
 {
     if (!art->pixels) return false;
     for (int row=0;row<art->height;row++) {

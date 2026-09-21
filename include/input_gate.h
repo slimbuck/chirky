@@ -1,36 +1,36 @@
-#ifndef TWO_FORTY_INPUT_GATE_H
-#define TWO_FORTY_INPUT_GATE_H
-#include "two_forty.h"
+#ifndef CHIRKY_INPUT_GATE_H
+#define CHIRKY_INPUT_GATE_H
+#include "chirky.h"
 #include <string.h>
 
 /* A fresh face, shoulder, or Start press begins a title screen. Select pauses. */
-static inline bool two_forty_title_pressed(const struct two_forty_input *input)
+static inline bool chirky_title_pressed(const struct chirky_input *input)
 {
-    for(int button=TWO_FORTY_BUTTON_Y;button<=TWO_FORTY_BUTTON_START;button++)
+    for(int button=CHIRKY_BUTTON_Y;button<=CHIRKY_BUTTON_START;button++)
         if(input->button_pressed[button])return true;
     return false;
 }
 
 /* Screen transitions consume the opening gesture. Require two neutral updates
    before accepting a fresh press; short release/press bounce cannot cross screens. */
-struct two_forty_input_gate { bool blocked; unsigned int neutral_frames; };
-static inline void two_forty_gate_begin(struct two_forty_input_gate *gate)
+struct chirky_input_gate { bool blocked; unsigned int neutral_frames; };
+static inline void chirky_gate_begin(struct chirky_input_gate *gate)
 { gate->blocked=true;gate->neutral_frames=0; }
-static inline bool two_forty_gate_accept(struct two_forty_input_gate *gate,bool neutral)
+static inline bool chirky_gate_accept(struct chirky_input_gate *gate,bool neutral)
 {
     if(!gate->blocked)return true;
     gate->neutral_frames=neutral?gate->neutral_frames+1:0;
     if(gate->neutral_frames>=2)gate->blocked=false;
     return false; /* the release frame itself never activates the new screen */
 }
-static inline void two_forty_gate_filter(struct two_forty_input_gate *gate,
-                                        const struct two_forty_input *input,
-                                        struct two_forty_input *output)
+static inline void chirky_gate_filter(struct chirky_input_gate *gate,
+                                        const struct chirky_input *input,
+                                        struct chirky_input *output)
 {
     bool neutral=true;
-    for(int i=0;i<TWO_FORTY_BUTTON_COUNT;i++)neutral &= !input->buttons[i] && !input->button_pressed[i];
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)neutral &= !input->buttons[i] && !input->button_pressed[i];
     *output=*input;
-    if(!two_forty_gate_accept(gate,neutral)) {
+    if(!chirky_gate_accept(gate,neutral)) {
         memset(output->buttons,0,sizeof(output->buttons));
         memset(output->button_pressed,0,sizeof(output->button_pressed));
     }

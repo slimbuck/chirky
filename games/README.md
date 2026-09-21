@@ -23,14 +23,14 @@ The remaining keys belong to that game and may be changed without rebuilding.
 The dashboard's **Save + reload** action copies the settings to the Pi and
 reloads the active module.
 
-`game.c` exports `two_forty_game_entry()` using the interface in
-`include/two_forty.h`. The host supplies the screen dimensions, rectangle
+`game.c` exports `chirky_game_entry()` using the interface in
+`include/chirky.h`. The host supplies the screen dimensions, rectangle
 rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
-ABI version 6 exposes SNES inputs directly: `input->buttons[TWO_FORTY_BUTTON_B]`
-is held B, and `input->button_pressed[TWO_FORTY_BUTTON_Y]` is a new Y press.
+ABI version 7 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
+is held B, and `input->button_pressed[CHIRKY_BUTTON_Y]` is a new Y press.
 The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
 Each game owns what its buttons do. Use `button_label` for SNES names; keyboard
 emulation belongs to the host, so games must not read raw keyboard state.
@@ -38,8 +38,8 @@ The host reserves Select for its pause menu; A resumes, B selects an option. Reb
 modules together when upgrading from the previous action-based ABI.
 
 For screen/phase changes, use the shared `include/input_gate.h` helper. Keep a
-`two_forty_input_gate` in game state, pass each update through
-`two_forty_gate_filter`, and call `two_forty_gate_begin` when changing a title,
+`chirky_input_gate` in game state, pass each update through
+`chirky_gate_filter`, and call `chirky_gate_begin` when changing a title,
 result, gameplay phase or level. It suppresses held buttons and new-press flags
 until all SNES inputs have been neutral for two updates. The update that finishes
 release detection is also consumed; the next fresh press belongs to the new

@@ -1,6 +1,11 @@
-# Two Forty
+# Chirky
 
-A low-latency Raspberry Pi CRT game host for the RGBerry SCART HAT.
+**Chirky** is the software behind **The Chirky Joybox**: a simple, low-latency Raspberry Pi CRT games console using the RGBerry SCART HAT.
+
+Repository: [slimbuck/chirky](https://github.com/slimbuck/chirky).
+
+The dashboard is the browser-based editing portal; the launcher is the menu
+running on the Pi. Both use the Chirky name.
 
 The persistent host opens the active DRM/KMS connector directly, creates a
 GBM/EGL OpenGL ES surface at the connector's native resolution, and presents
@@ -55,7 +60,7 @@ development packages.
 Run from SSH while the CRT is connected:
 
 ```sh
-./build/two-forty-host
+./build/chirky-host
 ```
 
 The console exposes the SNES D-pad, **B, Y, A, X, L, R, Start and Select**.
@@ -153,7 +158,7 @@ send `SIGUSR1` to the running process. The latter is the dashboard integration
 point:
 
 ```sh
-pkill -USR1 -x two-forty-host
+pkill -USR1 -x chirky-host
 ```
 
 ## Dashboard
@@ -202,7 +207,7 @@ from the game list and activates it with B.
 After deploying the `deploy/` directory, run this once on the Pi:
 
 ```sh
-cd /home/retro/two-forty
+cd /home/retro/chirky
 sh deploy/install-service.sh
 ```
 

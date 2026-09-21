@@ -1,6 +1,6 @@
 # Rosey Chop
 
-A top-down, native-pixel garden game for the Two Forty CRT host. One complete
+A top-down, native-pixel garden game for the Chirky CRT host. One complete
 level: **The Rose Garden**, with 18 dead black roses among 78 living crimson,
 pink, apricot and cream roses. Chop every black rose before the 75-second storm
 timer expires. A wasp sting immediately ends the run.

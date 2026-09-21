@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-const struct two_forty_game_api *two_forty_game_entry(void);
+const struct chirky_game_api *chirky_game_entry(void);
 static unsigned int draws;
 static struct colour pixels[240][320];
 static void rectangle(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
@@ -23,16 +23,16 @@ static void text(void *ctx,int x,int y,const char *value,int scale,unsigned char
 
 int main(void)
 {
-    struct two_forty_host_api host_api={.abi_version=TWO_FORTY_ABI_VERSION,
+    struct chirky_host_api host_api={.abi_version=CHIRKY_ABI_VERSION,
         .screen_width=320,.screen_height=240,.fill_rect=rectangle,.play_sound=sound,.draw_text=text};
-    const struct two_forty_game_api *api=two_forty_game_entry();
-    struct two_forty_input input={0};
+    const struct chirky_game_api *api=chirky_game_entry();
+    struct chirky_input input={0};
     assert(api->init(&host_api,"games/phosphor-run/game.conf"));
     assert(content.level_count==4 && content.sprite_count==20);
     for(int i=0;i<3600;i++)api->update(&input);
     assert(phase==PHASE_TITLE);
     api->render(); assert(draws>0 && draws<320*240);
-    input.button_pressed[TWO_FORTY_BUTTON_START]=true; api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_START]=false;
+    input.button_pressed[CHIRKY_BUTTON_START]=true; api->update(&input); input.button_pressed[CHIRKY_BUTTON_START]=false;
     assert(current_level==0 && phase==PHASE_PLAY);
     const struct animation *shard=content_animation(&content,"shard");
     assert(shard && shard->count==3);
@@ -66,13 +66,13 @@ int main(void)
         velocity_x=velocity_y=0;
         api->update(&input); assert(phase==PHASE_WIN);
         api->render();
-        input.buttons[TWO_FORTY_BUTTON_B]=true;
+        input.buttons[CHIRKY_BUTTON_B]=true;
         for(int i=0;i<3;i++)api->update(&input);
         assert(phase==PHASE_WIN && current_level==stage);
-        input.buttons[TWO_FORTY_BUTTON_B]=false;
+        input.buttons[CHIRKY_BUTTON_B]=false;
         api->update(&input);api->update(&input);
-        input.button_pressed[TWO_FORTY_BUTTON_B]=true;
-        api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_B]=false;
+        input.button_pressed[CHIRKY_BUTTON_B]=true;
+        api->update(&input); input.button_pressed[CHIRKY_BUTTON_B]=false;
         assert(phase==PHASE_PLAY && collected_shards==0);
         assert(current_level==(stage+1)%content.level_count);
         assert(deaths==(stage==content.level_count-1?0:7));
@@ -82,7 +82,7 @@ int main(void)
     }
     settings.start_level=1;
     api->update(&input);api->update(&input);
-    phase=PHASE_TITLE; input.button_pressed[TWO_FORTY_BUTTON_B]=true; api->update(&input);
+    phase=PHASE_TITLE; input.button_pressed[CHIRKY_BUTTON_B]=true; api->update(&input);
     assert(current_level==1);
     /* All UI remains inside the safe viewport; the world uses its own camera. */
     const int sizes[][2]={{288,216},{256,192}};
@@ -91,7 +91,7 @@ int main(void)
         phase=PHASE_TITLE;api->render();phase=PHASE_PLAY;api->render();
         phase=PHASE_DEAD;api->render();phase=PHASE_WIN;api->render();
         /* A jump above the map remains below the HUD despite camera lag. */
-        memset(&input,0,sizeof(input));input.buttons[TWO_FORTY_BUTTON_B]=true;
+        memset(&input,0,sizeof(input));input.buttons[CHIRKY_BUTTON_B]=true;
         phase=PHASE_PLAY;player_x=level.width*TILE/2;player_y=level.height*TILE+8;
         velocity_x=0;velocity_y=settings.jump_speed;dash_timer=0;
         on_ground=touching_left=touching_right=false;

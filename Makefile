@@ -5,7 +5,7 @@ CPPFLAGS += -D_GNU_SOURCE -Iinclude
 CFLAGS += -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDLIBS += -Wl,--no-as-needed -l:libdrm.so.2 -l:libgbm.so.1 -l:libEGL.so.1 -l:libGLESv2.so.2
 
-TARGET := build/two-forty-host
+TARGET := build/chirky-host
 SOURCES := src/host.c src/input_bindings.c src/rect_renderer.c
 GAME_SOURCES := $(wildcard games/*/game.c)
 GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
@@ -14,13 +14,13 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
 all: $(TARGET) $(GAME_TARGETS)
 
-$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/splash_art.h include/two_forty.h include/input_gate.h
+$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/splash_art.h include/chirky.h include/input_gate.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@.next $(LDLIBS)
 	mv $@.next $@
 
 .SECONDEXPANSION:
-build/games/%.so: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) include/two_forty.h include/input_gate.h include/splash_art.h
+build/games/%.so: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) include/chirky.h include/input_gate.h include/splash_art.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude -fPIC -shared $(filter %.c,$^) -o $@.next
 	mv $@.next $@
@@ -35,6 +35,7 @@ benchmark: build/games/rosey-chop.so
 
 test:
 	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js
+	sh tests/service_install.sh
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/splash_runtime.c -o /tmp/splash-runtime-test
 	/tmp/splash-runtime-test

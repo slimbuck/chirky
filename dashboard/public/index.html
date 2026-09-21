@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Two Forty Control Room</title>
-  <meta name="description" content="Local development control panel for the Two Forty CRT console.">
+  <title>Chirky Control Room</title>
+  <meta name="description" content="Local development control panel for the Chirky CRT console.">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      <div><h1>Two Forty</h1><p>CRT console</p></div>
+      <div><h1>Chirky</h1><p>The Chirky Joybox</p></div>
     </div>
     <div class="connection"><span id="statusDot" class="status-dot"></span><span id="connectionText">Checking Pi…</span></div>
   </header>
@@ -47,7 +47,7 @@
 </div>
     <div data-page="launcher" class="dashboard-page hidden">
       <div class="page-heading"><h2>Launcher</h2><p>The console menu, controlled from here. Select an item to open it on the Pi.</p></div>
-      <div class="launcher-layout"><section class="panel remote-menu"><div class="panel-head"><h2 id="remoteMenuTitle">Two Forty</h2></div><div id="launcherItems"><p class="help-text">Loading menu…</p></div></section>
+      <div class="launcher-layout"><section class="panel remote-menu"><div class="panel-head"><h2 id="remoteMenuTitle">Chirky</h2></div><div id="launcherItems"><p class="help-text">Loading menu…</p></div></section>
       <aside class="panel"><h2>Remote controls</h2><div class="session-actions"><button id="menuBtn" class="button">Show launcher on CRT</button><p>Exit the current game or settings screen.</p></div><div class="session-actions"><button id="reloadBtn" class="button">Restart current game</button></div><div class="session-actions"><button id="configureLauncher" class="button" disabled>Edit launcher</button><p>Names, order, and visibility apply here and on the CRT.</p><p id="launcherSource" class="help-text"></p></div></aside></div>
       <section id="launcherEditor" class="panel hidden"><div class="panel-head"><h2>Edit launcher</h2><button id="cancelLauncher" class="button">Cancel</button></div><p class="help-text">Move items within each menu, rename them, or hide them. Keep at least one item visible in each menu. Back is always available in Settings.</p><div id="launcherFields"></div><div class="editor-footer"><span id="launcherSaveStatus" role="status"></span><button id="saveLauncher" class="button primary">Apply to console</button></div></section>
     </div>

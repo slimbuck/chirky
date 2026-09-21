@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-  Provision and install Two Forty on a freshly booted Raspberry Pi OS Trixie Pi.
+  Provision and install Chirky on a freshly booted Raspberry Pi OS Trixie Pi.
 
 .EXAMPLE
-  .\provision\install.ps1 -HostName twoforty.local
-  .\provision\install.ps1 -HostName 192.168.137.2 -IdentityFile $env:USERPROFILE\.ssh\twoforty
+  .\provision\install.ps1 -HostName chirky.local
+  .\provision\install.ps1 -HostName 192.168.137.2 -IdentityFile $env:USERPROFILE\.ssh\chirky
 #>
 [CmdletBinding()]
 param(
   [string]$HostName = "192.168.137.2",
-  [string]$PiName = "twoforty",
+  [string]$PiName = "chirky",
   [string]$User = "retro",
   [string]$Address = "192.168.137.2/24",
   [string]$BootGame = "launcher",
@@ -22,7 +22,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$remoteRoot = "/home/$User/two-forty"
+$remoteRoot = "/home/$User/chirky"
 $target = "$User@$HostName"
 $sshOptions = @("-o", "BatchMode=yes", "-o", "ConnectTimeout=10")
 if ($IdentityFile) { $sshOptions += @("-i", $IdentityFile) }
@@ -44,8 +44,8 @@ if ($LASTEXITCODE -ne 0) { throw "Source deployment failed." }
 
 $networkOption = if ($SkipNetwork) { " --skip-network" } else { "" }
 $offlineOption = if ($Offline) { " --offline" } else { "" }
-$remoteCommand = "cd '$remoteRoot' && sudo sh provision/provision-pi.sh --user '$User' --hostname '$PiName' --address '$Address' --boot-game '$BootGame'$networkOption && sudo sh provision/install-two-forty.sh --user '$User'$offlineOption"
-Write-Host "==> Applying Trixie/RGBerry configuration and building Two Forty" -ForegroundColor Cyan
+$remoteCommand = "cd '$remoteRoot' && sudo sh provision/provision-pi.sh --user '$User' --hostname '$PiName' --address '$Address' --boot-game '$BootGame'$networkOption && sudo sh provision/install-chirky.sh --user '$User'$offlineOption"
+Write-Host "==> Applying Trixie/RGBerry configuration and building Chirky" -ForegroundColor Cyan
 & ssh @sshOptions $target $remoteCommand
 if ($LASTEXITCODE -ne 0) { throw "Remote provisioning or installation failed." }
 
