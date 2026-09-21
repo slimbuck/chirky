@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawn } = require("child_process");
+const {assets: browserAssets} = require("../tools/web-assets");
 
 const DASHBOARD = __dirname;
 const ROOT = path.resolve(DASHBOARD, "..");
@@ -179,7 +180,7 @@ function json(response, status, body) {
 function contentType(file) {
   const extension = path.extname(file).toLowerCase();
   return ({ ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8",
-    ".png":"image/png", ".js":"text/javascript; charset=utf-8", ".wav":"audio/wav", ".ppm":"image/x-portable-pixmap" })[extension]
+    ".wasm":"application/wasm", ".json":"application/json", ".png":"image/png", ".js":"text/javascript; charset=utf-8", ".wav":"audio/wav", ".ppm":"image/x-portable-pixmap" })[extension]
     || "application/octet-stream";
 }
 
@@ -317,6 +318,21 @@ async function playEditedGame(id, editor) {
 async function handle(request, response) {
   const url = new URL(request.url, "http://localhost");
   try {
+    if(request.method==="GET" && url.pathname==="/play") {
+      response.writeHead(302,{Location:"/play/"+url.search});return response.end();
+    }
+    if(request.method==="GET" && url.pathname.startsWith("/play/")) {
+      const relative=decodeURIComponent(url.pathname.slice(6)) || "index.html";
+      if(relative==="assets.json")return json(response,200,browserAssets());
+      if(relative.startsWith("runtime/")) {
+        const asset=relative.slice(8);
+        if(!browserAssets().includes(asset))return json(response,404,{error:"not found"});
+        return sendFile(response,path.join(ROOT,asset));
+      }
+      if(!/^(index\.html|player\.js|style\.css|(?:launcher|phosphor-run|rosey-chop|hardware-test)\.(?:js|wasm))$/.test(relative))
+        return json(response,404,{error:"not found"});
+      return sendFile(response,path.join(ROOT,"build","web",relative));
+    }
     if (request.method === "GET" && url.pathname === "/api/launcher") return json(response,200,await readLauncher());
     if (request.method === "PUT" && url.pathname === "/api/launcher") return await saveLauncher(request,response);
     if (request.method === "GET" && url.pathname === "/api/status") return routes.status(request, response);

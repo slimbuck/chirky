@@ -17,6 +17,14 @@ drawing order. A batch holds 4,096 rectangles; most scenes use one GPU draw.
 The previous per-rectangle scissor/clear path remains only as a test/benchmark
 reference. No changes to game artwork or the game ABI are needed for batching.
 
+## Browser player
+
+Run `make web` with Emscripten installed, then open
+<http://localhost:3030/play/> with the dashboard running. The existing C games
+run as WebAssembly, with keyboard, gamepad and touch input. The editing portal
+includes **Play in browser** and **Save and play in browser**.
+See [the browser guide](web/README.md) for build and standalone hosting details.
+
 ## Frame timing
 
 The diagnostic strip starts disabled. Hold **Start for two seconds** to toggle

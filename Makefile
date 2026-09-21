@@ -1,4 +1,5 @@
 CC ?= cc
+.DEFAULT_GOAL := all
 NODE ?= node
 
 CPPFLAGS += -D_GNU_SOURCE -Iinclude
@@ -10,11 +11,29 @@ SOURCES := src/host.c src/input_bindings.c src/rect_renderer.c
 GAME_SOURCES := $(wildcard games/*/game.c)
 GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
-.PHONY: all clean test benchmark
+.PHONY: all clean test benchmark web
+
+EMCC ?= emcc
+WEB_FLAGS = -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall --no-entry
+WEB_COMMON = web/host.c src/rect_renderer.c
+WEB_HEADERS = $(wildcard include/*.h) src/rect_renderer.h
+WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.js,$(wildcard games/*/game.c))
+.SECONDEXPANSION:
+
+web: build/web/launcher.js $(WEB_TARGETS)
+	$(NODE) tools/web-assets.js
+
+build/web/launcher.js: $(WEB_COMMON) $(WEB_HEADERS)
+	mkdir -p $(@D)
+	$(EMCC) $(WEB_FLAGS) -DCHIRKY_WEB_LAUNCHER $(WEB_COMMON) -o $@
+
+build/web/%.js: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) $(WEB_COMMON) $(WEB_HEADERS)
+	mkdir -p $(@D)
+	$(EMCC) $(WEB_FLAGS) $(WEB_COMMON) $(wildcard games/$*/*.c) -o $@
 
 all: $(TARGET) $(GAME_TARGETS)
 
-$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/launcher_wordmark.h include/splash_art.h include/chirky.h include/input_gate.h
+$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/pixel_font.h include/launcher_config.h include/launcher_wordmark.h include/splash_art.h include/chirky.h include/input_gate.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@.next $(LDLIBS)
 	mv $@.next $@

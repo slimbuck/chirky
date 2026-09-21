@@ -16,7 +16,7 @@
     <div class="connection"><span id="statusDot" class="status-dot"></span><span id="connectionText">Checking Pi…</span></div>
   </header>
 
-  <nav class="page-nav" aria-label="Dashboard"><a href="#console" data-page-link="console">Console</a><a href="#launcher" data-page-link="launcher">Launcher</a><a href="#edit" data-page-link="edit">Edit</a></nav>
+  <nav class="page-nav" aria-label="Dashboard"><a href="#console" data-page-link="console">Console</a><a href="#launcher" data-page-link="launcher">Launcher</a><a href="#edit" data-page-link="edit">Edit</a><a href="/play/" target="chirky-play">Play in browser</a></nav>
   <main>
     <p id="actionStatus" class="action-status" role="status" aria-live="polite">Ready.</p>
     <div data-page="console" class="dashboard-page">
@@ -52,7 +52,7 @@
       <section id="launcherEditor" class="panel hidden"><div class="panel-head"><h2>Edit launcher</h2><button id="cancelLauncher" class="button">Cancel</button></div><p class="help-text">Move items within each menu, rename them, or hide them. Keep at least one item visible in each menu. Back is always available in Settings.</p><div id="launcherFields"></div><div class="editor-footer"><span id="launcherSaveStatus" role="status"></span><button id="saveLauncher" class="button primary">Apply to console</button></div></section>
     </div>
     <div data-page="edit" class="dashboard-page hidden"><div class="page-heading"><h2>Edit</h2><p>Select a game to edit its levels, artwork, and settings on this laptop.</p></div><div id="editGames" class="games-grid"></div></div>
-    <div data-page="game" class="dashboard-page hidden"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="#edit">Edit</a><span aria-hidden="true"> / </span><span id="gameBreadcrumb"></span></nav><div class="page-heading"><h2 id="gameTitle"></h2><p>Save locally to keep changes on the laptop, or save and play to try them on the Pi.</p></div><img id="gameArtwork" class="game-detail-cover hidden" width="288" height="216" alt=""><div id="gameTools"></div>
+    <div data-page="game" class="dashboard-page hidden"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="#edit">Edit</a><span aria-hidden="true"> / </span><span id="gameBreadcrumb"></span></nav><div class="page-heading"><h2 id="gameTitle"></h2><p>Save locally, playtest in your browser, or send your changes to the Pi.</p></div><img id="gameArtwork" class="game-detail-cover hidden" width="288" height="216" alt=""><div id="gameTools"></div>
     <section id="editorPanel" class="panel editor-panel hidden">
       <div class="panel-head"><div><span class="eyebrow">Plain-text settings</span><h2 id="editorTitle">Game configuration</h2></div><button id="closeEditor" class="icon-button" aria-label="Close editor">×</button></div>
       <textarea id="configEditor" spellcheck="false" aria-label="Game configuration"></textarea>
@@ -99,7 +99,7 @@
       </div>
       <div class="level-footer">
         <div><strong id="levelValidation">Asset is valid</strong><span id="levelDirty">No unsaved changes.</span></div>
-        <div class="button-row"><button id="saveLevelLocal" class="button">Save locally</button><button id="saveLevelPlay" class="button primary">Save and play on Pi</button></div>
+        <div class="button-row"><button id="saveLevelLocal" class="button">Save locally</button><button id="saveLevelBrowser" class="button">Save and play in browser</button><button id="saveLevelPlay" class="button primary">Save and play on Pi</button></div>
       </div>
     </section>
 

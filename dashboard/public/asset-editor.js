@@ -178,6 +178,7 @@ function updateLevelState() {
   $("#redoLevel").disabled = !levelState.redo.length;
   $("#saveLevelLocal").disabled = errors.length > 0;
   $("#saveLevelPlay").disabled = errors.length > 0;
+  $("#saveLevelBrowser").disabled = errors.length > 0;
 }
 
 function renderLevel() {
@@ -421,6 +422,18 @@ $("#resizeLevel").addEventListener("click", () => {
   renderLevel();
 });
 $("#saveLevelLocal").addEventListener("click", () => act($("#saveLevelLocal"), "Saving", () => saveLevel(false)));
+$("#saveLevelBrowser").addEventListener("click", () => {
+  const state=levelState;
+  const index=games.find(game=>game.id===state.gameId).editors.filter(editor=>editor.catalogKind==="level").findIndex(editor=>editor.id===state.editorId);
+  const player=window.open("about:blank","chirky-play");
+  act($("#saveLevelBrowser"),"Saving and launching",async()=>{
+    try {
+      await saveLevel(false);
+      const url=`/play/?game=${encodeURIComponent(state.gameId)}${index>=0?`&level=${index}`:""}`;
+      if(player)player.location.href=url;else throw new Error("Saved. Allow pop-ups to open the browser player.");
+    } catch(error) {if(player)player.close();throw error;}
+  });
+});
 $("#saveLevelPlay").addEventListener("click", () => act($("#saveLevelPlay"), "Saving and launching", () => saveLevel(true)));
 
 const levelCanvas = $("#levelCanvas");
