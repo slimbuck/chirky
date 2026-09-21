@@ -48,16 +48,16 @@ Restart an already-running dashboard after updating its server code.
 - `game.conf`: movement, sounds, palette, catalog location and starting level.
 - `content.conf`: ordered levels and named animations, shared by runtime and editor.
 - `editor.json`: reusable level/sprite palette templates and validation constraints.
-- `assets/levels/`: additional level grids. The original remains `assets/level-01.txt`.
-- `assets/sprites/`: named animation files. Original idle art remains `assets/player.sprite`.
+- `assets/levels/`: all campaign level grids.
+- `assets/sprites/`: all named sprite and animation files.
 - `assets/*.wav`: sounds; `assets/concept.png`: visual reference.
 
 Catalog example (paths are relative to `content.conf`):
 
 ```ini
-level.relay-shaft=assets/level-01.txt
+level.relay-shaft=assets/levels/relay-shaft.txt
 level.signal-bridge=assets/levels/signal-bridge.txt
-sprite.player-idle=assets/player.sprite
+sprite.player-idle=assets/sprites/player-idle.sprite
 sprite.player-run=assets/sprites/player-run.sprite
 ```
 

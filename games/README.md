@@ -64,7 +64,7 @@ Version 1 supports rectangular, single-character tilemaps and pixel sprites:
     "id": "level-01",
     "name": "Level 1",
     "type": "tilemap",
-    "file": "assets/level-01.txt",
+    "file": "assets/levels/level-01.txt",
     "tileSize": 8,
     "empty": ".",
     "viewport": { "width": 40, "height": 30 },
@@ -85,7 +85,7 @@ A sprite uses the same palette-driven text format without `tileSize` or
   "id": "player",
   "name": "Player sprite",
   "type": "sprite",
-  "file": "assets/player.sprite",
+  "file": "assets/sprites/player.sprite",
   "empty": ".",
   "palette": [
     { "value": ".", "name": "Transparent", "color": "#050a14" },
