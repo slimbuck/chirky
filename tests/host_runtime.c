@@ -319,6 +319,9 @@ int main(int argc,char **argv)
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
     fputs("boot_game=launcher\n# Keep this comment\nbind_confirm=key:313\nframe_timing=1\n",config);fclose(config);
     static struct host host;
+    char art_path[1024];snprintf(art_path,sizeof(art_path),"%s/../assets/launcher/splash.ppm",argv[1]);
+    assert(splash_load_file(&host.launcher_art,art_path));
+    host.api.context=&host;host.api.fill_rect=fill_rect;
     host.mode.hdisplay=320;host.mode.vdisplay=240;
     load_host_config(&host);update_safe_area(&host);
     assert(!host.frame_timing_enabled);
@@ -430,6 +433,16 @@ int main(int argc,char **argv)
     assert(host.active_game && game_updates==65);
     event(&host,0,EV_KEY,BTN_SOUTH,0);event(&host,0,EV_KEY,BTN_EAST,0);
     host.active_game=NULL;host.game_api=NULL;
+    /* Default calibration with the actual shipped menu labels and artwork. */
+    host.safe_x=16;host.safe_y=12;host.safe_offset_x=host.safe_offset_y=0;
+    update_safe_area(&host);host.game_count=2;host.selected_game=0;
+    snprintf(host.games[0].id,sizeof(host.games[0].id),"phosphor-run");
+    snprintf(host.games[0].name,sizeof(host.games[0].name),"Phosphor Run");
+    snprintf(host.games[1].id,sizeof(host.games[1].id),"rosey-chop");
+    snprintf(host.games[1].name,sizeof(host.games[1].name),"Rosey Chop");
+    host.launcher.count=0;
+    draw_launcher(&host);
+    char artwork_preview[1024];snprintf(artwork_preview,sizeof(artwork_preview),"%s/launcher-art.ppm",argv[1]);write_preview(artwork_preview);
     /* Render fixtures at the maximum margins as well as the default. */
     host.safe_offset_x=host.safe_offset_y=0;
     host.safe_x=32;host.safe_y=24;update_safe_area(&host);host.game_count=6;host.selected_game=7;
@@ -445,6 +458,7 @@ int main(int argc,char **argv)
     host.setup.active=false;host.controller_settings=false;
     draw_settings_menu(&host);snprintf(output,sizeof(output),"%s/settings.ppm",argv[1]);write_preview(output);
     check_frame_timing(&host,argv[1]);
+    splash_free(&host.launcher_art);
     assert(remove(HOST_CONFIG_PATH)==0);assert(rmdir("config")==0);
     assert(remove("run/status.json")==0);assert(rmdir("run")==0);
     assert(chdir("/tmp")==0);assert(rmdir(directory)==0);

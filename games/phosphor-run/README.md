@@ -125,3 +125,8 @@ malformed animations/catalogs, duplication, ordering, campaign transitions,
 replay, selected start, animation timing and cleanup. On Windows, run the dashboard
 suite with `npm test --prefix dashboard`. Runtime tests use a stub host and do not
 require the CRT or change the running Pi session.
+
+## Title artwork
+
+`assets/artwork/splash.png` is the editable 288x216 image used by the dashboard;
+`splash.ppm` is its runtime export. See [artwork exports and generation prompt](../ARTWORK.md).

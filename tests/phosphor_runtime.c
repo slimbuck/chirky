@@ -28,10 +28,10 @@ int main(void)
     const struct two_forty_game_api *api=two_forty_game_entry();
     struct two_forty_input input={0};
     assert(api->init(&host_api,"games/phosphor-run/game.conf"));
-    assert(content.level_count==3 && content.sprite_count==20);
+    assert(content.level_count==4 && content.sprite_count==20);
     for(int i=0;i<3600;i++)api->update(&input);
     assert(phase==PHASE_TITLE);
-    api->render(); assert(draws>0 && draws<2000);
+    api->render(); assert(draws>0 && draws<320*240);
     input.button_pressed[TWO_FORTY_BUTTON_START]=true; api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_START]=false;
     assert(current_level==0 && phase==PHASE_PLAY);
     const struct animation *shard=content_animation(&content,"shard");
@@ -53,7 +53,7 @@ int main(void)
         }
     }
     deaths=7;
-    for (int stage=0;stage<3;stage++) {
+    for (int stage=0;stage<content.level_count;stage++) {
         api->update(&input);api->update(&input);
         int expected_shards=0, exit_x=0,exit_y=0;
         for (int y=0;y<level.height;y++) for (int x=0;x<level.width;x++) {
@@ -74,8 +74,8 @@ int main(void)
         input.button_pressed[TWO_FORTY_BUTTON_B]=true;
         api->update(&input); input.button_pressed[TWO_FORTY_BUTTON_B]=false;
         assert(phase==PHASE_PLAY && collected_shards==0);
-        assert(current_level==(stage+1)%3);
-        assert(deaths==(stage==2?0:7));
+        assert(current_level==(stage+1)%content.level_count);
+        assert(deaths==(stage==content.level_count-1?0:7));
         assert(player_x==level.initial_x && player_y==level.initial_y);
         assert(!on_ground && !touching_left && !touching_right && dash_available);
         assert(camera_x>=0 && camera_y>=0);

@@ -41,7 +41,7 @@ static void label(void *ctx, enum two_forty_button action, char *s, size_t n)
 { (void)ctx; snprintf(s,n,"%s",action==TWO_FORTY_BUTTON_Y ? "Y" : "B"); }
 static void preview(const char *name)
 {
-    draws=0; game->render(); assert(draws>0 && draws<5000);
+    draws=0; game->render(); assert(draws>0 && draws<(garden.phase==TITLE?320*240:5000));
     char path[256]; snprintf(path,sizeof(path),"build/rosey-%s.ppm",name);
     FILE *f=fopen(path,"wb"); assert(f);
     fprintf(f,"P6\n%d %d\n255\n",test_host.screen_width,test_host.screen_height);

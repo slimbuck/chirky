@@ -29,4 +29,6 @@ extern struct garden_state garden;
 extern const struct two_forty_host_api *host;
 float clamp_value(float value, float low, float high);
 void garden_render(void);
+void title_art_load(const char *config);
+void title_art_free(void);
 #endif

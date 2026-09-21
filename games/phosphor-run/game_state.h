@@ -64,4 +64,6 @@ bool load_settings(const char *path);
 char tile_at(int x, int y);
 void render_title(void);
 void render_game(void);
+void title_art_load(const char *config);
+void title_art_free(void);
 #endif

@@ -36,7 +36,7 @@ Write-Host "==> Creating $remoteRoot on $target" -ForegroundColor Cyan
 & ssh @sshOptions $target "sudo install -d -o '$User' -g '$User' '$remoteRoot'"
 if ($LASTEXITCODE -ne 0) { throw "Could not prepare the remote project directory." }
 
-$sources = @("Makefile", "README.md", "include", "src", "games", "tools", "deploy", "provision", "config") |
+$sources = @("Makefile", "README.md", "include", "src", "assets", "games", "tools", "deploy", "provision", "config") |
   ForEach-Object { Join-Path $projectRoot $_ }
 Write-Host "==> Copying reproducible source and assets" -ForegroundColor Cyan
 & scp @sshOptions -r @sources "${target}:$remoteRoot/"

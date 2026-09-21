@@ -4,6 +4,7 @@
 #include "frame_timing.h"
 #include "input_gate.h"
 #include "launcher_config.h"
+#include "splash_art.h"
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -224,6 +225,7 @@ struct game_record {
 };
 
 struct host {
+    struct splash_art launcher_art;
     int drm_fd;
     uint32_t connector_id, crtc_id;
     drmModeModeInfo mode;
@@ -873,19 +875,28 @@ static void menu_footer(struct host *host, bool can_go_back)
 static void draw_launcher(struct host *host)
 {
     clear_screen();
+    splash_draw(&host->launcher_art,&host->api);
     int height=host->api.screen_height;
     fill_rect(host,8,height-7,host->api.screen_width-16,3,40,175,212);
-    menu_text(host,10,height-23,"TWO FORTY",3,238,240,232);
+    menu_text(host,10,height-23,"GAME LIBRARY",2,238,240,232);
     menu_text(host,10,height-55,"GAMES AND SETTINGS",1,112,160,170);
     ensure_launcher(host);
     int count=launcher_count(&host->launcher,false), first=host->selected_game<4?0:host->selected_game-3;
     for (int row=0;row<4 && first+row<count;row++) {
         int index=first+row;
         const char *label=launcher_at(&host->launcher,false,index)->label;
-        menu_row(host,height-83-row*24,label,index==host->selected_game);
+        int y=height-83-row*24;
+        bool selected=index==host->selected_game;
+        int width=host->api.screen_width*2/3;
+        fill_rect(host,8,y-13,width,20,selected?28:5,selected?74:17,selected?84:23);
+        fill_rect(host,12,y-9,3,10,selected?244:40,selected?194:85,selected?70:91);
+        char visible[64];
+        snprintf(visible,sizeof(visible),"%.*s",(width-20)/6,label);
+        menu_text(host,22,y,visible,1,selected?250:170,selected?248:185,selected?236:190);
     }
     if (first+4<count) menu_text(host,10,30,"MORE BELOW",1,112,160,170);
     else if (first>0) menu_text(host,10,30,"MORE ABOVE",1,112,160,170);
+    fill_rect(host,8,5,host->api.screen_width-16,18,5,17,23);
     menu_footer(host,false);
 }
 
@@ -1657,6 +1668,7 @@ static bool next_frame(struct host *host)
 
 static void cleanup(struct host *host)
 {
+    splash_free(&host->launcher_art);
     unload_game(host);
     for (int index = 0; index < host->inputs.count; ++index) close(host->inputs.devices[index].fd);
     if (host->saved_crtc != NULL && host->drm_fd >= 0)
@@ -1713,6 +1725,7 @@ int main(void)
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
         .draw_text=draw_text,.button_label=button_label};
     update_safe_area(&host);
+    splash_load_file(&host.launcher_art,"assets/launcher/splash.ppm");
     open_inputs(&host.inputs);
     mkdir("run", 0755);
     if (mkfifo("run/control.fifo", 0600) != 0 && errno != EEXIST) {

@@ -103,6 +103,7 @@ static bool game_init(const struct two_forty_host_api *api, const char *config)
     }
     bool valid = !ferror(f); fclose(f);
     if (!valid || !load_garden(level)) return false;
+    title_art_load(config);
     reset_run(); garden.phase = TITLE;
     return true;
 }
@@ -211,7 +212,7 @@ static void game_update(const struct two_forty_input *input)
     if(garden.phase!=before)two_forty_gate_begin(&transition_gate);
 }
 
-static void game_shutdown(void) { memset(&garden, 0, sizeof(garden)); host = NULL; }
+static void game_shutdown(void) { title_art_free(); memset(&garden, 0, sizeof(garden)); host = NULL; }
 static const struct two_forty_game_api api = {
     .abi_version = TWO_FORTY_ABI_VERSION, .init = game_init, .shutdown = game_shutdown,
     .update = game_update, .render = garden_render

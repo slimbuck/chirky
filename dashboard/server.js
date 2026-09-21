@@ -109,7 +109,7 @@ function listGames() {
         : [];
       const editors = loadEditors(entry.name).map(({ id, name, type, catalogKind, catalogId }) => ({ id, name, type, catalogKind, catalogId }));
       return { id: values.id || entry.name, name: values.name || entry.name,
-        description: values.description || "", values, assets, editors };
+        description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors };
     }).filter(Boolean);
 }
 
@@ -177,7 +177,7 @@ function json(response, status, body) {
 function contentType(file) {
   const extension = path.extname(file).toLowerCase();
   return ({ ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8",
-    ".js":"text/javascript; charset=utf-8", ".wav":"audio/wav", ".ppm":"image/x-portable-pixmap" })[extension]
+    ".png":"image/png", ".js":"text/javascript; charset=utf-8", ".wav":"audio/wav", ".ppm":"image/x-portable-pixmap" })[extension]
     || "application/octet-stream";
 }
 
@@ -237,7 +237,7 @@ const routes = {
     await ssh(`mkdir -p ${config.remoteRoot}`);
     const hasHostConfig = (await ssh(
       `test -f ${config.remoteRoot}/config/host.conf && printf yes || true`)).stdout === "yes";
-    const sources = ["Makefile", "README.md", "include", "src", "games", "tools", "deploy", "provision"]
+    const sources = ["Makefile", "README.md", "include", "src", "assets", "games", "tools", "deploy", "provision"]
       .map((item) => path.join(ROOT, item));
     await command("scp", [...scpArgs(), "-r", ...sources,
       `${config.user}@${config.host}:${config.remoteRoot}/`], 60_000);
@@ -386,6 +386,10 @@ async function handle(request, response) {
       }
       return json(response, 200, { ok: true, hash: textHash(text), validation, playError });
     }
+
+    match = /^\/api\/games\/([^/]+)\/artwork$/.exec(url.pathname);
+    if (match && request.method === "GET")
+      return sendFile(response, path.join(gameDirectory(decodeURIComponent(match[1])), "assets", "artwork", "splash.png"));
 
     match = /^\/api\/games\/([^/]+)\/assets\/([^/]+)$/.exec(url.pathname);
     if (match && request.method === "GET") {

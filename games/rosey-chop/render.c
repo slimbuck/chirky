@@ -1,6 +1,11 @@
 #include "game_state.h"
+#include "splash_art.h"
 #include <stdio.h>
 #include <string.h>
+
+static struct splash_art title_art;
+void title_art_load(const char *config) { splash_load(&title_art,config); }
+void title_art_free(void) { splash_free(&title_art); }
 
 static int camera_x, camera_y;
 /* Art uses top-down coordinates; the CRT host's origin is bottom-left. */
@@ -191,6 +196,16 @@ static void overlay(void)
 
 void garden_render(void)
 {
+    if (garden.phase==TITLE && splash_draw(&title_art,host)) {
+        int top=host->screen_height-57;
+        rect(0,top,host->screen_width,57,0x203d36);
+        center(top+4,"CHOP BLACK ROSES BEFORE THE RAIN",1,0xffedcc);
+        center(top+15,"DODGE THE WASP - ONE STING ENDS IT",1,0xe9b76a);
+        center(top+27,"D-PAD MOVE / HOLD B CHOP / Y JUMP",1,0xaacb9f);
+        center(top+38,"SELECT - PAUSE",1,0xaacb9f);
+        center(top+49,"B - BEGIN",1,0xffb8c6);
+        return;
+    }
     int view_h = host->screen_height-42;
     camera_x = (int)clamp_value(garden.x-host->screen_width/2,0,WORLD_W-host->screen_width > 0 ? WORLD_W-host->screen_width : 0);
     camera_y = (int)clamp_value(garden.y-view_h/2,0,WORLD_H-view_h > 0 ? WORLD_H-view_h : 0);

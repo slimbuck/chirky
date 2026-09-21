@@ -299,6 +299,7 @@ static void update_play(const struct two_forty_input *input)
 
 static void game_shutdown(void)
 {
+    title_art_free();
     free(level.tiles); free(level.original);
     memset(&level,0,sizeof(level)); content_free(&content); host=NULL;
 }
@@ -322,6 +323,7 @@ static bool game_init(const struct two_forty_host_api *host_api, const char *con
     if (settings.start_level<0 || settings.start_level>=content.level_count) settings.start_level=0;
     current_level=settings.start_level;
     if (!load_level(content.levels[current_level].path)) { game_shutdown(); return false; }
+    title_art_load(config_path);
     begin_level();
     frame_number=0; phase=PHASE_TITLE; title_timer=0; facing=1; deaths=0;
     return true;

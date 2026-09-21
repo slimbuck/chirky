@@ -47,3 +47,8 @@ Original PCM sound effects are included. Regenerate them with
 for safe living roses, replay, jump avoidance, stings, storm expiry and viewport
 layout. Software-rendered previews use the actual host font and are written to
 `build/rosey-*.ppm`. These tests do not access the Pi or DRM hardware.
+
+## Title artwork
+
+`assets/artwork/splash.png` is the editable 288x216 image used by the dashboard;
+`splash.ppm` is its runtime export. See [artwork exports and generation prompt](../ARTWORK.md).

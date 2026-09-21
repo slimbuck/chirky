@@ -14,13 +14,13 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
 all: $(TARGET) $(GAME_TARGETS)
 
-$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/two_forty.h include/input_gate.h
+$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/splash_art.h include/two_forty.h include/input_gate.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@.next $(LDLIBS)
 	mv $@.next $@
 
 .SECONDEXPANSION:
-build/games/%.so: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) include/two_forty.h include/input_gate.h
+build/games/%.so: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) include/two_forty.h include/input_gate.h include/splash_art.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude -fPIC -shared $(filter %.c,$^) -o $@.next
 	mv $@.next $@
@@ -36,6 +36,8 @@ benchmark: build/games/rosey-chop.so
 test:
 	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js
 	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/splash_runtime.c -o /tmp/splash-runtime-test
+	/tmp/splash-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/launcher_runtime.c -o /tmp/launcher-runtime-test
 	/tmp/launcher-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tests/host_runtime.c src/input_bindings.c src/rect_renderer.c -Wl,--gc-sections -ldl -l:libGLESv2.so.2 -o /tmp/host-runtime-test

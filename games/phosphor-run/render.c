@@ -1,6 +1,11 @@
 #include "game_state.h"
+#include "splash_art.h"
 #include <stdio.h>
 #include <string.h>
+
+static struct splash_art title_art;
+void title_art_load(const char *config) { splash_load(&title_art,config); }
+void title_art_free(void) { splash_free(&title_art); }
 
 static struct colour sprite_colour(char value)
 {
@@ -154,6 +159,14 @@ void render_title(void)
     controller_label(TWO_FORTY_BUTTON_B,"B",jump,sizeof(jump));
     controller_label(TWO_FORTY_BUTTON_Y,"Y",dash,sizeof(dash));
     controller_label(TWO_FORTY_BUTTON_SELECT,"SELECT",menu,sizeof(menu));
+    if (splash_draw(&title_art,host)) {
+        rectangle(0,0,host->screen_width,48,settings.background);
+        centered_text(39,"RESTORE THE LAST SIGNAL",1,settings.paper);
+        centered_text(27,"D-PAD MOVE / B JUMP / Y DASH",1,settings.edge);
+        centered_text(17,"L RESTART / SELECT PAUSE",1,settings.edge);
+        centered_text(7,"B - BEGIN",1,settings.amber);
+        return;
+    }
     render_background();
     int height=host->screen_height;
     centered_text(height-24,"PHOSPHOR",3,settings.phosphor);
@@ -180,6 +193,7 @@ void render_game(void)
         centered_text(middle+5,"SIGNAL LOST",2,settings.hazard);
     } else if (phase==PHASE_WIN) {
         char confirm[32],line[96];
+        controller_label(TWO_FORTY_BUTTON_B,"B",confirm,sizeof(confirm));
             rectangle(8,middle-51,host->screen_width-16,102,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);

@@ -32,6 +32,9 @@ function showPage(route) {
   });
 }
 function renderGameTools(game) {
+  const cover=$("#gameArtwork");
+  cover.classList.toggle("hidden",!game.artwork);
+  if(game.artwork) {cover.src=game.artwork;cover.alt=game.name+" artwork";}
   $("#gameTools").innerHTML=`<div class="button-row">${(game.editors || []).filter((editor,index,all)=>all.findIndex(e=>e.type===editor.type)===index).map(editor=>`<button class="button" data-level-editor="${editor.id}">${editor.type==="sprite"?"Sprites & animations":"Levels"}</button>`).join("")}<button class="button" data-edit="${game.id}">Game settings</button></div><details class="asset-files"><summary>Browse asset files</summary><div class="assets">${game.assets.map(asset=>`<a class="asset" href="${asset.url}" target="_blank" rel="noopener">${escapeHtml(asset.name)}</a>`).join("")}</div></details>`;
   $("#gameTools [data-edit]").onclick=()=>openEditor(game.id).catch(error=>setAction(error.message,true));
   document.querySelectorAll("#gameTools [data-level-editor]").forEach(button=>button.onclick=()=>openLevelEditor(game.id,button.dataset.levelEditor).catch(error=>setAction(error.message,true)));
@@ -113,7 +116,7 @@ function renderGames() {
   if(signature===renderedGames)return;
   renderedGames=signature;
   const playable=games.filter(game=>game.id!=="hardware-test");
-  $("#editGames").innerHTML=playable.map(game=>`<a class="game-card game-link" href="#edit/${game.id}"><h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.description || "")}</p><span class="text-link">Open game editor →</span></a>`).join("");
+  $("#editGames").innerHTML=playable.map(game=>`<a class="game-card game-link" href="#edit/${game.id}">${game.artwork?`<img class="game-cover" src="${escapeHtml(game.artwork)}" alt="" width="288" height="216" loading="lazy">`:""}<h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.description || "")}</p><span class="text-link">Open game editor →</span></a>`).join("");
 
 }
 
