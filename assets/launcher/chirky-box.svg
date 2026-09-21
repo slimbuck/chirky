@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="744" height="168" viewBox="0 0 248 56" role="img" aria-labelledby="title description" shape-rendering="crispEdges">
+  <title id="title">Chirky Box — maker's badge</title>
+  <desc id="description">Cream pixel lettering with BOX inside an amber frame, matching the launcher's native pixel logo. Transparent surrounding canvas; no fonts or linked images.</desc>
+  <g id="badge">
+    <rect x="159" y="9" width="81" height="39" fill="#082a2c"/>
+    <rect x="158" y="8" width="81" height="39" fill="#f4b845"/>
+    <rect x="160" y="10" width="77" height="35" fill="#051117"/>
+  </g>
+  <g id="letter-shadows" fill="#082a2c" transform="translate(1 1)">
+    <path d="M11 14h18v3h-18zM8 17h21v3h-21zM8 20h6v3h-6zM8 23h6v3h-6zM8 26h6v3h-6zM8 29h6v3h-6zM8 32h6v3h-6zM8 35h21v3h-21zM11 38h18v3h-18z"/>
+    <path d="M32 14h6v3h-6zM47 14h6v3h-6zM32 17h6v3h-6zM47 17h6v3h-6zM32 20h6v3h-6zM47 20h6v3h-6zM32 23h21v3h-21zM32 26h21v3h-21zM32 29h6v3h-6zM47 29h6v3h-6zM32 32h6v3h-6zM47 32h6v3h-6zM32 35h6v3h-6zM47 35h6v3h-6zM32 38h6v3h-6zM47 38h6v3h-6z"/>
+    <path d="M56 14h21v3h-21zM56 17h21v3h-21zM62 20h9v3h-9zM62 23h9v3h-9zM62 26h9v3h-9zM62 29h9v3h-9zM62 32h9v3h-9zM56 35h21v3h-21zM56 38h21v3h-21z"/>
+    <path d="M80 14h18v3h-18zM80 17h21v3h-21zM80 20h6v3h-6zM95 20h6v3h-6zM80 23h6v3h-6zM95 23h6v3h-6zM80 26h18v3h-18zM80 29h15v3h-15zM80 32h6v3h-6zM89 32h6v3h-6zM80 35h6v3h-6zM92 35h6v3h-6zM80 38h6v3h-6zM95 38h6v3h-6z"/>
+    <path d="M104 14h6v3h-6zM119 14h6v3h-6zM104 17h6v3h-6zM116 17h9v3h-9zM104 20h6v3h-6zM113 20h9v3h-9zM104 23h15v3h-15zM104 26h12v3h-12zM104 29h15v3h-15zM104 32h6v3h-6zM113 32h9v3h-9zM104 35h6v3h-6zM116 35h9v3h-9zM104 38h6v3h-6zM119 38h6v3h-6z"/>
+    <path d="M128 14h6v3h-6zM143 14h6v3h-6zM128 17h6v3h-6zM143 17h6v3h-6zM128 20h6v3h-6zM143 20h6v3h-6zM131 23h6v3h-6zM140 23h6v3h-6zM131 26h15v3h-15zM134 29h9v3h-9zM134 32h9v3h-9zM134 35h9v3h-9zM134 38h9v3h-9z"/>
+    <path d="M164 14h18v3h-18zM164 17h21v3h-21zM164 20h6v3h-6zM179 20h6v3h-6zM164 23h6v3h-6zM179 23h6v3h-6zM164 26h18v3h-18zM164 29h21v3h-21zM164 32h6v3h-6zM179 32h6v3h-6zM164 35h6v3h-6zM179 35h6v3h-6zM164 38h18v3h-18z"/>
+    <path d="M191 14h15v3h-15zM188 17h21v3h-21zM188 20h6v3h-6zM203 20h6v3h-6zM188 23h6v3h-6zM203 23h6v3h-6zM188 26h6v3h-6zM203 26h6v3h-6zM188 29h6v3h-6zM203 29h6v3h-6zM188 32h6v3h-6zM203 32h6v3h-6zM188 35h21v3h-21zM191 38h15v3h-15z"/>
+    <path d="M212 14h6v3h-6zM227 14h6v3h-6zM212 17h6v3h-6zM227 17h6v3h-6zM215 20h6v3h-6zM224 20h6v3h-6zM215 23h15v3h-15zM218 26h9v3h-9zM215 29h15v3h-15zM215 32h6v3h-6zM224 32h6v3h-6zM212 35h6v3h-6zM227 35h6v3h-6zM212 38h6v3h-6zM227 38h6v3h-6z"/>
+  </g>
+  <g id="chirky" fill="#f4e9ca">
+    <path id="letter-c" d="M11 14h18v3h-18zM8 17h21v3h-21zM8 20h6v3h-6zM8 23h6v3h-6zM8 26h6v3h-6zM8 29h6v3h-6zM8 32h6v3h-6zM8 35h21v3h-21zM11 38h18v3h-18z"/>
+    <path id="letter-h" d="M32 14h6v3h-6zM47 14h6v3h-6zM32 17h6v3h-6zM47 17h6v3h-6zM32 20h6v3h-6zM47 20h6v3h-6zM32 23h21v3h-21zM32 26h21v3h-21zM32 29h6v3h-6zM47 29h6v3h-6zM32 32h6v3h-6zM47 32h6v3h-6zM32 35h6v3h-6zM47 35h6v3h-6zM32 38h6v3h-6zM47 38h6v3h-6z"/>
+    <path id="letter-i" d="M56 14h21v3h-21zM56 17h21v3h-21zM62 20h9v3h-9zM62 23h9v3h-9zM62 26h9v3h-9zM62 29h9v3h-9zM62 32h9v3h-9zM56 35h21v3h-21zM56 38h21v3h-21z"/>
+    <path id="letter-r" d="M80 14h18v3h-18zM80 17h21v3h-21zM80 20h6v3h-6zM95 20h6v3h-6zM80 23h6v3h-6zM95 23h6v3h-6zM80 26h18v3h-18zM80 29h15v3h-15zM80 32h6v3h-6zM89 32h6v3h-6zM80 35h6v3h-6zM92 35h6v3h-6zM80 38h6v3h-6zM95 38h6v3h-6z"/>
+    <path id="letter-k" d="M104 14h6v3h-6zM119 14h6v3h-6zM104 17h6v3h-6zM116 17h9v3h-9zM104 20h6v3h-6zM113 20h9v3h-9zM104 23h15v3h-15zM104 26h12v3h-12zM104 29h15v3h-15zM104 32h6v3h-6zM113 32h9v3h-9zM104 35h6v3h-6zM116 35h9v3h-9zM104 38h6v3h-6zM119 38h6v3h-6z"/>
+    <path id="letter-y" d="M128 14h6v3h-6zM143 14h6v3h-6zM128 17h6v3h-6zM143 17h6v3h-6zM128 20h6v3h-6zM143 20h6v3h-6zM131 23h6v3h-6zM140 23h6v3h-6zM131 26h15v3h-15zM134 29h9v3h-9zM134 32h9v3h-9zM134 35h9v3h-9zM134 38h9v3h-9z"/>
+  </g>
+  <g id="box" fill="#f4b845">
+    <path id="letter-b" d="M164 14h18v3h-18zM164 17h21v3h-21zM164 20h6v3h-6zM179 20h6v3h-6zM164 23h6v3h-6zM179 23h6v3h-6zM164 26h18v3h-18zM164 29h21v3h-21zM164 32h6v3h-6zM179 32h6v3h-6zM164 35h6v3h-6zM179 35h6v3h-6zM164 38h18v3h-18z"/>
+    <path id="letter-o" d="M191 14h15v3h-15zM188 17h21v3h-21zM188 20h6v3h-6zM203 20h6v3h-6zM188 23h6v3h-6zM203 23h6v3h-6zM188 26h6v3h-6zM203 26h6v3h-6zM188 29h6v3h-6zM203 29h6v3h-6zM188 32h6v3h-6zM203 32h6v3h-6zM188 35h21v3h-21zM191 38h15v3h-15z"/>
+    <path id="letter-x" d="M212 14h6v3h-6zM227 14h6v3h-6zM212 17h6v3h-6zM227 17h6v3h-6zM215 20h6v3h-6zM224 20h6v3h-6zM215 23h15v3h-15zM218 26h9v3h-9zM215 29h15v3h-15zM215 32h6v3h-6zM224 32h6v3h-6zM212 35h6v3h-6zM227 35h6v3h-6zM212 38h6v3h-6zM227 38h6v3h-6z"/>
+  </g>
+</svg>

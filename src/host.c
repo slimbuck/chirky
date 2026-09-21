@@ -4,6 +4,7 @@
 #include "frame_timing.h"
 #include "input_gate.h"
 #include "launcher_config.h"
+#include "launcher_wordmark.h"
 #include "splash_art.h"
 
 #include <dirent.h>
@@ -877,9 +878,10 @@ static void draw_launcher(struct host *host)
     clear_screen();
     splash_draw(&host->launcher_art,&host->api);
     int height=host->api.screen_height;
-    fill_rect(host,8,height-7,host->api.screen_width-16,3,40,175,212);
-    menu_text(host,10,height-23,"CHIRKY",3,238,240,232);
-    menu_text(host,10,height-55,"THE CHIRKY JOYBOX",1,112,160,170);
+    struct chirky_host_api title_api=host->api;
+    title_api.context=host;
+    title_api.fill_rect=fill_rect;
+    launcher_wordmark(&title_api);
     ensure_launcher(host);
     int count=launcher_count(&host->launcher,false), first=host->selected_game<4?0:host->selected_game-3;
     for (int row=0;row<4 && first+row<count;row++) {

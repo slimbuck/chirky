@@ -14,7 +14,7 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
 all: $(TARGET) $(GAME_TARGETS)
 
-$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/splash_art.h include/chirky.h include/input_gate.h
+$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/launcher_config.h include/launcher_wordmark.h include/splash_art.h include/chirky.h include/input_gate.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@.next $(LDLIBS)
 	mv $@.next $@
