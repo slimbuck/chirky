@@ -30,6 +30,8 @@ grep -Fqx "WorkingDirectory=$root" "$CHIRKY_TEST_SERVICE"
 grep -Fqx "ExecStart=$root/build/chirky-host" "$CHIRKY_TEST_SERVICE"
 grep -Fqx 'systemctl disable --now two-forty.service' "$CHIRKY_TEST_LOG"
 grep -Fqx 'systemctl restart chirky.service' "$CHIRKY_TEST_LOG"
+grep -Fqx 'systemctl restart chirky-gpu.service' "$CHIRKY_TEST_LOG"
+grep -Fqx 'systemctl enable chirky-gpu.service' "$CHIRKY_TEST_LOG"
 : > "$CHIRKY_TEST_LOG"
 PATH="$fixture/bin:$PATH" sh "$root/deploy/install-service.sh" --user tester --no-start
 grep -Fqx 'systemctl enable chirky.service' "$CHIRKY_TEST_LOG"

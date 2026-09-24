@@ -1,0 +1,15 @@
+{
+  "vertices": 654,
+  "triangles": 1224,
+  "bones": 3,
+  "clips": [
+    "idle",
+    "run",
+    "jump",
+    "fall",
+    "dash",
+    "death"
+  ],
+  "pose_frames": 68,
+  "runtime_bytes": 30208
+}

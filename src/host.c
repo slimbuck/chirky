@@ -2,6 +2,8 @@
 #include "input_bindings.h"
 #include "rect_renderer.h"
 #include "frame_timing.h"
+#include "gpu_timing.h"
+#include "profile.h"
 #include "input_gate.h"
 #include "launcher_config.h"
 #include "launcher_wordmark.h"
@@ -170,6 +172,8 @@ extern EGLBoolean eglMakeCurrent(EGLDisplay display, EGLSurface draw,
 extern EGLBoolean eglSwapInterval(EGLDisplay display, EGLint interval);
 extern EGLBoolean eglSwapBuffers(EGLDisplay display, EGLSurface surface);
 extern EGLint eglGetError(void);
+extern gpu_proc eglGetProcAddress(const char *name);
+extern const unsigned char *glGetString(unsigned int name);
 
 typedef int32_t GLsizei;
 typedef int32_t GLint;
@@ -257,6 +261,8 @@ struct host {
     struct rect_renderer renderer;
     unsigned int submitted_rectangles;
     struct frame_timing timing;
+    struct gpu_timing gpu_timing;
+    struct profile profile;
     bool frame_timing_enabled;
     bool timing_start_held, timing_start_toggled;
     uint64_t timing_start_us;
@@ -482,11 +488,11 @@ static void write_status(const struct host *host)
     if (file == NULL) return;
     fprintf(file, "{\n  \"pid\": %ld,\n  \"mode\": \"%s\",\n  \"game\": \"%s\",\n"
                   "  \"width\": %u,\n  \"height\": %u,\n  \"refresh\": %u,\n"
-                  "  \"viewport_width\": %d,\n  \"viewport_height\": %d\n}\n",
+                  "  \"viewport_width\": %d,\n  \"viewport_height\": %d,\n  \"profiling\": %s\n}\n",
             (long)getpid(), (const char *[]){"launcher","settings","input","setup","test","display","game","paused"}[current_screen(host)],
             host->active_game ? host->active_game->id : "",
             host->mode.hdisplay, host->mode.vdisplay, host->mode.vrefresh,
-            host->api.screen_width, host->api.screen_height);
+            host->api.screen_width, host->api.screen_height,host->frame_timing_enabled?"true":"false");
     fclose(file);
     rename("run/status.json.tmp", "run/status.json");
 }
@@ -766,6 +772,8 @@ static void process_control(struct host *host)
         power_down_pi();
     } else if (strcmp(line, "snapshot") == 0) {
         snapshot_requested = 1;
+    } else if (!strcmp(line,"timing on") || !strcmp(line,"timing off")) {
+        host->frame_timing_enabled=!strcmp(line,"timing on");
     } else if (strcmp(line, "quit") == 0) {
         host->running = false;
     } else if (strcmp(line, "reload") == 0 && host->active_game != NULL) {
@@ -1130,6 +1138,8 @@ static bool init_graphics(struct host *host)
     eglSwapInterval(host->egl_display, 0);
     glViewport(0, 0, host->mode.hdisplay, host->mode.vdisplay);
     printf("EGL version: %d.%d\n", major, minor);
+    gpu_timing_init(&host->gpu_timing,(const char *)glGetString(0x1f03),eglGetProcAddress);
+    printf("GPU profiling: %s\n",host->gpu_timing.supported?"elapsed timer queries":"kernel trace collector");
     return rect_renderer_init(&host->renderer,host->mode.hdisplay,host->mode.vdisplay);
 }
 
@@ -1489,33 +1499,60 @@ static unsigned int frame_budget_us(const struct host *host)
     return 1000000u/(host->mode.vrefresh?host->mode.vrefresh:60);
 }
 
+/* Two twelve-pixel rows: text above a two-pixel timing bar. */
+static void timing_bar(struct host *host,int y,const char *name,struct profile_stats stats,bool gpu)
+{
+    unsigned budget=frame_budget_us(host),scale=budget*2;
+    int width=host->api.screen_width-6;
+    char line[64];
+    uint32_t average=stats.count?(uint32_t)(stats.sum/stats.count):0;
+    if(stats.count)snprintf(line,sizeof(line),"%s %u.%u A%u.%u M%u.%u",name,
+        stats.latest/1000,(stats.latest%1000)/100,average/1000,(average%1000)/100,
+        stats.maximum/1000,(stats.maximum%1000)/100);
+    else snprintf(line,sizeof(line),"%s -- A-- M--",name);
+    menu_text(host,3,y+10,line,1,225,231,219);
+    fill_rect(host,3,y,width,2,29,42,52);
+    if(stats.count) {
+        unsigned value=stats.latest>scale?scale:stats.latest;
+        bool over=stats.latest>budget;
+        int length=(int)((uint64_t)value*width/scale);
+        if(value && !length)length=1;
+        fill_rect(host,3,y,length,2,over?241:gpu?80:91,
+                  over?82:gpu?174:212,over?92:gpu?235:95);
+        unsigned top=stats.maximum>scale?scale:stats.maximum;
+        fill_rect(host,3+(int)((uint64_t)top*(width-1)/scale),y,1,3,244,194,75);
+    }
+    fill_rect(host,3+width/2,y,1,3,244,236,209);
+}
+
 static void draw_frame_timing(struct host *host)
 {
-    const struct frame_timing *t=&host->timing;
-    unsigned int budget=frame_budget_us(host);
-    struct frame_sample last={0};
-    if (t->count) last=t->history[(t->head+FRAME_HISTORY-1)%FRAME_HISTORY];
-    int width=host->api.screen_width,y=host->api.screen_height-18;
-    fill_rect(host,0,y,width,18,10,19,28);
-    char line[80];
-    snprintf(line,sizeof(line),"W %u.%u F %u.%u MS MISS %llu",last.work_us/1000,(last.work_us%1000)/100,
-        last.interval_us/1000,(last.interval_us%1000)/100,(unsigned long long)t->missed_total);
-    menu_text(host,3,y+16,line,1,225,231,219);
-    int bar=width*2/3-8;
-    unsigned int work=last.work_us>budget*2?budget*2:last.work_us;
-    unsigned int interval=last.interval_us>budget*2?budget*2:last.interval_us;
-    fill_rect(host,3,y+2,bar,5,29,42,52);
-    fill_rect(host,3,y+2,(int)((uint64_t)interval*bar/(budget*2)),5,80,103,118);
-    fill_rect(host,3,y+2,(int)((uint64_t)work*bar/(budget*2)),5,
-        work>budget?241:work>budget*8/10?241:91,work>budget?82:work>budget*8/10?190:212,work>budget?92:95);
-    fill_rect(host,3+bar/2,y+1,1,7,244,236,209);
-    int history_width=width-bar-10;
-    for(int column=0;column<history_width;column++) {
-        unsigned int age=(unsigned int)(history_width-1-column);
-        if(age>=t->count)continue;
-        const struct frame_sample *s=&t->history[(t->head+FRAME_HISTORY-1-age)%FRAME_HISTORY];
-        fill_rect(host,bar+7+column,y+2,1,5,s->missed?241:55,s->missed?82:147,s->missed?92:108);
+    const struct profile *p=&host->profile;
+    uint64_t now=monotonic_us();
+    struct profile_stats cpu=profile_window(p,now,false),gpu=profile_window(p,now,true);
+    if(host->gpu_timing.supported) {
+        const struct gpu_timing *g=&host->gpu_timing;
+        gpu=(struct profile_stats){0};
+        for(unsigned age=0;age<g->count;age++) {
+            const struct gpu_sample *sample=&g->history[(g->head+GPU_HISTORY-1-age)%GPU_HISTORY];
+            if(sample->valid)profile_stats_add(&gpu,sample->value,sample->stamp_us,now);
+        }
     }
+    int y=host->api.screen_height-24,width=host->api.screen_width;
+    fill_rect(host,0,y,width,24,10,19,28);
+    timing_bar(host,y+12,"CPU",cpu,false);
+    timing_bar(host,y,"GPU",gpu,true);
+    bool dropped=now<p->flash_until;
+    uint64_t drops=host->timing.missed_total-p->drop_base;
+    char line[32];
+    if(drops>99999)snprintf(line,sizeof(line),"D99999+");
+    else snprintf(line,sizeof(line),"D%llu",(unsigned long long)drops);
+    int badge_width=(int)strlen(line)*6+4,x=width-badge_width-2;
+    fill_rect(host,x,y+15,badge_width,9,dropped?155:10,dropped?30:19,dropped?35:28);
+    draw_text(host,x+2,y+22,line,1,dropped?255:156,dropped?235:218,dropped?210:166);
+    unsigned budget=frame_budget_us(host);
+    snprintf(line,sizeof(line),"%u.%uMS",(budget+50)/1000,((budget+50)%1000)/100);
+    draw_text(host,width-3-(int)strlen(line)*6,y+10,line,1,156,174,184);
 }
 
 static void draw_pause_menu(struct host *host)
@@ -1540,6 +1577,16 @@ static void draw_pause_menu(struct host *host)
 
 static void draw_host(struct host *host)
 {
+    if(host->profile.enabled!=host->frame_timing_enabled) {
+        profile_reset(&host->profile,host->frame_timing_enabled,host->timing.missed_total);
+        write_status(host);
+        memset(host->gpu_timing.history,0,sizeof(host->gpu_timing.history));
+        host->gpu_timing.count=0;
+    }
+    if(host->frame_timing_enabled)profile_poll(&host->profile,monotonic_us());
+    gpu_timing_poll(&host->gpu_timing);
+    if(host->frame_timing_enabled)gpu_timing_begin(&host->gpu_timing);
+    else host->gpu_timing.count=0;
     host->submitted_rectangles=0;
     rect_renderer_begin(&host->renderer);
     clear_screen();
@@ -1553,6 +1600,7 @@ static void draw_host(struct host *host)
     else draw_launcher(host);
     if (host->frame_timing_enabled) draw_frame_timing(host);
     rect_renderer_flush(&host->renderer);
+    gpu_timing_end(&host->gpu_timing);
     glDisable(GL_SCISSOR_TEST);
     if (snapshot_requested) { snapshot_requested = 0; save_snapshot(host); }
 }
@@ -1562,7 +1610,9 @@ static void flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
 {
     (void)fd;
     struct host *host=user_data;
+    uint64_t previous=host->timing.missed_total;
     frame_timing_present(&host->timing,sequence,(uint64_t)tv_sec*1000000u+tv_usec);
+    if(host->timing.missed_total>previous)host->profile.flash_until=monotonic_us()+1000000;
     host->flip_pending = false;
 }
 
@@ -1600,6 +1650,8 @@ static bool first_frame(struct host *host)
 static bool next_frame(struct host *host)
 {
     uint64_t began=monotonic_us();
+    struct timespec cpu_start,cpu_end;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID,&cpu_start);
     update_host(host);
     draw_host(host);
     host->frame_number++;
@@ -1616,7 +1668,11 @@ static bool next_frame(struct host *host)
         return false;
     }
     host->timing.pending_work_us=(uint32_t)(monotonic_us()-began);
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID,&cpu_end);
+    uint64_t cpu_ns=(uint64_t)(cpu_end.tv_sec-cpu_start.tv_sec)*1000000000u+cpu_end.tv_nsec-cpu_start.tv_nsec;
     wait_for_events(host);
+    if(host->frame_timing_enabled && !host->flip_pending)
+        profile_push(&host->profile,began,monotonic_us(),(uint32_t)(cpu_ns/1000));
     if (host->timing.count && host->frame_number%300==0) {
         const struct frame_sample *s=&host->timing.history[(host->timing.head+FRAME_HISTORY-1)%FRAME_HISTORY];
         printf("Frame timing: work=%uus interval=%uus missed=%llu rects=%u batches=%u\n",
@@ -1644,7 +1700,10 @@ static void cleanup(struct host *host)
     if (host->front_bo != NULL && host->gbm_surface != NULL)
         gbm_surface_release_buffer(host->gbm_surface, host->front_bo);
     if (host->egl_display != EGL_NO_DISPLAY) {
-        if (host->egl_context != EGL_NO_CONTEXT) rect_renderer_destroy(&host->renderer);
+        if (host->egl_context != EGL_NO_CONTEXT) {
+            gpu_timing_destroy(&host->gpu_timing);
+            rect_renderer_destroy(&host->renderer);
+        }
         eglMakeCurrent(host->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (host->egl_surface != EGL_NO_SURFACE)
             eglDestroySurface(host->egl_display, host->egl_surface);

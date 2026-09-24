@@ -296,7 +296,9 @@ async function openLevelEditor(gameId, editorId) {
   $("#gridPaletteTitle").textContent = isSprite ? "Palette" : "Tiles";
   $("#gridSizeTitle").textContent = isSprite ? "Image size" : "Map size";
   $("#gridEditorHelp").textContent = isSprite ?
-    "Transparent pixels show the checkerboard behind the native preview." :
+    (gameId==="phosphor-run" && data.editor.catalogId?.startsWith("player-") ?
+      "The player uses an animated 3D robot. These pixels are only its fallback artwork; edit the Blender model to change the normal character." :
+      "Transparent pixels show the checkerboard behind the native preview.") :
     `Each dashed frame is the ${Math.round(data.editor.viewport.width*data.editor.tileSize)}×${Math.round(data.editor.viewport.height*data.editor.tileSize)} playable area.`;
   $("#spritePreviewPanel").classList.toggle("hidden", !isSprite);
   $("#flipSprite").classList.toggle("hidden", !isSprite);

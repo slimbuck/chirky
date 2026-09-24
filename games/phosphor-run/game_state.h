@@ -2,6 +2,7 @@
 #define PHOSPHOR_GAME_STATE_H
 #include "chirky.h"
 #include "assets.h"
+#include "robot.h"
 
 /* Internal runtime boundary. Gameplay owns mutable state; settings initializes
    configuration, assets owns loaded data, and rendering only reads state.
@@ -54,6 +55,9 @@ extern float respawn_x, respawn_y;
 extern int collected_shards, deaths, coyote_timer, jump_buffer, dash_timer;
 extern int death_timer, title_timer, win_timer, frame_number, facing;
 extern bool on_ground, touching_left, touching_right, dash_available;
+extern int player_animation_tick;
+extern struct robot_motion player_motion;
+enum robot_clip player_robot_clip(void);
 
 
 float absolute(float value);

@@ -8,7 +8,7 @@ function assets() {
     for(const entry of fs.readdirSync(path.join(ROOT,relative),{withFileTypes:true})) {
       const name=relative+"/"+entry.name;
       if(entry.isDirectory())walk(name);
-      else if(entry.isFile() && /\.(conf|txt|sprite|ppm|wav)$/.test(name))files.push(name);
+      else if(entry.isFile() && /\.(conf|txt|sprite|ppm|wav|robot)$/.test(name))files.push(name);
     }
   }
   games.forEach(id=>walk("games/"+id));

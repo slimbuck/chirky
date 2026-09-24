@@ -1,0 +1,16 @@
+[Unit]
+Description=Chirky VC4 GPU timing collector
+After=local-fs.target
+ConditionPathExists=/sys/kernel/tracing/events/vc4/vc4_submit_cl
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/chirky/gpu-profiler.py /home/retro/chirky/run/status.json
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=chirky-gpu
+RuntimeDirectoryMode=0755
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

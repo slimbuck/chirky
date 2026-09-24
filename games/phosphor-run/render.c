@@ -128,7 +128,8 @@ static void render_player(void)
         !on_ground?(velocity_y>0?"player-jump":"player-fall"):
         absolute(velocity_x)>.3f?"player-run":"player-idle";
     if (dash_timer>0) draw_sprite("dash-trail",x-facing*7,y+4,facing<0,frame_number,NULL);
-    draw_sprite(id,x,y,facing<0,frame_number,NULL);
+    if(!robot_draw_weighted(host,x+PLAYER_WIDTH/2,y,facing,player_robot_clip(),(float)player_animation_tick,&player_motion))
+        draw_sprite(id,x,y,facing<0,frame_number,NULL);
 }
 
 static void centered_text(int y, const char *value, int scale, struct colour colour)
@@ -185,7 +186,7 @@ void render_title(void)
 void render_game(void)
 {
     render_background(); render_world(); render_particles();
-    if (phase!=PHASE_DEAD || (death_timer&3)<2) render_player();
+    if (robot_ready() || phase!=PHASE_DEAD || (death_timer&3)<2) render_player();
     render_hud();
     int middle=host->screen_height/2;
     if (phase==PHASE_DEAD) {

@@ -18,6 +18,14 @@ float respawn_x, respawn_y;
 int collected_shards, deaths, coyote_timer, jump_buffer, dash_timer;
 int death_timer, title_timer, win_timer, frame_number, facing;
 bool on_ground, touching_left, touching_right, dash_available;
+int player_animation_tick;
+struct robot_motion player_motion;
+enum robot_clip player_robot_clip(void)
+{
+    return phase==PHASE_DEAD?ROBOT_DEATH:dash_timer>0?ROBOT_DASH:
+        !on_ground?(velocity_y>0?ROBOT_JUMP:ROBOT_FALL):
+        absolute(velocity_x)>.3f?ROBOT_RUN:ROBOT_IDLE;
+}
 
 float fmax_zero(float value) { return value>0?value:0; }
 float absolute(float value) { return value < 0 ? -value : value; }
@@ -144,6 +152,7 @@ static void play(const char *path)
 
 static void respawn(void)
 {
+    player_motion=(struct robot_motion){0};
     player_x = respawn_x; player_y = respawn_y;
     velocity_x = velocity_y = 0;
     dash_timer = jump_buffer = coyote_timer = 0;
@@ -299,6 +308,7 @@ static void update_play(const struct chirky_input *input)
 
 static void game_shutdown(void)
 {
+    robot_free();
     title_art_free();
     free(level.tiles); free(level.original);
     memset(&level,0,sizeof(level)); content_free(&content); host=NULL;
@@ -324,6 +334,8 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
     current_level=settings.start_level;
     if (!load_level(content.levels[current_level].path)) { game_shutdown(); return false; }
     title_art_load(config_path);
+    if(!robot_load(config_path))fprintf(stderr,"phosphor-run: robot model unavailable; using legacy player sprites\n");
+    player_animation_tick=0;
     begin_level();
     frame_number=0; phase=PHASE_TITLE; title_timer=0; facing=1; deaths=0;
     return true;
@@ -351,10 +363,19 @@ static void game_render(void)
 
 static void game_update(const struct chirky_input *input)
 {
+    float previous_x=player_x;
     enum phase before=phase;int level_before=current_level;
+    enum robot_clip animation_before=player_robot_clip();
     struct chirky_input filtered;
     chirky_gate_filter(&transition_gate,input,&filtered);
     update_gameplay(&filtered);
+    if(phase==before && current_level==level_before && phase==PHASE_PLAY) {
+        int intent=(filtered.buttons[CHIRKY_BUTTON_RIGHT]?1:0)-(filtered.buttons[CHIRKY_BUTTON_LEFT]?1:0);
+        if(dash_timer>0)intent=facing;
+        robot_motion_update(&player_motion,intent,player_x-previous_x,on_ground);
+    } else if(phase!=PHASE_DEAD) player_motion=(struct robot_motion){0};
+    player_animation_tick=animation_before==player_robot_clip() && phase==before && current_level==level_before?
+        (player_animation_tick+1)%1000000:0;
     if(phase!=before || current_level!=level_before)chirky_gate_begin(&transition_gate);
 }
 

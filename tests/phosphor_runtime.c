@@ -38,19 +38,13 @@ int main(void)
     assert(shard && shard->count==3);
     assert(animation_frame(shard,0)==animation_frame(shard,shard->ticks*3));
     assert(animation_frame(shard,0)!=animation_frame(shard,shard->ticks));
-    /* Pixel-equivalence check for merged rectangles and mirrored player art. */
-    const struct grid *idle=animation_frame(content_animation(&content,"player-idle"),0);
+    /* Default player is the articulated model; legacy sprites remain available
+       only as a fallback. Rendering must not mutate animation or gameplay. */
+    assert(robot_ready());
     player_x=150;player_y=150;camera_x=camera_y=0;on_ground=true;
-    for (int direction=-1;direction<=1;direction+=2) {
-        facing=direction;api->render();
-        for (int y=0;y<idle->height;y++) for (int x=0;x<idle->width;x++) {
-            char c=idle->pixels[y*idle->width+(direction<0?idle->width-1-x:x)];
-            if (c=='.') continue;
-            struct colour expected=c=='n'?settings.deep:c=='s'?settings.platform:
-                c=='c'?settings.edge:c=='a'?settings.amber:c=='w'?settings.paper:settings.hazard;
-            struct colour actual=pixels[150+idle->height-1-y][150+x];
-            assert(actual.r==expected.r && actual.g==expected.g && actual.b==expected.b);
-        }
+    for(int direction=-1;direction<=1;direction+=2) {
+        facing=direction;draws=0;int tick=player_animation_tick;api->render();
+        assert(draws>0 && draws<5000 && player_animation_tick==tick);
     }
     deaths=7;
     for (int stage=0;stage<content.level_count;stage++) {

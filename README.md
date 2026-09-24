@@ -27,23 +27,49 @@ See [the browser guide](web/README.md) for build and standalone hosting details.
 
 ## Frame timing
 
-The diagnostic strip starts disabled. Hold **Start for two seconds** to toggle
-it on or off from any screen, including the launcher, settings and games.
-Keyboard emulation works too (Enter maps to Start by default). Each hold toggles
-once; release Start before holding it again. Visibility lasts for the current
-host session and starts disabled again after a restart. `W` is host
-work/submission time (update, drawing, swap and flip submission); `F` is the
-interval between actual display flips, both in milliseconds. The white tick
-marks one refresh period (about 16.7 ms at 60 Hz). Green/yellow/red shows work
-relative to that budget, and blue-grey shows the presentation interval. The
-history on the right turns red for missed refreshes. `MISS` counts missed
-refreshes since host startup, using DRM sequence gaps, not estimates from CPU
-timings. The first flip establishes a baseline; each visible sample describes
-the previous completed presentation. The overlay covers part of the game's HUD.
+The overlay starts disabled. Hold **Start for two seconds** to toggle it from
+any screen (Enter with the default keyboard bindings). It has two running bars:
 
-Old `frame_timing` configuration entries are ignored. Timing and rectangle/batch counts are also
-logged every 300 frames. GPU work can finish after submission, so `W` alone is
-not a GPU timer; the actual flip interval and missed count detect late frames.
+- **CPU**: main-thread CPU time for game updates, rendering and frame submission.
+  Sleeping, blocked driver waits and waiting for the display flip are excluded.
+- **GPU** (kernel estimate): approximate GPU time from VC4 kernel dispatch/completion events. All
+  jobs within a completed host frame are combined; overlapping intervals are
+  counted once. Interrupt and dispatch latency is included. If OpenGL elapsed
+  timer queries are available, the label is **GPU** instead.
+
+The overlay occupies **24 pixels**: two compact rows, down from 52 pixels.
+Each row reads `CPU 3.1 A2.5 M4.8` (or `GPU`): latest time, **A**verage over the
+last wall-clock second, and **M**aximum over that same second, all in milliseconds.
+This is a time window, not a fixed frame count, so it remains one second when
+frames are dropped. Unavailable/pending GPU samples are excluded; `--` means no
+valid samples in the last second. GPU values on VC4 remain kernel estimates even
+though the compact row label is simply `GPU`.
+
+Both thin bars use the same fixed scale: zero to two display refresh periods
+(about 33.3 ms at 60 Hz). The white tick marks the one-frame budget, **16.7 ms**,
+also printed at the right of the GPU row. Current fill turns red above that
+budget; the amber marker shows the maximum from the last second and falls again
+when that sample expires. GPU samples arrive asynchronously, so displayed CPU
+and GPU values need not describe the same frame. These bars measure workload,
+not the complete presentation deadline; bars below budget do not guarantee 60 FPS.
+
+The **D** counter at the right of the CPU row counts missed display refreshes
+since enabling the overlay. Its background flashes red for one second on a new
+miss. It uses actual DRM presentation sequence gaps. Toggle off/on to reset the
+counter; averages and maxima roll continuously without needing a reset.
+
+`deploy/install-service.sh` also installs the small root-owned
+`chirky-gpu.service` collector. It uses a dedicated tracefs instance and a bounded
+ring of atomically published snapshots in `/run/chirky-gpu/samples`, without waiting for GPU completion or collector results
+in the game. The collector batches reads at 10 Hz and disables tracing while the overlay is
+hidden. Collection adds some CPU/trace overhead. It requires Python 3 and the VC4 kernel tracepoints;
+without it, CPU and dropped-frame diagnostics continue to work. The game itself
+still runs as the normal unprivileged user. On other drivers, native OpenGL timer
+queries are used when supported.
+
+For remote diagnostics, send `timing on` or `timing off` to `run/control.fifo`.
+Old `frame_timing` configuration entries are ignored. Work/submission time,
+display intervals and dropped refreshes are still logged every 300 frames.
 
 `tools/render_benchmark.c` compares the reference and batched paths on an offscreen
 EGL surface without touching the CRT or the running game. On the connected Pi,
@@ -227,6 +253,11 @@ optional once the Pi has been installed.
 
 
 ## Host regression tests
+
+For CPU/GPU timing experiments on the actual Pi and CRT, see
+[performance investigation and benchmark commands](docs/performance-pi3.md).
+The benchmark captures per-frame CPU phases, asynchronous VC4 GPU jobs, and
+missed display refreshes; it includes a controlled pipeline experiment.
 
 `make test` checks the asset/editor, game and host input/layout behavior without
 accessing DRM, input devices, or the live Pi. In WSL with Windows Node installed,

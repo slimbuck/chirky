@@ -227,6 +227,16 @@ static void check_frame_timing(struct host *host,const char *output_dir)
     frame_timing_present(&host->timing,3,5033333);
     draw_launcher(host);draw_frame_timing(host);
     char output[512];snprintf(output,sizeof(output),"%s/frame-timing.ppm",output_dir);write_preview(output);
+    profile_reset(&host->profile,true,0);
+    uint64_t now=monotonic_us();
+    for(unsigned i=0;i<PROFILE_HISTORY;i++) {
+        profile_push(&host->profile,now-20000,now-1000,2000+i*10);
+        struct profile_frame *f=&host->profile.frames[i];f->resolved=f->valid=true;f->gpu=500+i*2;
+    }
+    host->profile.flash_until=now+1000000;
+    draw_launcher(host);draw_frame_timing(host);
+    snprintf(output,sizeof(output),"%s/frame-timing-gpu.ppm",output_dir);write_preview(output);
+    profile_reset(&host->profile,false,0);
     /* Batched geometry retains clipping, native pixel positions and painter order. */
     struct rect_vertex vertices[18];
     host->renderer=(struct rect_renderer){.program=1,.vertices=vertices,.width=320,.height=240};

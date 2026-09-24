@@ -11,7 +11,7 @@ SOURCES := src/host.c src/input_bindings.c src/rect_renderer.c
 GAME_SOURCES := $(wildcard games/*/game.c)
 GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
-.PHONY: all clean test benchmark web
+.PHONY: all clean test benchmark performance-benchmark web
 
 EMCC ?= emcc
 WEB_FLAGS = -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall --no-entry
@@ -33,7 +33,7 @@ build/web/%.js: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) $(WEB_CO
 
 all: $(TARGET) $(GAME_TARGETS)
 
-$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h include/pixel_font.h include/launcher_config.h include/launcher_wordmark.h include/splash_art.h include/chirky.h include/input_gate.h
+$(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.h src/gpu_timing.h src/profile.h include/pixel_font.h include/launcher_config.h include/launcher_wordmark.h include/splash_art.h include/chirky.h include/input_gate.h
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@.next $(LDLIBS)
 	mv $@.next $@
@@ -41,7 +41,7 @@ $(TARGET): $(SOURCES) src/input_bindings.h src/rect_renderer.h src/frame_timing.
 .SECONDEXPANSION:
 build/games/%.so: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) include/chirky.h include/input_gate.h include/splash_art.h
 	mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude -fPIC -shared $(filter %.c,$^) -o $@.next
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Iinclude -fPIC -shared $(filter %.c,$^) -lm -o $@.next
 	mv $@.next $@
 
 clean:
@@ -52,7 +52,20 @@ benchmark: build/games/rosey-chop.so
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tools/render_benchmark.c src/rect_renderer.c -Wl,--gc-sections -ldl -l:libEGL.so.1 -l:libGLESv2.so.2 -o build/render-benchmark
 	./build/render-benchmark
 
+# Build only: the explicit supervisor command temporarily takes over the CRT.
+performance-benchmark: build/performance-benchmark $(GAME_TARGETS)
+
+build/performance-benchmark: tools/performance_benchmark.c $(SOURCES) $(wildcard src/*.h include/*.h)
+	mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tools/performance_benchmark.c src/input_bindings.c -Wl,--gc-sections -ldl $(LDLIBS) -o $@
+
 test:
+	python3 tests/performance_analysis.py
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/profile.c -o /tmp/profile-test
+	/tmp/profile-test
+	python3 tests/gpu_profiler.py
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/gpu_timing.c -o /tmp/gpu-timing-test
+	/tmp/gpu-timing-test
 	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js
 	sh tests/service_install.sh
 	mkdir -p build
@@ -62,7 +75,9 @@ test:
 	/tmp/launcher-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tests/host_runtime.c src/input_bindings.c src/rect_renderer.c -Wl,--gc-sections -ldl -l:libGLESv2.so.2 -o /tmp/host-runtime-test
 	/tmp/host-runtime-test $(CURDIR)/build
-	$(CC) $(CPPFLAGS) $(CFLAGS) -Igames/phosphor-run tests/phosphor_runtime.c games/phosphor-run/*.c -o /tmp/phosphor-runtime-test
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Igames/phosphor-run tests/phosphor_runtime.c games/phosphor-run/*.c -lm -o /tmp/phosphor-runtime-test
 	/tmp/phosphor-runtime-test
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Igames/phosphor-run tests/robot_runtime.c games/phosphor-run/robot.c -lm -o /tmp/robot-runtime-test
+	/tmp/robot-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tests/rosey_runtime.c games/rosey-chop/*.c -Wl,--gc-sections -ldl -o /tmp/rosey-runtime-test
 	/tmp/rosey-runtime-test
