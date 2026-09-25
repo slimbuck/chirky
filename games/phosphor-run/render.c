@@ -4,7 +4,7 @@
 #include <string.h>
 
 static struct splash_art title_art;
-void title_art_load(const char *config) { splash_load(&title_art,config); }
+void title_art_load(const char *config) { splash_load_api(&title_art,host,config); }
 void title_art_free(void) { splash_free(&title_art); }
 
 static struct colour sprite_colour(char value)
@@ -185,9 +185,13 @@ void render_title(void)
 
 void render_game(void)
 {
-    render_background(); render_world(); render_particles();
+    chirky_scope(host,"background",true);render_background();chirky_scope(host,"background",false);
+    chirky_scope(host,"world",true);render_world();chirky_scope(host,"world",false);
+    chirky_scope(host,"particles",true);render_particles();chirky_scope(host,"particles",false);
+    chirky_scope(host,"player",true);
     if (robot_ready() || phase!=PHASE_DEAD || (death_timer&3)<2) render_player();
-    render_hud();
+    chirky_scope(host,"player",false);
+    chirky_scope(host,"hud",true);render_hud();chirky_scope(host,"hud",false);
     int middle=host->screen_height/2;
     if (phase==PHASE_DEAD) {
         rectangle((host->screen_width-170)/2,middle-16,170,32,settings.background);

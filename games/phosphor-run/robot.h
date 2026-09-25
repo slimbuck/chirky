@@ -11,6 +11,7 @@ void robot_motion_update(struct robot_motion *motion,int intent,float distance,b
 bool robot_draw_weighted(const struct chirky_host_api *api,int center_x,int floor_y,
                          int facing,enum robot_clip clip,float tick,const struct robot_motion *motion);
 bool robot_load(const char *config_path);
+bool robot_load_api(const struct chirky_host_api *api,const char *config_path);
 void robot_free(void);
 bool robot_ready(void);
 /* Pure rendering: repeated renders of the same simulation state are identical. */

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Texture renderer tests</title></head>
+<body><canvas id="canvas" width="320" height="240"></canvas><pre id="output"></pre>
+<script>
+var Module = {
+  canvas: document.getElementById('canvas'),
+  print: text => { document.getElementById('output').textContent += text + '\n'; },
+  printErr: text => { document.getElementById('output').textContent += text + '\n'; },
+  onAbort: () => { document.body.dataset.textureTests = 'failed'; }
+};
+</script>
+{{{ SCRIPT }}}
+</body></html>

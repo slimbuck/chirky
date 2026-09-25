@@ -3,6 +3,8 @@
 #include "splash_art.h"
 #include "launcher_wordmark.h"
 #include "rect_renderer.h"
+#include "asset_store.h"
+#include "image_cache.h"
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <GLES2/gl2.h>
@@ -12,6 +14,9 @@ static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context;
 static struct chirky_host_api api;
 static struct chirky_input input;
 static unsigned previous;
+static struct asset_store *assets;
+static struct image_cache images;
+EMSCRIPTEN_KEEPALIVE void web_destroy(void);
 #ifdef CHIRKY_WEB_LAUNCHER
 static struct splash_art art;
 static int selected;
@@ -21,6 +26,32 @@ extern const struct chirky_game_api *chirky_game_entry(void);
 static const struct chirky_game_api *game;
 #endif
 EM_JS(void, sound, (const char *path), { Module.onSound(UTF8ToString(path)); });
+EM_JS(void, prepare_sound, (unsigned handle,const void *data,unsigned size,unsigned rate,unsigned channels), {
+    Module.onAssetReady(handle,data,size,rate,channels);
+});
+EM_JS(void, play_asset_sound, (unsigned handle), { Module.onAssetSound(handle); });
+static chirky_asset request_asset(void *unused,const char *path,enum chirky_asset_type type)
+{
+    (void)unused;chirky_asset asset=asset_store_request(assets,path,type);
+    if(type==CHIRKY_ASSET_SOUND && asset_store_state(assets,asset)==CHIRKY_ASSET_READY) {
+        struct chirky_asset_view view=asset_store_view(assets,asset);
+        prepare_sound(asset,view.data,(unsigned)view.size,view.rate,view.channels);
+    }
+    return asset;
+}
+static enum chirky_asset_state status_asset(void *unused,chirky_asset asset)
+{ (void)unused;return asset_store_state(assets,asset); }
+static struct chirky_asset_view data_asset(void *unused,chirky_asset asset)
+{ (void)unused;return asset_store_view(assets,asset); }
+static void release_asset(void *unused,chirky_asset asset)
+{ (void)unused;asset_store_release(assets,asset); }
+static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
+    int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
+{
+    (void)unused;image_cache_draw(&images,&renderer,&api,image,x,y,w,h,sx,sy,sw,sh,r,g,b,a,flip,16,12);
+}
+static void sound_play(void *unused,chirky_asset asset)
+{ (void)unused;play_asset_sound(asset); }
 static void fill(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)unused;
@@ -50,15 +81,24 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
     EmscriptenWebGLContextAttributes attrs;emscripten_webgl_init_context_attributes(&attrs);
     attrs.alpha=0;attrs.depth=0;attrs.stencil=0;attrs.antialias=0;
     context=emscripten_webgl_create_context("#screen",&attrs);
-    if(context<=0 || emscripten_webgl_make_context_current(context)!=EMSCRIPTEN_RESULT_SUCCESS)return 0;
-    if(!rect_renderer_init(&renderer,320,240))return 0;
-    api=(struct chirky_host_api){CHIRKY_ABI_VERSION,288,216,NULL,fill,play,text,label};
+    if(context<=0 || emscripten_webgl_make_context_current(context)!=EMSCRIPTEN_RESULT_SUCCESS)goto failed;
+    if(!rect_renderer_init(&renderer,320,240))goto failed;
+    assets=asset_store_create();if(!assets)goto failed;
+    api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,.screen_width=288,.screen_height=216,
+        .fill_rect=fill,.play_sound=play,.draw_text=text,.button_label=label,
+        .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
+        .draw_sprite=sprite,.sound_play=sound_play};
 #ifdef CHIRKY_WEB_LAUNCHER
-    (void)config;splash_load_file(&art,"assets/launcher/splash.ppm");return 1;
+    (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");return 1;
 #else
+    char directory[1024];snprintf(directory,sizeof(directory),"%s",config);
+    char *slash=strrchr(directory,'/');if(!slash)goto failed;*slash=0;
+    if(!asset_store_prefetch(assets,directory) || asset_store_prefetch_state(assets)!=CHIRKY_ASSET_READY)goto failed;
     game=chirky_game_entry();
-    return game && game->abi_version==CHIRKY_ABI_VERSION && game->init(&api,config);
+    if(game && game->abi_version==CHIRKY_ABI_VERSION && game->init(&api,config))return 1;
 #endif
+failed:
+    web_destroy();return 0;
 }
 EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
 {
@@ -97,7 +137,10 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void)
 #ifdef CHIRKY_WEB_LAUNCHER
     splash_free(&art);
 #else
-    if(game)game->shutdown();
+    if(game)game->shutdown();game=NULL;
 #endif
-    rect_renderer_destroy(&renderer);emscripten_webgl_destroy_context(context);
+    image_cache_clear(&images,&renderer);
+    asset_store_destroy(assets);assets=NULL;
+    if(context>0){rect_renderer_destroy(&renderer);emscripten_webgl_destroy_context(context);}
+    context=0;previous=0;memset(&input,0,sizeof(input));
 }

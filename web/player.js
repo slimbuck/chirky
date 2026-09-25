@@ -5,6 +5,28 @@ const params=new URLSearchParams(location.search),id=params.get("game") || "laun
 const canvas=$("#screen"),status=$("#status");
 let runtime,audio,muted=false,paused=false,leaving=false,last=0,accumulator=0,pending=0,selectHeld=false,ready=false;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
+const assetSounds=new Map();
+function prepareAssetSound(handle,pointer,size,rate,channels){
+  if(assetSounds.has(handle))return;
+  const frames=size/(2*channels);
+  try {
+    const buffer=new AudioBuffer({length:frames,numberOfChannels:channels,sampleRate:rate});
+    const pcm=runtime.HEAP16.subarray(pointer/2,(pointer+size)/2);
+    for(let channel=0;channel<channels;channel++){
+      const output=buffer.getChannelData(channel);
+      for(let frame=0;frame<frames;frame++)output[frame]=pcm[frame*channels+channel]/32768;
+    }
+    assetSounds.set(handle,buffer);
+  }catch(error){console.warn("Sound unavailable",handle,error);}
+}
+function playAssetSound(handle){
+  if(!audio || muted || paused || leaving)return;
+  const buffer=assetSounds.get(handle);if(!buffer)return;
+  for(const source of sources)if(source.buffer===buffer)return;
+  if(sources.size>=8){const oldest=sources.values().next().value;oldest.stop();sources.delete(oldest);}
+  const source=audio.createBufferSource();source.buffer=buffer;source.connect(audio.destination);
+  sources.add(source);source.onended=()=>sources.delete(source);source.start();
+}
 const bindings={ArrowLeft:0,ArrowRight:1,ArrowUp:2,ArrowDown:3,KeyZ:4,KeyX:5,Enter:5,KeyC:6,KeyV:7,KeyA:8,KeyS:9,Space:10,Escape:11};
 function stopSounds(){for(const source of sources)source.stop();sources.clear();}
 function unlock(){if(!audio)audio=new AudioContext();audio.resume().catch(()=>{});}
@@ -65,7 +87,8 @@ async function start(){
   if(!Object.hasOwn(titles,id))throw new Error("Unknown game");
   const files=await (await checked("assets.json")).json();
   const {default:create}=await import(`./${id}.js`);
-  runtime=await create({canvas,onSound:playSound,onLaunch:index=>{leaving=true;location.href=`?game=${ids[index]}`;},printErr:message=>console.warn(message)});
+  runtime=await create({canvas,onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,
+    onLaunch:index=>{leaving=true;location.href=`?game=${ids[index]}`;},printErr:message=>console.warn(message)});
   await Promise.all(files.filter(file=>id==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${id}/`)).map(async file=>{
     const bytes=new Uint8Array(await (await checked("runtime/"+file)).arrayBuffer());
     runtime.FS.mkdirTree("/"+file.slice(0,file.lastIndexOf("/")));runtime.FS.writeFile("/"+file,bytes);

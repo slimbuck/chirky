@@ -1,4 +1,5 @@
 #include "game_state.h"
+#include "asset_file.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,7 +44,8 @@ static void default_settings(void)
 bool load_settings(const char *path)
 {
     default_settings();
-    FILE *file = fopen(path, "r");
+    struct chirky_file source=chirky_file_open(host,path);
+    FILE *file = source.stream;
     if (file == NULL) return false;
     char line[1024];
     while (fgets(line, sizeof(line), file) != NULL) {
@@ -83,7 +85,7 @@ bool load_settings(const char *path)
         else if (!strcmp(key,"hazard")) settings.hazard=colour_from_hex(value,settings.hazard);
         else if (!strcmp(key,"paper")) settings.paper=colour_from_hex(value,settings.paper);
     }
-    fclose(file);
+    chirky_file_close(&source);
     return true;
 }
 

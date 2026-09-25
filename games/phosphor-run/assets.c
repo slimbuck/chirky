@@ -1,8 +1,12 @@
 #include "assets.h"
+#include "asset_file.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
+static const struct chirky_host_api *asset_api;
+void assets_bind(const struct chirky_host_api *api) { asset_api=api; }
 
 void animation_free(struct animation *animation)
 {
@@ -12,7 +16,8 @@ void animation_free(struct animation *animation)
 
 static bool read_grids(const char *path, struct animation *out, bool sprite)
 {
-    FILE *file = fopen(path, "r");
+    struct chirky_file source=chirky_file_open(asset_api,path);
+    FILE *file = source.stream;
     if (!file) return false;
     struct animation result = {.count=1, .ticks=6};
     char line[1024];
@@ -48,7 +53,7 @@ static bool read_grids(const char *path, struct animation *out, bool sprite)
         frame->width = width; frame->height++;
     }
     if (ferror(file)) ok = false;
-    fclose(file);
+    chirky_file_close(&source);
     for (int i=0; i<result.count; i++)
         if (!result.frames[i].height || result.frames[i].width != result.frames[0].width ||
             result.frames[i].height != result.frames[0].height) ok = false;
@@ -99,12 +104,14 @@ static bool valid_path(const char *path)
 void content_free(struct content *content)
 {
     for (int i=0; i<content->sprite_count; i++) animation_free(&content->sprites[i].animation);
+    for (int i=0; i<content->level_count; i++) free(content->levels[i].level.pixels);
     memset(content, 0, sizeof(*content));
 }
 
 bool content_load(const char *path, struct content *out)
 {
-    FILE *file=fopen(path,"r");
+    struct chirky_file source=chirky_file_open(asset_api,path);
+    FILE *file=source.stream;
     if (!file) return false;
     char directory[512], line[1024];
     snprintf(directory,sizeof(directory),"%s",path);
@@ -130,10 +137,10 @@ bool content_load(const char *path, struct content *out)
         snprintf(entry->id,sizeof(entry->id),"%s",id);
         if (snprintf(entry->path,sizeof(entry->path),"%s%s",directory,value)>=(int)sizeof(entry->path)) { ok=false; break; }
         if (is_sprite) ok=animation_load(entry->path,&entry->animation);
-        else { struct grid grid={0}; ok=grid_load(entry->path,&grid); free(grid.pixels); }
+        else ok=grid_load(entry->path,&entry->level);
     }
     if (ferror(file)) ok=false;
-    fclose(file);
+    chirky_file_close(&source);
     if (!out->level_count || !out->sprite_count) ok=false;
     if (!ok) content_free(out);
     return ok;

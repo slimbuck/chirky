@@ -27,6 +27,11 @@ See [the browser guide](web/README.md) for build and standalone hosting details.
 
 ## Frame timing
 
+For frame-by-frame CPU attribution, robot stage timings and correlated GPU
+totals, see [live profiling](docs/live-profiling.md). A bounded capture of normal
+play produces a summary and an exportable timeline; the overlay below remains
+useful for a quick check.
+
 The overlay starts disabled. Hold **Start for two seconds** to toggle it from
 any screen (Enter with the default keyboard bindings). It has two running bars:
 
@@ -228,6 +233,12 @@ The dashboard asks for confirmation; the launcher keeps `POWER DOWN` separate
 from the game list and activates it with B.
 
 ## Included games
+
+The shared native/browser interface is documented in
+[Platform API 9](docs/platform-api.md): retained assets, sprites, rectangles,
+text, input, sound and timing scopes. See the
+[Pi platform measurements](docs/performance-platform-pi3.md) for before/after
+results and the asynchronous audio-startup follow-up.
 
 - `rosey-chop`: clear the dead black roses from a colourful garden before the
   rainstorm, with sweeping chops, jumping, chasing wasps and a complete first level

@@ -1,5 +1,6 @@
 #include "game_state.h"
 #include "input_gate.h"
+#include "asset_file.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,12 +8,20 @@
 struct garden_state garden;
 const struct chirky_host_api *host;
 static struct chirky_input_gate transition_gate;
+static const char *sound_names[]={"win","sting","storm","chop","swing","warning","jump"};
+static chirky_asset sound_assets[7];
 
 float clamp_value(float v, float low, float high) { return v < low ? low : v > high ? high : v; }
 static float absolute(float v) { return v < 0 ? -v : v; }
 static unsigned int random_value(void) { garden.random = garden.random * 1664525u + 1013904223u; return garden.random; }
 static void sound(const char *name)
 {
+    if(host->sound_play) {
+        for(int i=0;i<7;i++)if(!strcmp(name,sound_names[i])) {
+            host->sound_play(host->context,sound_assets[i]);return;
+        }
+        return;
+    }
     char path[640];
     snprintf(path, sizeof(path), "%s/%s.wav", garden.sound_root, name);
     if (host->play_sound) host->play_sound(host->context, garden.sound_device, path);
@@ -28,7 +37,8 @@ static char *trim(char *s)
 
 static bool load_garden(const char *path)
 {
-    FILE *f = fopen(path, "r");
+    struct chirky_file source=chirky_file_open(host,path);
+    FILE *f = source.stream;
     if (!f) return false;
     char line[256];
     int row = 0, spawns = 0;
@@ -49,7 +59,7 @@ static bool load_garden(const char *path)
         row++;
     }
     valid = valid && !ferror(f) && row == GARDEN_ROWS && spawns == 1 && garden.total > 0;
-    fclose(f);
+    chirky_file_close(&source);
     return valid;
 }
 
@@ -83,7 +93,8 @@ static bool game_init(const struct chirky_host_api *api, const char *config)
     snprintf(level, sizeof(level), "%s/assets/level-01.txt", directory);
     if (snprintf(garden.sound_root, sizeof(garden.sound_root), "%s/assets", directory) >= (int)sizeof(garden.sound_root)) return false;
     snprintf(garden.sound_device, sizeof(garden.sound_device), "plughw:0,0");
-    FILE *f = fopen(config, "r");
+    struct chirky_file source=chirky_file_open(host,config);
+    FILE *f = source.stream;
     if (!f) return false;
     char line[1024];
     while (fgets(line, sizeof(line), f)) {
@@ -96,14 +107,18 @@ static bool game_init(const struct chirky_host_api *api, const char *config)
         if (!strcmp(key, "wasp_duration_seconds")) { setting = &garden.wasp_duration; low = 2; high = 12; }
         if (setting) {
             char *end; long seconds = strtol(value, &end, 10);
-            if (*end || end == value || seconds < low || seconds > high) { fclose(f); return false; }
+            if (*end || end == value || seconds < low || seconds > high) { chirky_file_close(&source); return false; }
             *setting = (int)seconds*60;
         }
         if (!strcmp(key, "sound_device")) snprintf(garden.sound_device, sizeof(garden.sound_device), "%s", value);
     }
-    bool valid = !ferror(f); fclose(f);
+    bool valid = !ferror(f); chirky_file_close(&source);
     if (!valid || !load_garden(level)) return false;
     title_art_load(config);
+    if(host->asset_request)for(int i=0;i<7;i++) {
+        char path[640];snprintf(path,sizeof(path),"%s/%s.wav",garden.sound_root,sound_names[i]);
+        sound_assets[i]=host->asset_request(host->context,path,CHIRKY_ASSET_SOUND);
+    }
     reset_run(); garden.phase = TITLE;
     return true;
 }
@@ -212,7 +227,12 @@ static void game_update(const struct chirky_input *input)
     if(garden.phase!=before)chirky_gate_begin(&transition_gate);
 }
 
-static void game_shutdown(void) { title_art_free(); memset(&garden, 0, sizeof(garden)); host = NULL; }
+static void game_shutdown(void)
+{
+    if(host && host->asset_release)for(int i=0;i<7;i++)host->asset_release(host->context,sound_assets[i]);
+    memset(sound_assets,0,sizeof(sound_assets));
+    title_art_free();memset(&garden,0,sizeof(garden));host=NULL;
+}
 static const struct chirky_game_api api = {
     .abi_version = CHIRKY_ABI_VERSION, .init = game_init, .shutdown = game_shutdown,
     .update = game_update, .render = garden_render

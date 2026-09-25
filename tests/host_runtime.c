@@ -5,6 +5,33 @@
 #include <assert.h>
 
 static unsigned char framebuffer[240][320][3], clear_colour[3];
+static void check_capture_gpu(void)
+{
+    struct host h={0};
+    assert(trace_arm(&h.trace,2,16667));h.trace.recording=true;h.trace.gpu_mode=2;
+    trace_scope_at(&h.trace,"frame",true,0,100,10);
+    trace_scope_at(&h.trace,"frame",false,0,200,20);
+    trace_scope_at(&h.trace,"frame",true,0,200,20);
+    trace_scope_at(&h.trace,"frame",false,0,300,30);
+    struct profile_shared shared={.watermark=150,.total=2};
+    shared.jobs[0]=(struct profile_job){1,120,170,(uint64_t)getpid()};
+    shared.jobs[1]=(struct profile_job){2,190,230,(uint64_t)getpid()};
+    capture_gpu_resolve(&h,&shared);assert(!h.trace.gpu_cursor);
+    shared.watermark=300;capture_gpu_resolve(&h,&shared);
+    assert(h.trace.gpu_cursor==2 && !h.trace.spans[0].gpu_valid && !h.trace.spans[1].gpu_valid);
+    /* Cross-frame jobs cannot be assigned to either frame. */
+    h.trace.gpu_cursor=0;shared.total=1;
+    capture_gpu_resolve(&h,&shared);
+    assert(h.trace.spans[0].gpu_valid && h.trace.spans[0].gpu_us==50);
+    assert(!h.trace.spans[1].gpu_valid);
+    h.trace.gpu_cursor=0;h.trace.gpu_mode=1;h.trace.spans[0].gpu_valid=false;
+    h.trace.spans[0].gpu_serial=1;h.gpu_timing.serial=1;
+    h.gpu_timing.history[0]=(struct gpu_sample){.serial=1,.value=99};
+    capture_gpu_resolve(&h,NULL);assert(!h.trace.gpu_cursor && !h.trace.spans[0].gpu_valid);
+    h.gpu_timing.history[0].valid=true;capture_gpu_resolve(&h,NULL);
+    assert(h.trace.spans[0].gpu_valid && h.trace.spans[0].gpu_us==99);
+    free(h.trace.spans);
+}
 static int scissor_x,scissor_y,scissor_w,scissor_h;
 static bool scissor;
 void glDisable(GLenum cap) { (void)cap; scissor=false; }
@@ -325,7 +352,7 @@ int main(int argc,char **argv)
     check_settings_shortcuts();
     check_launcher_menu();
     check_transition_gates();
-    check_timing_toggle();
+    check_timing_toggle();check_capture_gpu();
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
     fputs("boot_game=launcher\n# Keep this comment\nbind_confirm=key:313\nframe_timing=1\n",config);fclose(config);
     static struct host host;

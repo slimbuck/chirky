@@ -1,8 +1,16 @@
 /* On-device, real-scanout benchmark. Run through run-performance.py, which
-   stops/restores the normal host and captures an isolated VC4 kernel trace. */
+   stops/restores the normal host and captures an isolated VC4 kernel trace.
+   Custom: OUTPUT MODE LOOPS SHADER LAYERS SCENE [FRAMES [legacy|assets [GAME]]]
+   GAME defaults to phosphor-run; rosey-chop is also supported. */
+#include "../src/audio_mixer.h"
+/* Host activation normally starts audio even with a quiet sound callback.
+   Keep the benchmark free of audio devices and mixer CPU in either mode. */
+static struct audio_mixer *benchmark_audio_start(const char *device) {(void)device;return NULL;}
+#define audio_mixer_start benchmark_audio_start
 #define main unused_host_main
 #include "../src/host.c"
 #undef main
+#undef audio_mixer_start
 #include "../src/rect_renderer.c"
 #include <assert.h>
 extern void glFinish(void);
@@ -16,7 +24,11 @@ static struct gbm_bo *queued;
 static int marker=-1;
 static unsigned normal_program,work_program;
 static volatile uint32_t checksum;
+static bool asset_mode;
+static const char *benchmark_game="phosphor-run";
+static int benchmark_game_index=-1;
 static void quiet_sound(void *ctx,const char *device,const char *path) {(void)ctx;(void)device;(void)path;}
+static void quiet_sound_handle(void *ctx,chirky_asset sound) {(void)ctx;(void)sound;}
 enum {START,WORK,DRAW,FINISH,PREWAIT,SWAP,LOCK,FB,SUBMIT,POINTS};
 struct record {
     unsigned id,stage,index,sequence,missed;
@@ -80,34 +92,79 @@ static void render(int shader_work,int layers,int scene)
     for(int i=0;i<layers;i++)rect_renderer_rect(&h.renderer,0,0,h.mode.hdisplay,h.mode.vdisplay,40,60,80);
     rect_renderer_flush(&h.renderer);assert(!glGetError());
 }
-static void setup(void)
+static bool wait_assets(void)
+{
+    uint64_t deadline=monotonic_us()+15000000;
+    for(;;) {
+        if(stop_requested)return false;
+        finish_loading(&h);
+        enum chirky_asset_state launcher=h.assets?
+            asset_store_state(h.assets,h.launcher_art.image):CHIRKY_ASSET_READY;
+        if(!h.pending_game && launcher!=CHIRKY_ASSET_LOADING) {
+            if(launcher!=CHIRKY_ASSET_READY)fprintf(stderr,"Benchmark launcher asset failed\n");
+            return launcher==CHIRKY_ASSET_READY;
+        }
+        if(monotonic_us()>=deadline) {fprintf(stderr,"Benchmark asset loading timed out\n");return false;}
+        usleep(1000);
+    }
+}
+static bool setup(void)
 {
     h.drm_fd=-1;h.control_fd=-1;h.running=true;
     signal(SIGINT,on_stop);signal(SIGTERM,on_stop);
     discover_games(&h);load_launcher(&h);load_host_config(&h);
+    for(int i=0;i<h.game_count;i++)if(!strcmp(h.games[i].id,benchmark_game))benchmark_game_index=i;
+    if(benchmark_game_index<0) {fprintf(stderr,"Benchmark game not found: %s\n",benchmark_game);return false;}
+    for(int i=0;i<launcher_count(&h.launcher,false);i++)
+        if(launcher_at(&h.launcher,false,i)->action==benchmark_game_index)h.selected_game=i;
     h.drm_fd=open("/dev/dri/card0",O_RDWR|O_CLOEXEC);assert(h.drm_fd>=0);
     assert(!drmSetMaster(h.drm_fd) && choose_display(&h) && init_graphics(&h));
     h.api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,.screen_width=h.mode.hdisplay,.screen_height=h.mode.vdisplay,
         .context=&h,.fill_rect=fill_rect,.draw_text=draw_text,.button_label=button_label,.play_sound=quiet_sound};
-    update_safe_area(&h);splash_load_file(&h.launcher_art,"assets/launcher/splash.ppm");
+    if(asset_mode) {
+        h.assets=asset_store_create();if(!h.assets)return false;
+        h.api.asset_request=request_asset;h.api.asset_status=status_asset;
+        h.api.asset_data=data_asset;h.api.asset_release=release_asset;
+        h.api.draw_sprite=draw_sprite;h.api.sound_play=quiet_sound_handle;
+    }
+    update_safe_area(&h);
+    splash_load_file_api(&h.launcher_art,&h.api,"assets/launcher/splash.ppm");
+    if(!wait_assets())return false;
     normal_program=h.renderer.program;make_work_shader();
     clear_screen();assert(eglSwapBuffers(h.egl_display,h.egl_surface));
     h.front_bo=gbm_surface_lock_front_buffer(h.gbm_surface);assert(h.front_bo);
     uint32_t fb=framebuffer_for_bo(&h,h.front_bo);assert(fb);
     assert(!drmModeSetCrtc(h.drm_fd,h.crtc_id,fb,0,0,&h.connector_id,1,&h.mode));
+    return true;
 }
 struct stage {const char *name;int mode,shader,layers,scene,sleep;uint64_t loops;};
-static void run(struct stage s,unsigned stage,int frames)
+static bool freeze_gameplay(void)
+{
+    struct chirky_input input={0};
+    /* Two neutral updates also release a gate that was already blocked. */
+    h.game_api->update(&input);h.game_api->update(&input);
+    input.buttons[CHIRKY_BUTTON_B]=input.button_pressed[CHIRKY_BUTTON_B]=true;
+    h.game_api->update(&input);memset(&input,0,sizeof(input));
+    h.game_api->update(&input);h.game_api->update(&input);
+    /* Both module enums use TITLE=0, PLAY=1; garden starts with its phase.
+       Copy the native enum representation without aliasing it through int*. */
+    const char *name=!strcmp(benchmark_game,"rosey-chop")?"garden":"phase";
+    dlerror();void *state=dlsym(h.game_library,name);const char *error=dlerror();
+    if(error || !state) {fprintf(stderr,"Cannot verify frozen gameplay: %s\n",error?error:name);return false;}
+    int phase=0;memcpy(&phase,state,sizeof(phase));
+    if(phase!=1) {fprintf(stderr,"Benchmark game %s did not enter PLAY (phase=%d)\n",benchmark_game,phase);return false;}
+    printf("Frozen gameplay verified: game=%s phase=PLAY\n",benchmark_game);
+    return true;
+}
+static bool run(struct stage s,unsigned stage,int frames)
 {
     retire();
     if(s.scene>=2 && !h.active_game) {
-        for(int i=0;i<h.game_count;i++)if(!strcmp(h.games[i].id,"phosphor-run"))assert(load_game(&h,i));
-        assert(h.active_game);
+        if(!load_game(&h,benchmark_game_index) || !wait_assets() || !h.active_game) {
+            fprintf(stderr,"Benchmark game activation failed: %s\n",benchmark_game);return false;
+        }
     }
-    if(s.scene==3) {
-        struct chirky_input input={0};input.button_pressed[CHIRKY_BUTTON_B]=true;
-        h.game_api->update(&input);memset(&input,0,sizeof(input));h.game_api->update(&input);
-    }
+    if(s.scene==3 && !freeze_gameplay())return false;
     printf("STAGE %u %s mode=%d loops=%llu shader=%d layers=%d\n",stage,s.name,s.mode,(unsigned long long)s.loops,s.shader,s.layers);fflush(stdout);
     for(int i=0;i<frames+12 && !stop_requested;i++) {
         assert(used<sizeof(records)/sizeof(records[0]));struct record *r=&records[used++];
@@ -131,17 +188,25 @@ static void run(struct stage s,unsigned stage,int frames)
         if(s.mode!=1)retire();
     }
     retire();
+    return true;
 }
 int main(int argc,char **argv)
 {
     assert(argc>=2);const char *marker_env=getenv("CHIRKY_BENCH_MARKER_FD");if(marker_env)marker=atoi(marker_env);
+    if(argc>=9) {
+        assert(!strcmp(argv[8],"legacy") || !strcmp(argv[8],"assets"));
+        asset_mode=!strcmp(argv[8],"assets");
+    }
+    if(argc>=10)benchmark_game=argv[9];
+    assert(!strcmp(benchmark_game,"phosphor-run") || !strcmp(benchmark_game,"rosey-chop"));
+    printf("Benchmark assets=%s game=%s audio=disabled\n",asset_mode?"enabled":"legacy",benchmark_game);
     struct timespec resolution;clock_getres(CLOCK_MONOTONIC,&resolution);
     printf("CLOCK_MONOTONIC resolution %ld ns\n",resolution.tv_nsec);
     clock_getres(CLOCK_THREAD_CPUTIME_ID,&resolution);printf("CLOCK_THREAD_CPUTIME_ID resolution %ld ns\n",resolution.tv_nsec);
     uint64_t t=cpu_us();work(1000000);uint64_t cost=cpu_us()-t;
     uint64_t unit=1000000000/(cost?cost:1); /* calibrated approximate 1 ms; fixed loops thereafter */
     printf("CPU calibration: 1000000 iterations %lluus, unit %llu iterations\n",(unsigned long long)cost,(unsigned long long)unit);
-    setup();
+    if(!setup()) {cleanup(&h);return stop_requested?130:EXIT_FAILURE;}
     struct stage stages[64];unsigned n=0;
     if(argc>=7) {
         stages[n++]=(struct stage){.name="custom",.mode=atoi(argv[2]),.loops=strtoull(argv[3],NULL,10),.shader=atoi(argv[4]),.layers=atoi(argv[5]),.scene=atoi(argv[6])};
@@ -164,7 +229,8 @@ int main(int argc,char **argv)
         stages[n++]=(struct stage){.name="phosphor_play",.scene=3};
     }
     int frames=argc>=8?atoi(argv[7]):60;assert(frames>0 && frames<=1000);
-    for(unsigned i=0;i<n && !stop_requested;i++)run(stages[i],i,frames);
+    bool ok=true;
+    for(unsigned i=0;i<n && !stop_requested;i++)if(!run(stages[i],i,frames)) {ok=false;break;}
     FILE *out=fopen(argv[1],"w");assert(out);
     fputs("pid,id,stage,name,mode,index,loops,shader,layers,scene",out);
     const char *names[]={"start","work","draw","finish","prewait","swap","lock","fb","submit"};
@@ -177,5 +243,5 @@ int main(int argc,char **argv)
         fprintf(out,",%llu,%llu,%u,%u\n",(unsigned long long)r->present,(unsigned long long)r->callback,r->sequence,r->missed);
     }
     fclose(out);h.renderer.program=normal_program;glDeleteProgram(work_program);cleanup(&h);
-    printf("Saved %u frames; checksum %u\n",used,checksum);return stop_requested?130:0;
+    printf("Saved %u frames; checksum %u\n",used,checksum);return stop_requested?130:ok?0:EXIT_FAILURE;
 }

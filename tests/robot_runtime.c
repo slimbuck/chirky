@@ -1,4 +1,5 @@
 #include "robot.h"
+#include "../src/trace.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,6 +12,11 @@
 
 static unsigned char pixels[64][64][3];
 static unsigned draws;
+static struct trace_capture capture;
+static void scope(void *context,const char *name,bool begin)
+{
+    (void)context;trace_scope(&capture,name,begin,draws);
+}
 static void fill(void *context,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)context;draws++;
@@ -31,6 +37,13 @@ int main(void)
     struct chirky_host_api api={.screen_width=64,.screen_height=64,.fill_rect=fill};
     const char *config="games/phosphor-run/game.conf";
     assert(robot_load(config) && robot_ready());
+    assert(trace_arm(&capture,1,16667));capture.recording=true;api.profile_scope=scope;
+    assert(robot_draw(&api,32,4,1,ROBOT_RUN,0));
+    assert(!capture.invalid && !capture.depth && capture.count==7);
+    uint64_t profiled_hash=hash();
+    api.profile_scope=NULL;memset(pixels,0,sizeof(pixels));
+    assert(robot_draw(&api,32,4,1,ROBOT_RUN,0));assert(hash()==profiled_hash);
+    free(capture.spans);capture=(struct trace_capture){0};
     struct robot_motion motion={0},mirror={0};
     FILE *trace=fopen("build/robot-motion.csv","w");assert(trace);
     fputs("frame,intent,distance,roll,lean\n",trace);

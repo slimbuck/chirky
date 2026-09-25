@@ -1,4 +1,5 @@
 #include "robot.h"
+#include "asset_file.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,6 +49,8 @@ void robot_free(void)
 }
 bool robot_ready(void) { return model.poses!=NULL; }
 bool robot_load(const char *config)
+{ return robot_load_api(NULL,config); }
+bool robot_load_api(const struct chirky_host_api *api,const char *config)
 {
     robot_free();if(!config)return false;
     const char *slash=strrchr(config,'/');
@@ -55,7 +58,8 @@ bool robot_load(const char *config)
     if(backslash && (!slash || backslash>slash))slash=backslash;
     char path[1024];int prefix=slash?(int)(slash-config+1):0;
     if(snprintf(path,sizeof(path),"%.*sassets/models/player.robot",prefix,config)>=(int)sizeof(path))return false;
-    FILE *file=fopen(path,"rb");if(!file)return false;
+    struct chirky_file source=chirky_file_open(api,path);
+    FILE *file=source.stream;if(!file)return false;
     char magic[4];uint32_t counts[6];bool ok=fread(magic,1,4,file)==4 && !memcmp(magic,"PRB1",4);
     for(int i=0;i<6 && ok;i++)ok=word(file,&counts[i]);
     if(!ok || !counts[0] || counts[0]>LIMIT_VERTICES || !counts[1] || counts[1]>LIMIT_TRIANGLES ||
@@ -89,9 +93,9 @@ bool robot_load(const char *config)
     }
     for(size_t i=0;i<matrices;i++)if(!real(file,&model.poses[i]))goto invalid;
     if(fgetc(file)!=EOF)goto invalid;
-    fclose(file);return true;
+    chirky_file_close(&source);return true;
 invalid:
-    fclose(file);robot_free();return false;
+    chirky_file_close(&source);robot_free();return false;
 }
 
 static float edge(struct projected a,struct projected b,float x,float y)
@@ -128,6 +132,11 @@ bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int 
 {
     if(!robot_ready() || !api || !api->fill_rect || animation<0 || animation>ROBOT_DEATH)return false;
     if(cx+16<0 || cx-16>=api->screen_width || floor+30<0 || floor-2>=api->screen_height)return true;
+    chirky_scope(api,"robot",true);
+    static const char *clip_names[]={"robot.idle","robot.run","robot.jump","robot.fall","robot.dash","robot.death"};
+    const char *clip_name=clip_names[animation];
+    chirky_scope(api,clip_name,true);
+    chirky_scope(api,"robot.pose",true);
     if(!isfinite(tick) || tick<0)tick=0;
     const struct clip *clip=&model.clips[animation];
     float frame=tick/clip->ticks;
@@ -154,6 +163,8 @@ bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int 
         lean=motion->lean*(facing<0?-1:1);
     }
     float lean_cos=cosf(lean),lean_sin=sinf(lean);
+    chirky_scope(api,"robot.pose",false);
+    chirky_scope(api,"robot.transform",true);
     for(unsigned i=0;i<model.vertices;i++) {
         const struct vertex *v=&model.vertex[i];const float *m=pose+v->bone*12;
         float p[3];for(int j=0;j<3;j++)p[j]=m[j*4]*v->p[0]+m[j*4+1]*v->p[1]+m[j*4+2]*v->p[2]+m[j*4+3];
@@ -166,6 +177,8 @@ bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int 
         transformed[i]=(struct projected){32+(facing<0?-1:1)*horizontal*16,
             4+(p[2]*.984f-towards*.178f)*16,towards*.984f+p[2]*.178f};
     }
+    chirky_scope(api,"robot.transform",false);
+    chirky_scope(api,"robot.rasterise",true);
     for(int i=0;i<SIDE*SIDE;i++){depth[i]=-FLT_MAX;samples[i]=0;}
     for(unsigned i=0;i<model.triangles;i++) {
         const struct triangle *tri=&model.triangle[i];
@@ -196,6 +209,8 @@ bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int 
             if(z>depth[pixel]){depth[pixel]=z;samples[pixel]=colour;}
         }
     }
+    chirky_scope(api,"robot.rasterise",false);
+    chirky_scope(api,"robot.resolve",true);
     for(int y=0;y<SIDE/2;y++)for(int x=0;x<SIDE/2;x++) {
         unsigned r=0,g=0,bvalue=0,count=0;
         for(int yy=0;yy<2;yy++)for(int xx=0;xx<2;xx++) {
@@ -204,11 +219,16 @@ bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int 
         }
         resolved[y*(SIDE/2)+x]=count>=2?0xff000000u|(r/count)<<16|(g/count)<<8|bvalue/count:0;
     }
+    chirky_scope(api,"robot.resolve",false);
+    chirky_scope(api,"robot.submit",true);
     for(int y=0;y<SIDE/2;y++)for(int x=0;x<SIDE/2;) {
         uint32_t c=resolved[y*(SIDE/2)+x];int width=1;
         while(x+width<SIDE/2 && resolved[y*(SIDE/2)+x+width]==c)width++;
         if(c)api->fill_rect(api->context,cx-16+x,floor-2+y,width,1,(c>>16)&255,(c>>8)&255,c&255);
         x+=width;
     }
+    chirky_scope(api,"robot.submit",false);
+    chirky_scope(api,clip_name,false);
+    chirky_scope(api,"robot",false);
     return true;
 }

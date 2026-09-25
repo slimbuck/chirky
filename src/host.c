@@ -4,6 +4,11 @@
 #include "frame_timing.h"
 #include "gpu_timing.h"
 #include "profile.h"
+#include "trace.h"
+#include "asset_store.h"
+#include "audio_mixer.h"
+#include "image_cache.h"
+#include "asset_file.h"
 #include "input_gate.h"
 #include "launcher_config.h"
 #include "launcher_wordmark.h"
@@ -263,6 +268,17 @@ struct host {
     struct frame_timing timing;
     struct gpu_timing gpu_timing;
     struct profile profile;
+    struct trace_capture trace;
+    struct asset_store *assets;
+    struct audio_mixer *audio;
+    char audio_device[128];
+    enum audio_mixer_state audio_state;
+    bool audio_reported;
+    chirky_asset sound_pins[ASSET_STORE_SLOTS];
+    size_t sound_pin_count;
+    struct image_cache images;
+    const struct game_record *pending_game;
+    uint64_t loading_started;
     bool frame_timing_enabled;
     bool timing_start_held, timing_start_toggled;
     uint64_t timing_start_us;
@@ -282,6 +298,43 @@ struct host {
 static volatile sig_atomic_t stop_requested;
 static volatile sig_atomic_t snapshot_requested;
 static uint64_t monotonic_us(void);
+static unsigned int frame_budget_us(const struct host *host);
+
+static chirky_asset request_asset(void *context,const char *path,enum chirky_asset_type type)
+{ return asset_store_request(((struct host *)context)->assets,path,type); }
+static enum chirky_asset_state status_asset(void *context,chirky_asset asset)
+{ return asset_store_state(((struct host *)context)->assets,asset); }
+static struct chirky_asset_view data_asset(void *context,chirky_asset asset)
+{ return asset_store_view(((struct host *)context)->assets,asset); }
+static void release_asset(void *context,chirky_asset asset)
+{ asset_store_release(((struct host *)context)->assets,asset); }
+static void draw_sprite(void *context,chirky_asset image,int x,int y,int w,int h,
+    int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
+{
+    struct host *host=context;
+    image_cache_draw(&host->images,&host->renderer,&host->api,image,x,y,w,h,sx,sy,sw,sh,r,g,b,a,flip,
+        host->safe_x+host->safe_offset_x,host->safe_y+host->safe_offset_y);
+}
+static void sound_play(void *context,chirky_asset sound)
+{
+    struct host *host=context;
+    chirky_scope(&host->api,"audio.enqueue",true);
+    if(host->audio && asset_store_state(host->assets,sound)==CHIRKY_ASSET_READY) {
+        struct chirky_asset_view view=asset_store_view(host->assets,sound);
+        size_t i=0;
+        while(i<host->sound_pin_count && host->sound_pins[i]!=sound)i++;
+        if(i==host->sound_pin_count && i<ASSET_STORE_SLOTS && view.rate && view.channels &&
+            asset_store_retain(host->assets,sound))host->sound_pins[host->sound_pin_count++]=sound;
+        if(i<host->sound_pin_count)audio_mixer_play(host->audio,view.data,view.size,view.rate,view.channels);
+    }
+    chirky_scope(&host->api,"audio.enqueue",false);
+}
+
+static void capture_scope(void *context,const char *name,bool begin)
+{
+    struct host *host=context;
+    trace_scope(&host->trace,name,begin,host->submitted_rectangles);
+}
 
 static void block_transition_input(struct host *host)
 {
@@ -460,6 +513,11 @@ static void fill_rect(void *context, int x, int y, int width, int height,
 static void play_sound(void *context, const char *device, const char *path)
 {
     struct host *host = context;
+    if(host->assets) {
+        chirky_asset asset=asset_store_request(host->assets,path,CHIRKY_ASSET_SOUND);
+        sound_play(context,asset);asset_store_release(host->assets,asset);
+        return;
+    }
     if (host->sound_pid > 0) {
         if (waitpid(host->sound_pid, NULL, WNOHANG) == 0) return;
         host->sound_pid = 0;
@@ -488,11 +546,12 @@ static void write_status(const struct host *host)
     if (file == NULL) return;
     fprintf(file, "{\n  \"pid\": %ld,\n  \"mode\": \"%s\",\n  \"game\": \"%s\",\n"
                   "  \"width\": %u,\n  \"height\": %u,\n  \"refresh\": %u,\n"
-                  "  \"viewport_width\": %d,\n  \"viewport_height\": %d,\n  \"profiling\": %s\n}\n",
+                  "  \"viewport_width\": %d,\n  \"viewport_height\": %d,\n  \"profiling\": %s,\n  \"loading\": %s\n}\n",
             (long)getpid(), (const char *[]){"launcher","settings","input","setup","test","display","game","paused"}[current_screen(host)],
             host->active_game ? host->active_game->id : "",
             host->mode.hdisplay, host->mode.vdisplay, host->mode.vrefresh,
-            host->api.screen_width, host->api.screen_height,host->frame_timing_enabled?"true":"false");
+            host->api.screen_width, host->api.screen_height,
+            host->frame_timing_enabled || host->trace.spans?"true":"false",host->pending_game?"true":"false");
     fclose(file);
     rename("run/status.json.tmp", "run/status.json");
 }
@@ -668,27 +727,30 @@ static bool load_boot_game(struct host *host)
 
 static void unload_game(struct host *host)
 {
+    host->pending_game=NULL;
+    audio_mixer_reset(host->audio);
+    for(size_t i=0;i<host->sound_pin_count;i++)asset_store_release(host->assets,host->sound_pins[i]);
+    host->sound_pin_count=0;
     host->paused=false;host->pause_option=0;
     if (host->game_api != NULL) host->game_api->shutdown();
     host->game_api = NULL;
     host->active_game = NULL;
     if (host->game_library != NULL) dlclose(host->game_library);
     host->game_library = NULL;
+    if(host->assets) {
+        splash_free(&host->launcher_art);
+        image_cache_clear(&host->images,&host->renderer);
+        asset_store_clear(host->assets);
+        splash_load_file_api(&host->launcher_art,&host->api,"assets/launcher/splash.ppm");
+    }
     write_status(host);
 }
 
-static bool load_game(struct host *host, int index)
+static bool activate_game(struct host *host,struct game_record *game)
 {
-    if (index < 0 || index >= host->game_count) return false;
-    if (host->display_settings) {
-        restore_display_area(host);
-    }
-    host->settings_menu=host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
-    block_transition_input(host);
-    host->controller_menu_chord_frames=0;
-    unload_game(host);
-    struct game_record *game = &host->games[index];
+    chirky_scope(&host->api,"assets.module",true);
     host->game_library = dlopen(game->module_path, RTLD_NOW | RTLD_LOCAL);
+    chirky_scope(&host->api,"assets.module",false);
     if (host->game_library == NULL) {
         fprintf(stderr, "Cannot load %s: %s\n", game->module_path, dlerror());
         return false;
@@ -705,17 +767,85 @@ static bool load_game(struct host *host, int index)
         return false;
     }
     host->game_api = entry();
-    if (host->game_api == NULL ||
-        host->game_api->abi_version != CHIRKY_ABI_VERSION ||
-        !host->game_api->init(&host->api, game->config_path)) {
+    chirky_scope(&host->api,"assets.game_init",true);
+    bool initialized=host->game_api && host->game_api->abi_version==CHIRKY_ABI_VERSION &&
+        host->game_api->init(&host->api,game->config_path);
+    chirky_scope(&host->api,"assets.game_init",false);
+    if (!initialized) {
         fprintf(stderr, "Game initialization failed: %s\n", game->id);
         unload_game(host);
         return false;
     }
     host->active_game = game;
+    if(host->assets) {
+        char device[128]="plughw:0,0",line[1024];
+        struct chirky_file config=chirky_file_open(&host->api,game->config_path);
+        while(config.stream && fgets(line,sizeof(line),config.stream)) {
+            char *key=trim(line),*equals=strchr(key,'=');
+            if(equals){*equals=0;if(!strcmp(trim(key),"sound_device"))copy_text(device,sizeof(device),trim(equals+1));}
+        }
+        chirky_file_close(&config);
+        if(!host->audio || strcmp(device,host->audio_device) ||
+            audio_mixer_get_info(host->audio).state==AUDIO_FAILED) {
+            chirky_scope(&host->api,"audio.startup",true);
+            audio_mixer_stop(host->audio);host->audio=audio_mixer_start(device);
+            chirky_scope(&host->api,"audio.startup",false);
+            copy_text(host->audio_device,sizeof(host->audio_device),device);
+            host->audio_reported=false;
+            if(!host->audio)fprintf(stderr,"Audio unavailable on %s\n",device);
+        }
+    }
+    block_transition_input(host);
     printf("Started game: %s\n", game->name);
     write_status(host);
     return true;
+}
+
+static bool load_game(struct host *host,int index)
+{
+    if(index<0 || index>=host->game_count)return false;
+    if(host->display_settings)restore_display_area(host);
+    host->settings_menu=host->controller_settings=host->display_settings=host->setup.active=host->input_test=false;
+    block_transition_input(host);host->controller_menu_chord_frames=0;
+    unload_game(host);
+    if(!host->assets)return activate_game(host,&host->games[index]);
+    char directory[1024];copy_text(directory,sizeof(directory),host->games[index].config_path);
+    char *slash=strrchr(directory,'/');if(!slash)return false;*slash=0;
+    host->loading_started=monotonic_us();
+    if(!asset_store_prefetch(host->assets,directory))return false;
+    host->pending_game=&host->games[index];write_status(host);return true;
+}
+
+static void finish_loading(struct host *host)
+{
+    if(!host->pending_game)return;
+    enum chirky_asset_state state=asset_store_prefetch_state(host->assets);
+    if(state==CHIRKY_ASSET_LOADING)return;
+    struct game_record *game=(struct game_record *)host->pending_game;host->pending_game=NULL;
+    if(state!=CHIRKY_ASSET_READY) {
+        fprintf(stderr,"Asset preparation failed: %s\n",game->id);unload_game(host);return;
+    }
+    struct asset_store_metrics metrics=asset_store_get_metrics(host->assets);
+    uint64_t began=monotonic_us();
+    chirky_scope(&host->api,"assets.activate",true);
+    bool ok=activate_game(host,game);
+    chirky_scope(&host->api,"assets.activate",false);
+    printf("Assets: game=%s ready=%d load_wall=%.3fms worker_cpu=%.3fms bytes=%llu resident=%zu activate=%.3fms total=%.3fms\n",
+        game->id,ok,metrics.wall_ms,metrics.worker_cpu_ms,(unsigned long long)metrics.bytes_read,
+        metrics.bytes_resident,(monotonic_us()-began)/1000.0,(monotonic_us()-host->loading_started)/1000.0);
+    fflush(stdout);
+}
+
+static void poll_audio(struct host *host)
+{
+    if(!host->audio)return;
+    struct audio_mixer_info info=audio_mixer_get_info(host->audio);
+    if(info.state==AUDIO_STARTING || (host->audio_reported && host->audio_state==info.state))return;
+    host->audio_state=info.state;host->audio_reported=true;
+    printf("Audio: device=%s state=%s worker_setup_wall=%.3fms worker_setup_cpu=%.3fms\n",
+        host->audio_device,info.state==AUDIO_READY?"ready":"failed",
+        info.startup_wall_us/1000.0,info.startup_cpu_us/1000.0);
+    fflush(stdout);
 }
 
 static void open_settings_screen(struct host *host, int option)
@@ -774,6 +904,18 @@ static void process_control(struct host *host)
         snapshot_requested = 1;
     } else if (!strcmp(line,"timing on") || !strcmp(line,"timing off")) {
         host->frame_timing_enabled=!strcmp(line,"timing on");
+    } else if (!strncmp(line,"capture ",8)) {
+        char *end;unsigned long frames=strtoul(line+8,&end,10);
+        const char *id=*end==' '?end+1:end;
+        bool valid_id=(!*end || *end==' ') && strlen(id)<=32 && strspn(id,"0123456789abcdef")==strlen(id);
+        if(end!=line+8 && valid_id && frames>=1 && frames<=1800 &&
+           trace_arm(&host->trace,(unsigned)frames,frame_budget_us(host))) {
+            snprintf(host->trace.request_id,sizeof(host->trace.request_id),"%s",id);
+            host->trace.gpu_mode=host->gpu_timing.supported?1:2;
+            remove("run/profile.json");
+            write_status(host);
+            printf("Frame capture armed: %lu frames\n",frames);
+        } else fprintf(stderr,"Capture rejected: use 1..1800 frames, one capture at a time\n");
     } else if (strcmp(line, "quit") == 0) {
         host->running = false;
     } else if (strcmp(line, "reload") == 0 && host->active_game != NULL) {
@@ -1400,6 +1542,14 @@ static void update_timing_toggle(struct host *host,uint64_t now_us)
 
 static void update_host(struct host *host)
 {
+    finish_loading(host);
+    poll_audio(host);
+    if(host->pending_game) {
+        if(host->inputs.state.pressed[KEY_F1])unload_game(host);
+        memset(host->inputs.state.button_pressed,0,sizeof(host->inputs.state.button_pressed));
+        memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
+        return;
+    }
     ensure_launcher(host);
     enum host_screen previous_screen=current_screen(host);
     struct chirky_input *input=&host->inputs.state;
@@ -1575,6 +1725,44 @@ static void draw_pause_menu(struct host *host)
     menu_text(host,x+12,y+10,"B SELECT - A BACK",1,112,160,170);
 }
 
+static void capture_gpu_resolve(struct host *host,const struct profile_shared *shared)
+{
+    struct trace_capture *t=&host->trace;
+    while(t->gpu_cursor<t->count) {
+        struct trace_span *s=&t->spans[t->gpu_cursor];
+        if(s->parent!=UINT32_MAX){t->gpu_cursor++;continue;}
+        if(!s->end)return;
+        if(t->gpu_mode==2) {
+            if(!shared || s->end>shared->watermark)return;
+            s->gpu_valid=profile_gpu(shared,s->start,s->end,(uint64_t)getpid(),&s->gpu_us);
+        } else if(t->gpu_mode==1 && s->gpu_serial) {
+            const struct gpu_sample *g=&host->gpu_timing.history[(s->gpu_serial-1)%GPU_HISTORY];
+            if(g->serial==s->gpu_serial && g->valid){s->gpu_us=g->value;s->gpu_valid=true;}
+            else if(host->gpu_timing.serial-s->gpu_serial<GPU_HISTORY)return;
+        }
+        t->gpu_cursor++;
+    }
+}
+
+static void capture_gpu_poll(struct host *host)
+{
+    struct trace_capture *t=&host->trace;
+    if(!t->spans)return;
+    uint64_t now=monotonic_us();
+    if(now<t->gpu_poll_after)return;
+    t->gpu_poll_after=now+100000;
+    struct profile_shared shared;
+    if(t->gpu_mode==2) {
+        int fd=open("/run/chirky-gpu/samples",O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+        if(fd<0)return;
+        struct stat st;
+        bool ok=!fstat(fd,&st) && st.st_size==sizeof(shared) && read(fd,&shared,sizeof(shared))==sizeof(shared);
+        close(fd);
+        if(!ok || shared.magic!=PROFILE_MAGIC || now>shared.watermark+2000000)return;
+    }
+    capture_gpu_resolve(host,t->gpu_mode==2?&shared:NULL);
+}
+
 static void draw_host(struct host *host)
 {
     if(host->profile.enabled!=host->frame_timing_enabled) {
@@ -1585,21 +1773,31 @@ static void draw_host(struct host *host)
     }
     if(host->frame_timing_enabled)profile_poll(&host->profile,monotonic_us());
     gpu_timing_poll(&host->gpu_timing);
-    if(host->frame_timing_enabled)gpu_timing_begin(&host->gpu_timing);
+    chirky_scope(&host->api,"profiler.gpu_poll",true);
+    capture_gpu_poll(host);
+    chirky_scope(&host->api,"profiler.gpu_poll",false);
+    if(host->frame_timing_enabled || host->trace.recording)gpu_timing_begin(&host->gpu_timing);
     else host->gpu_timing.count=0;
     host->submitted_rectangles=0;
     rect_renderer_begin(&host->renderer);
     clear_screen();
     if (host->active_game != NULL) {
+        chirky_scope(&host->api,host->active_game->id,true);
         host->game_api->render();
+        chirky_scope(&host->api,host->active_game->id,false);
         if(host->paused)draw_pause_menu(host);
     }
     else if (host->display_settings) draw_display_settings(host);
     else if (host->controller_settings) draw_controller_settings(host);
     else if (host->settings_menu) draw_settings_menu(host);
-    else draw_launcher(host);
+    else { chirky_scope(&host->api,"launcher",true);draw_launcher(host);chirky_scope(&host->api,"launcher",false); }
+    if(host->pending_game)menu_text(host,12,host->api.screen_height/2,"LOADING",2,250,248,236);
+    chirky_scope(&host->api,"overlay",true);
     if (host->frame_timing_enabled) draw_frame_timing(host);
+    chirky_scope(&host->api,"overlay",false);
+    chirky_scope(&host->api,"renderer.flush",true);
     rect_renderer_flush(&host->renderer);
+    chirky_scope(&host->api,"renderer.flush",false);
     gpu_timing_end(&host->gpu_timing);
     glDisable(GL_SCISSOR_TEST);
     if (snapshot_requested) { snapshot_requested = 0; save_snapshot(host); }
@@ -1649,14 +1847,34 @@ static bool first_frame(struct host *host)
 
 static bool next_frame(struct host *host)
 {
+    struct trace_capture *capture=&host->trace;
+    unsigned frame_span=capture->count;
+    uint64_t missed_before=host->timing.missed_total;
+    uint64_t presented_before=host->timing.stamp_us;
+    if(capture->spans && capture->frames<capture->target && !capture->invalid) {
+        capture->recording=true;host->api.profile_scope=capture_scope;
+        host->submitted_rectangles=0;
+    }
+    chirky_scope(&host->api,"frame",true);
     uint64_t began=monotonic_us();
     struct timespec cpu_start,cpu_end;
     clock_gettime(CLOCK_THREAD_CPUTIME_ID,&cpu_start);
+    chirky_scope(&host->api,"update",true);
     update_host(host);
+    chirky_scope(&host->api,"update",false);
+    chirky_scope(&host->api,"render",true);
     draw_host(host);
+    chirky_scope(&host->api,"render",false);
+    if(capture->recording && frame_span<capture->count)
+        capture->spans[frame_span].gpu_serial=host->gpu_timing.serial;
     host->frame_number++;
+    chirky_scope(&host->api,"submit",true);
+    chirky_scope(&host->api,"egl.swap",true);
     if (!eglSwapBuffers(host->egl_display, host->egl_surface)) return false;
+    chirky_scope(&host->api,"egl.swap",false);
+    chirky_scope(&host->api,"gbm.lock",true);
     struct gbm_bo *next = gbm_surface_lock_front_buffer(host->gbm_surface);
+    chirky_scope(&host->api,"gbm.lock",false);
     if (next == NULL) return false;
     uint32_t fb_id = framebuffer_for_bo(host, next);
     if (!fb_id) { gbm_surface_release_buffer(host->gbm_surface, next); return false; }
@@ -1668,9 +1886,12 @@ static bool next_frame(struct host *host)
         return false;
     }
     host->timing.pending_work_us=(uint32_t)(monotonic_us()-began);
+    chirky_scope(&host->api,"submit",false);
     clock_gettime(CLOCK_THREAD_CPUTIME_ID,&cpu_end);
     uint64_t cpu_ns=(uint64_t)(cpu_end.tv_sec-cpu_start.tv_sec)*1000000000u+cpu_end.tv_nsec-cpu_start.tv_nsec;
+    chirky_scope(&host->api,"present.wait",true);
     wait_for_events(host);
+    chirky_scope(&host->api,"present.wait",false);
     if(host->frame_timing_enabled && !host->flip_pending)
         profile_push(&host->profile,began,monotonic_us(),(uint32_t)(cpu_ns/1000));
     if (host->timing.count && host->frame_number%300==0) {
@@ -1684,13 +1905,39 @@ static bool next_frame(struct host *host)
         gbm_surface_release_buffer(host->gbm_surface, host->front_bo);
         host->front_bo = next;
     } else gbm_surface_release_buffer(host->gbm_surface, next);
+    chirky_scope(&host->api,"frame",false);
+    if(capture->recording) {
+        if(host->flip_pending)capture->invalid=true;
+        if(frame_span<capture->count) {
+            struct trace_span *frame=&capture->spans[frame_span];
+            frame->missed=(unsigned)(host->timing.missed_total-missed_before);
+            frame->interval=presented_before?(unsigned)(host->timing.stamp_us-presented_before):0;
+            capture->missed+=frame->missed;
+        }
+        capture->rectangles+=host->renderer.rectangles;capture->batches+=host->renderer.batches;
+        capture->sprites+=host->renderer.sprites;
+        capture->frames++;capture->recording=false;host->api.profile_scope=NULL;
+        if(capture->frames==capture->target || capture->invalid)capture->finish_after=monotonic_us()+300000;
+    }
+    if(capture->spans && capture->finish_after && monotonic_us()>=capture->finish_after) {
+        bool ok=trace_write(capture,"run/profile.json.tmp") &&
+            !rename("run/profile.json.tmp","run/profile.json");
+        printf("Frame capture %s: run/profile.json (%u frames)\n",ok?"saved":"write failed",capture->frames);
+        free(capture->spans);*capture=(struct trace_capture){0};
+        write_status(host);
+    }
     return true;
 }
 
 static void cleanup(struct host *host)
 {
+    free(host->trace.spans);host->trace.spans=NULL;
     splash_free(&host->launcher_art);
     unload_game(host);
+    audio_mixer_stop(host->audio);host->audio=NULL;
+    splash_free(&host->launcher_art);
+    image_cache_clear(&host->images,&host->renderer);
+    asset_store_destroy(host->assets);host->assets=NULL;
     for (int index = 0; index < host->inputs.count; ++index) close(host->inputs.devices[index].fd);
     if (host->saved_crtc != NULL && host->drm_fd >= 0)
         drmModeSetCrtc(host->drm_fd, host->saved_crtc->crtc_id,
@@ -1747,9 +1994,13 @@ int main(void)
     host.api = (struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,
         .screen_width=host.mode.hdisplay,.screen_height=host.mode.vdisplay,
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
-        .draw_text=draw_text,.button_label=button_label};
+        .draw_text=draw_text,.button_label=button_label,.asset_request=request_asset,
+        .asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
+        .draw_sprite=draw_sprite,.sound_play=sound_play};
+    host.assets=asset_store_create();
+    if(!host.assets){fprintf(stderr,"Could not start asset loader\n");cleanup(&host);return EXIT_FAILURE;}
     update_safe_area(&host);
-    splash_load_file(&host.launcher_art,"assets/launcher/splash.ppm");
+    splash_load_file_api(&host.launcher_art,&host.api,"assets/launcher/splash.ppm");
     open_inputs(&host.inputs);
     mkdir("run", 0755);
     if (mkfifo("run/control.fifo", 0600) != 0 && errno != EEXIST) {

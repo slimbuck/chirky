@@ -4,7 +4,7 @@
 #include <string.h>
 
 static struct splash_art title_art;
-void title_art_load(const char *config) { splash_load(&title_art,config); }
+void title_art_load(const char *config) { splash_load_api(&title_art,host,config); }
 void title_art_free(void) { splash_free(&title_art); }
 
 static int camera_x, camera_y;
@@ -194,7 +194,7 @@ static void overlay(void)
     }
 }
 
-void garden_render(void)
+static void render_scene(void)
 {
     if (garden.phase==TITLE && splash_draw(&title_art,host)) {
         int top=host->screen_height-57;
@@ -209,7 +209,8 @@ void garden_render(void)
     int view_h = host->screen_height-42;
     camera_x = (int)clamp_value(garden.x-host->screen_width/2,0,WORLD_W-host->screen_width > 0 ? WORLD_W-host->screen_width : 0);
     camera_y = (int)clamp_value(garden.y-view_h/2,0,WORLD_H-view_h > 0 ? WORLD_H-view_h : 0);
-    scenery();
+    chirky_scope(host,"world",true);scenery();chirky_scope(host,"world",false);
+    chirky_scope(host,"rain",true);
     if (garden.elapsed > garden.storm_ticks-15*60 || garden.phase == STORM) {
         int drops = garden.phase == STORM ? 65 : 14;
         for (int i = 0; i < drops; i++) {
@@ -218,6 +219,16 @@ void garden_render(void)
             rect(x,y,1,5,0x93b5ba);
         }
     }
-    hud();
-    if (garden.phase != PLAY) overlay();
+    chirky_scope(host,"rain",false);
+    chirky_scope(host,"hud",true);hud();chirky_scope(host,"hud",false);
+    if (garden.phase != PLAY) {
+        chirky_scope(host,"result",true);overlay();chirky_scope(host,"result",false);
+    }
+}
+
+void garden_render(void)
+{
+    const char *scene=garden.phase==TITLE?"scene.title":garden.phase==PLAY?"scene.play":
+        garden.phase==WON?"scene.won":garden.phase==STUNG?"scene.stung":"scene.storm";
+    chirky_scope(host,scene,true);render_scene();chirky_scope(host,scene,false);
 }

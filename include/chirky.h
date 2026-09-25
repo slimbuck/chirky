@@ -6,8 +6,20 @@
 #endif
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 7
+#define CHIRKY_ABI_VERSION 9
+
+typedef uint32_t chirky_asset;
+enum chirky_asset_type { CHIRKY_ASSET_BLOB, CHIRKY_ASSET_IMAGE, CHIRKY_ASSET_SOUND };
+enum chirky_asset_state { CHIRKY_ASSET_FAILED, CHIRKY_ASSET_LOADING, CHIRKY_ASSET_READY };
+/* Immutable until the owning handle is released. Images are top-down RGBA8;
+   sounds are interleaved signed PCM16; blobs include an extra NUL terminator. */
+struct chirky_asset_view {
+    const void *data;
+    size_t size;
+    unsigned width,height,rate,channels;
+};
 
 enum chirky_button {
     CHIRKY_BUTTON_LEFT,
@@ -50,7 +62,22 @@ struct chirky_host_api {
                       unsigned char blue);
     void (*button_label)(void *context, enum chirky_button action,
                          char *text, size_t capacity);
+    /* Optional nested CPU scopes. NULL outside a bounded diagnostic capture. */
+    void (*profile_scope)(void *context, const char *name, bool begin);
+    chirky_asset (*asset_request)(void *context,const char *path,enum chirky_asset_type type);
+    enum chirky_asset_state (*asset_status)(void *context,chirky_asset asset);
+    struct chirky_asset_view (*asset_data)(void *context,chirky_asset asset);
+    void (*asset_release)(void *context,chirky_asset asset);
+    void (*draw_sprite)(void *context,chirky_asset image,int x,int y,int width,int height,
+                        int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,
+                        unsigned char b,unsigned char a,bool flip_x);
+    void (*sound_play)(void *context,chirky_asset sound);
 };
+
+static inline void chirky_scope(const struct chirky_host_api *api,const char *name,bool begin)
+{
+    if(api->profile_scope)api->profile_scope(api->context,name,begin);
+}
 
 struct chirky_game_api {
     unsigned int abi_version;

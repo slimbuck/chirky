@@ -6,6 +6,14 @@
 
 const struct chirky_host_api *host;
 static struct chirky_input_gate transition_gate;
+static chirky_asset sound_assets[6];
+
+static const char *sound_path(int index)
+{
+    const char *paths[]={settings.jump_sound,settings.dash_sound,settings.shard_sound,
+        settings.checkpoint_sound,settings.death_sound,settings.win_sound};
+    return paths[index];
+}
 struct settings settings;
 struct level level;
 struct content content;
@@ -45,14 +53,23 @@ void copy_text(char *destination, size_t capacity, const char *source)
 static bool load_level(const char *path)
 {
     struct grid grid={0};
-    if (!grid_load(path,&grid)) return false;
-    struct level next={.width=grid.width,.height=grid.height,.tiles=grid.pixels};
+    size_t capacity=0;
+    for(int i=0;i<content.level_count;i++) {
+        const struct grid *cached=&content.levels[i].level;
+        size_t bytes=(size_t)cached->width*cached->height;
+        if(bytes>capacity)capacity=bytes;
+        if(!strcmp(content.levels[i].path,path))grid=*cached;
+    }
+    if(!grid.pixels)return false;
+    if(!level.tiles)level.tiles=malloc(capacity);
+    if(!level.original)level.original=malloc(capacity);
+    if(!level.tiles || !level.original)return false;
+    struct level next={.width=grid.width,.height=grid.height,.tiles=level.tiles,.original=level.original};
     size_t size=(size_t)grid.width*grid.height;
-    next.original=malloc(size);
-    if (!next.original) { free(grid.pixels); return false; }
+    memcpy(next.tiles,grid.pixels,size);
     for (int row=0;row<grid.height;row++) {
         for (int column=0;column<grid.width;column++) {
-            char *tile=&grid.pixels[(size_t)row*grid.width+column];
+            char *tile=&next.tiles[(size_t)row*grid.width+column];
             if (*tile=='S') {
                 next.initial_x=column*TILE; next.initial_y=(grid.height-1-row)*TILE;
                 *tile='.';
@@ -60,7 +77,6 @@ static bool load_level(const char *path)
         }
     }
     memcpy(next.original,next.tiles,size);
-    free(level.tiles); free(level.original);
     level=next;
     return true;
 }
@@ -147,7 +163,11 @@ static bool move_axis(float amount, bool horizontal)
 
 static void play(const char *path)
 {
-    host->play_sound(host->context, settings.sound_device, path);
+    if(host->sound_play) {
+        for(int i=0;i<6;i++)if(!strcmp(path,sound_path(i))) {
+            host->sound_play(host->context,sound_assets[i]);return;
+        }
+    } else if(host->play_sound)host->play_sound(host->context, settings.sound_device, path);
 }
 
 static void respawn(void)
@@ -308,16 +328,19 @@ static void update_play(const struct chirky_input *input)
 
 static void game_shutdown(void)
 {
+    if(host && host->asset_release)for(int i=0;i<6;i++)host->asset_release(host->context,sound_assets[i]);
+    memset(sound_assets,0,sizeof(sound_assets));
     robot_free();
     title_art_free();
     free(level.tiles); free(level.original);
-    memset(&level,0,sizeof(level)); content_free(&content); host=NULL;
+    memset(&level,0,sizeof(level)); content_free(&content); assets_bind(NULL);host=NULL;
 }
 
 static bool game_init(const struct chirky_host_api *host_api, const char *config_path)
 {
     transition_gate=(struct chirky_input_gate){0};
     host=host_api;
+    assets_bind(host_api);
     if (host->abi_version!=CHIRKY_ABI_VERSION || !load_settings(config_path) ||
         !content_load(settings.content,&content)) { game_shutdown(); return false; }
     const char *required[]={"player-idle","player-run","player-jump","player-fall","player-dash",
@@ -334,7 +357,9 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
     current_level=settings.start_level;
     if (!load_level(content.levels[current_level].path)) { game_shutdown(); return false; }
     title_art_load(config_path);
-    if(!robot_load(config_path))fprintf(stderr,"phosphor-run: robot model unavailable; using legacy player sprites\n");
+    if(!robot_load_api(host,config_path))fprintf(stderr,"phosphor-run: robot model unavailable; using legacy player sprites\n");
+    if(host->asset_request)for(int i=0;i<6;i++)
+        sound_assets[i]=host->asset_request(host->context,sound_path(i),CHIRKY_ASSET_SOUND);
     player_animation_tick=0;
     begin_level();
     frame_number=0; phase=PHASE_TITLE; title_timer=0; facing=1; deaths=0;
@@ -358,7 +383,11 @@ static void update_gameplay(const struct chirky_input *input)
 
 static void game_render(void)
 {
+    const char *scene=phase==PHASE_TITLE?"scene.title":phase==PHASE_DEAD?"scene.dead":
+        phase==PHASE_WIN?"scene.win":"scene.play";
+    chirky_scope(host,scene,true);
     if (phase==PHASE_TITLE) render_title(); else render_game();
+    chirky_scope(host,scene,false);
 }
 
 static void game_update(const struct chirky_input *input)
