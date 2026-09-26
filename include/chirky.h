@@ -49,17 +49,27 @@ struct chirky_input {
 struct chirky_host_api {
     unsigned int abi_version;
     /* Logical playable viewport, excluding the CRT-safe border. Drawing is
-       clipped to these bounds and translated to physical output by the host. */
+       clipped to these bounds and translated to physical output by the host.
+       Games must not add the physical border or calibrated display offset. */
     int screen_width;
     int screen_height;
     void *context;
+    /* Drawing uses integer logical pixels with a bottom-left origin. Rectangle
+       coverage is [x,x+width) by [y,y+height). The host clips it to the logical
+       viewport before applying the physical CRT offset. */
     void (*fill_rect)(void *context, int x, int y, int width, int height,
                       unsigned char red, unsigned char green,
                       unsigned char blue);
     void (*play_sound)(void *context, const char *device, const char *path);
+    /* Draws the built-in 5x7 font. x is the left edge and y is the bottom-left
+       coordinate of the glyphs' top pixel row; subsequent rows descend by
+       scale pixels. Characters advance by 6*scale. */
     void (*draw_text)(void *context, int x, int y, const char *text, int scale,
                       unsigned char red, unsigned char green,
                       unsigned char blue);
+    /* Writes the current host-facing label for a logical SNES button as a
+       NUL-terminated string when capacity is nonzero. Games should display
+       this label instead of naming a keyboard key. */
     void (*button_label)(void *context, enum chirky_button action,
                          char *text, size_t capacity);
     /* Optional nested CPU scopes. NULL outside a bounded diagnostic capture. */
@@ -68,6 +78,10 @@ struct chirky_host_api {
     enum chirky_asset_state (*asset_status)(void *context,chirky_asset asset);
     struct chirky_asset_view (*asset_data)(void *context,chirky_asset asset);
     void (*asset_release)(void *context,chirky_asset asset);
+    /* IMAGE source rectangles use top-left RGBA8 coordinates. Destination
+       coordinates use the bottom-left logical viewport above. Source and
+       destination sizes may differ and are nearest sampled, but pixel art
+       should normally use width==sw and height==sh to preserve 1:1 texels. */
     void (*draw_sprite)(void *context,chirky_asset image,int x,int y,int width,int height,
                         int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,
                         unsigned char b,unsigned char a,bool flip_x);

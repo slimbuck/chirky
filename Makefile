@@ -97,3 +97,5 @@ test: $(GAME_TARGETS)
 	/tmp/robot-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tests/rosey_runtime.c games/rosey-chop/*.c -Wl,--gc-sections -ldl -o /tmp/rosey-runtime-test
 	/tmp/rosey-runtime-test
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/bramble_runtime.c games/bramble-hollow/*.c src/asset_store.c -pthread -lm -o /tmp/bramble-runtime-test
+	/tmp/bramble-runtime-test

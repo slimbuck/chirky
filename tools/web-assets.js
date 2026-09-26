@@ -1,14 +1,14 @@
 "use strict";
 const fs=require("fs"),path=require("path");
 const ROOT=path.resolve(__dirname,"..");
-const games=["phosphor-run","rosey-chop","hardware-test"];
+const games=["phosphor-run","rosey-chop","bramble-hollow","hardware-test"];
 function assets(root=ROOT) {
   const files=["assets/launcher/splash.ppm"];
   function walk(relative) {
     for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})) {
       const name=relative+"/"+entry.name;
       if(entry.isDirectory())walk(name);
-      else if(entry.isFile() && /\.(conf|txt|sprite|ppm|wav|robot)$/.test(name))files.push(name);
+      else if(entry.isFile() && /\.(conf|txt|sprite|ppm|pam|wav|robot)$/.test(name))files.push(name);
     }
   }
   games.forEach(id=>walk("games/"+id));

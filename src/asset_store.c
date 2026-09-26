@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -254,23 +255,46 @@ static bool decode_image(struct asset_store *s, const struct asset_job *job,
 {
     const unsigned char *data = raw->view.data;
     size_t size = raw->view.size, pos = 2;
-    unsigned width, height, maximum;
-    if (size < 3 || memcmp(data, "P6", 2) || !isspace(data[2]) ||
-        !ppm_number(data, size, &pos, &width) || !ppm_number(data, size, &pos, &height) ||
-        !ppm_number(data, size, &pos, &maximum) || !width || !height || maximum != 255)
-        return false;
-    /* Consume only the raster separator (or CRLF), never binary whitespace. */
-    unsigned char separator = data[pos++];
-    if (separator == '\r' && pos < size && data[pos] == '\n') pos++;
+    unsigned width = 0, height = 0, maximum = 0, depth = 3;
+    if (size >= 3 && !memcmp(data, "P6", 2) && isspace(data[2])) {
+        if (!ppm_number(data, size, &pos, &width) || !ppm_number(data, size, &pos, &height) ||
+            !ppm_number(data, size, &pos, &maximum) || !width || !height || maximum != 255)
+            return false;
+        /* Consume only the raster separator (or CRLF), never binary whitespace. */
+        unsigned char separator = data[pos++];
+        if (separator == '\r' && pos < size && data[pos] == '\n') pos++;
+    } else if (size >= 3 && !memcmp(data, "P7", 2) && isspace(data[2])) {
+        bool ended = false, tuple = false;
+        pos = 3;
+        while (pos < size && !ended) {
+            size_t start = pos;
+            while (pos < size && data[pos] != '\n' && data[pos] != '\r') pos++;
+            size_t length = pos - start;
+            if (pos < size && data[pos++] == '\r' && pos < size && data[pos] == '\n') pos++;
+            if (!length || data[start] == '#') continue;
+            char line[96];
+            if (length >= sizeof(line)) return false;
+            memcpy(line, data + start, length); line[length] = 0;
+            if (!strcmp(line, "ENDHDR")) { ended = true; continue; }
+            unsigned value; char extra;
+            if (sscanf(line, "WIDTH %u%c", &value, &extra) == 1) width = value;
+            else if (sscanf(line, "HEIGHT %u%c", &value, &extra) == 1) height = value;
+            else if (sscanf(line, "DEPTH %u%c", &value, &extra) == 1) depth = value;
+            else if (sscanf(line, "MAXVAL %u%c", &value, &extra) == 1) maximum = value;
+            else if (!strcmp(line, "TUPLTYPE RGB_ALPHA")) tuple = true;
+            else if (strncmp(line, "TUPLTYPE ", 9)) return false;
+        }
+        if (!ended || !tuple || !width || !height || depth != 4 || maximum != 255) return false;
+    } else return false;
     uint64_t pixels64 = (uint64_t)width * height;
-    if (pixels64 > ASSET_STORE_MAX_BYTES / 4 || pixels64 * 3 > size - pos) return false;
+    if (pixels64 > ASSET_STORE_MAX_BYTES / 4 || pixels64 * depth > size - pos) return false;
     size_t pixels = (size_t)pixels64, bytes = pixels * 4;
     unsigned char *rgba = allocate_payload(s, job, bytes);
     if (!rgba) return false;
     for (size_t i = 0; i < pixels; i++) {
         if (!(i % 16384) && !current(s, job)) { free_payload(s, rgba, bytes); return false; }
-        memcpy(rgba + i * 4, data + pos + i * 3, 3);
-        rgba[i * 4 + 3] = 255;
+        memcpy(rgba + i * 4, data + pos + i * depth, depth);
+        if (depth == 3) rgba[i * 4 + 3] = 255;
     }
     *out = (struct asset_result){.view = {.data = rgba, .size = bytes,
         .width = width, .height = height}, .allocation = bytes};
@@ -363,7 +387,7 @@ static bool asset_extension(const char *name, enum chirky_asset_type *type)
     const char *ext = strrchr(name, '.');
     if (!ext) return false;
     *type = CHIRKY_ASSET_BLOB;
-    if (!strcmp(ext, ".ppm")) *type = CHIRKY_ASSET_IMAGE;
+    if (!strcmp(ext, ".ppm") || !strcmp(ext, ".pam")) *type = CHIRKY_ASSET_IMAGE;
     else if (!strcmp(ext, ".wav")) *type = CHIRKY_ASSET_SOUND;
     else if (strcmp(ext, ".conf") && strcmp(ext, ".txt") &&
              strcmp(ext, ".sprite") && strcmp(ext, ".robot")) return false;

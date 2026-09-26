@@ -48,8 +48,8 @@ void asset_store_clear(struct asset_store *store);
 
 /* One directory per clear; repeating the same directory is idempotent. Native
    traversal is asynchronous; browser traversal is synchronous. Regular files
-   ending in .conf/.txt/.sprite/.robot/.ppm/.wav are retained as BLOB, plus IMAGE
-   for .ppm and SOUND for .wav. Extensions are case-sensitive. Symlinks are not
+   ending in .conf/.txt/.sprite/.robot/.ppm/.pam/.wav are retained as BLOB, plus
+   IMAGE for .ppm/.pam and SOUND for .wav. Extensions are case-sensitive. Symlinks are not
    traversed; directory nesting is limited to 64 and paths to 4095 bytes.
    Returns false for invalid input or an already selected different directory.
    Prefetch owner refs survive caller releases until clear/destroy. State is

@@ -19,6 +19,50 @@ asset operations below. Pass `context` back unchanged. Coordinates use the
 logical playable viewport; the host applies its physical offset and clipping.
 Games consume logical buttons and button edges from `struct chirky_input`.
 
+## Rendering contract
+
+`screen_width` and `screen_height` describe the logical playable viewport, not
+necessarily the physical display mode. The native host subtracts the calibrated
+CRT-safe margins from 320x240 and translates all game drawing into that region.
+The browser host presents the same arrangement using a 288x216 logical viewport
+inside a 320x240 framebuffer. A game must never add a safe-area border or display
+offset itself.
+
+Drawing uses integer logical pixels with `(0, 0)` at the bottom left. Rectangles
+cover the half-open area `[x, x + width)` by `[y, y + height)`. The host clips
+destination geometry to the logical viewport while preserving the original
+sprite mapping, then applies the physical safe-area translation. Games may use
+their own top-left world convention, but must perform that conversion before
+calling the host, as Bramble Hollow and Rosey Chop do.
+
+Decoded images are top-down RGBA8. A sprite source rectangle therefore uses a
+top-left `(sx, sy)` with positive `sw` and `sh`; its destination `(x, y)` uses the
+bottom-left logical convention. Invalid or out-of-bounds source rectangles,
+non-positive dimensions, zero alpha, failed assets, and fully clipped draws are
+no-ops. Tint and alpha are applied during drawing, and `flip_x` mirrors the
+source horizontally without changing its destination bounds.
+
+The host supports nearest-neighbour scaling when destination and source sizes
+differ. That capability is useful for full-screen art and intentional scaling,
+but it is not an automatic pixel-art cleanup step. For native pixel sprites,
+use `width == sw` and `height == sh`; reduce source artwork once offline, keep
+transparent gutters inside fixed atlas cells, and draw each complete cell at
+its native size. Fractional ratios such as reducing a large generated character
+to a small destination distribute source texels unevenly even with nearest
+sampling and can make lines, wheels, and animation alignment appear malformed.
+
+The browser page enlarges the completed 320x240 framebuffer at integer multiples
+where space permits and uses `image-rendering: pixelated`. This page-level scale
+does not change game coordinates. Native CRT calibration likewise changes only
+the position and dimensions of the logical viewport, never individual sprites.
+
+`draw_text` uses the built-in 5x7 font. `x` is its left edge and `y` identifies
+the bottom-left coordinate of the glyphs' top pixel row; the remaining rows
+descend in logical coordinates. Each character advances by `6 * scale` and each
+set font pixel occupies `scale` square logical pixels. Use `button_label` when
+showing controls so the game names logical SNES buttons rather than host-specific
+keyboard keys. With nonzero capacity, the callback writes a NUL-terminated label.
+
 ## Asset operations
 
 `chirky_asset` is a 32-bit opaque handle. Zero is invalid. Paths are exact cache
@@ -40,7 +84,7 @@ The asset view contains `const void *data`, byte count `size`, and unsigned
 | Type | Data and metadata |
 | --- | --- |
 | `CHIRKY_ASSET_BLOB` | Original bytes plus an extra NUL terminator; `size` excludes that terminator. Used for config, level, sprite, and robot-model parsers. |
-| `CHIRKY_ASSET_IMAGE` | Decoded top-down RGBA8 pixels, with `width` and `height`. The current decoder reads P6 PPM. |
+| `CHIRKY_ASSET_IMAGE` | Decoded top-down RGBA8 pixels, with `width` and `height`. The decoder reads opaque P6 PPM and RGBA P7 PAM. |
 | `CHIRKY_ASSET_SOUND` | Decoded native-endian signed PCM16, interleaved, with `rate` and `channels`; `size` is bytes, not frames. The current decoder accepts uncompressed PCM WAV with 8- or 16-bit samples. Native playback supports mono/stereo. |
 
 Retain a caller reference while reading a borrowed view. Do not modify or free
@@ -70,9 +114,9 @@ reference, including native sound pins. It is not a game-facing API9 callback.
    with its current GL context. Decoding completion does not mean a texture has
    already been uploaded. Subsequent draws reuse the host's texture cache.
 
-Prefetch covers `.conf`, `.txt`, `.sprite`, `.robot`, `.ppm`, and `.wav` regular
-files below the game directory. Every selected file has a BLOB entry; PPM and
-WAV also have decoded entries. Prefetch retains ownership until store clear,
+Prefetch covers `.conf`, `.txt`, `.sprite`, `.robot`, `.ppm`, `.pam`, and `.wav` regular
+files below the game directory. Every selected file has a BLOB entry; PPM/PAM
+and WAV also have decoded entries. Prefetch retains ownership until store clear,
 independently of game references. Symlinks are not traversed. The store has 1024
 slots and a 64 MiB payload budget, including in-flight allocations. Traversal or
 BLOB failures fail the bundle; a decoded IMAGE/SOUND failure can leave its BLOB

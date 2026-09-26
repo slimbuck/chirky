@@ -5,3 +5,5 @@
 /dashboard/captures/
 __pycache__/
 *.py[cod]
+/games/bramble-hollow/runtime/*
+!/games/bramble-hollow/runtime/.gitkeep

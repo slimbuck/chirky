@@ -29,13 +29,20 @@ rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
-ABI version 7 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
+Platform API 9 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
 is held B, and `input->button_pressed[CHIRKY_BUTTON_Y]` is a new Y press.
 The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
 Each game owns what its buttons do. Use `button_label` for SNES names; keyboard
 emulation belongs to the host, so games must not read raw keyboard state.
 The host reserves Select for its pause menu; A resumes, B selects an option. Rebuild host and all game
 modules together when upgrading from the previous action-based ABI.
+
+The complete host/game contract, including logical CRT-safe coordinates,
+bottom-left drawing, top-down image source rectangles, retained assets, and
+native-size sprite guidance, is documented in
+[`docs/platform-api.md`](../docs/platform-api.md). Games must use the host's
+reported `screen_width` and `screen_height`; they must not add physical CRT
+margins or calibrated offsets themselves.
 
 For screen/phase changes, use the shared `include/input_gate.h` helper. Keep a
 `chirky_input_gate` in game state, pass each update through

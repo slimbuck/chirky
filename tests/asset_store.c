@@ -173,6 +173,24 @@ static void test_images(struct asset_store *s)
     assert(ready(s, blob).size == sizeof(ppm) - 1);
     asset_store_release(s, h);
     asset_store_release(s, blob);
+    const unsigned char pam[] = "P7\n# alpha fixture\nWIDTH 2\nHEIGHT 1\nDEPTH 4\n"
+        "MAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n"
+        "\x01\x02\x03\x04\x80\x81\x82\xff";
+    write_bytes("alpha.pam", pam, sizeof(pam) - 1);
+    h = request(s, "alpha.pam", CHIRKY_ASSET_IMAGE);
+    v = ready(s, h); p = v.data;
+    assert(v.width == 2 && v.height == 1 && v.size == 8);
+    assert(!memcmp(p, "\x01\x02\x03\x04\x80\x81\x82\xff", 8));
+    asset_store_release(s, h);
+    const char *bad_pam[] = {
+        "P7\nWIDTH 1\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\n",
+        "P7\nWIDTH 1\nHEIGHT 1\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\nabc",
+        "P7\nWIDTH 1\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\nabcd"
+    };
+    for (size_t i = 0; i < sizeof(bad_pam) / sizeof(*bad_pam); i++) {
+        write_bytes("bad.pam", bad_pam[i], strlen(bad_pam[i]));
+        expect_failure(s, "bad.pam", CHIRKY_ASSET_IMAGE);
+    }
     const char *bad[] = {"P3\n1 1\n255\nabc", "P6\n0 1\n255\n", "P6\n-1 1\n255\n",
         "P6\n1 1\n65535\nabcdef", "P6\n1 1\n255\nab", "P6\n1 1\n255",
         "P6\n4294967296 2\n255\nabc", "P6\n4294967295 4294967295\n255\nabc",
@@ -515,6 +533,12 @@ static void test_shipped(struct asset_store *s)
     h = asset_store_request(s, "games/phosphor-run/assets/artwork/splash.ppm", CHIRKY_ASSET_IMAGE);
     v = ready(s, h);
     assert(v.width && v.height && v.size == (size_t)v.width * v.height * 4);
+    h = asset_store_request(s, "games/bramble-hollow/assets/player.pam", CHIRKY_ASSET_IMAGE);
+    v = ready(s, h);
+    assert(v.width == 160 && v.height == 160 && v.size == (size_t)v.width * v.height * 4);
+    bool transparent = false;
+    for (size_t i = 3; i < v.size; i += 4) transparent |= ((const unsigned char *)v.data)[i] < 255;
+    assert(transparent);
     asset_store_clear(s);
 }
 
@@ -563,6 +587,6 @@ int main(void)
     test_shipped(s);
     asset_store_destroy(s);
     remove_fixture_tree(root);
-    puts("Assets: cache/ownership, PPM, WAV, prefetch, limits, cancellation and stale handles passed.");
+    puts("Assets: cache/ownership, PPM/PAM, WAV, prefetch, limits, cancellation and stale handles passed.");
     return 0;
 }

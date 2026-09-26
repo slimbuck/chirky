@@ -1,6 +1,6 @@
 const $=selector=>document.querySelector(selector);
-const ids=["phosphor-run","rosey-chop","hardware-test"];
-const titles={"launcher":"Launcher","phosphor-run":"Phosphor Run","rosey-chop":"Rosey Chop","hardware-test":"Hardware Test"};
+const ids=["bramble-hollow","phosphor-run","rosey-chop","hardware-test"];
+const titles={"launcher":"Launcher","bramble-hollow":"Bramble Hollow","phosphor-run":"Phosphor Run","rosey-chop":"Rosey Chop","hardware-test":"Hardware Test"};
 const params=new URLSearchParams(location.search),id=params.get("game") || "launcher";
 const canvas=$("#screen"),status=$("#status");
 let runtime,audio,muted=false,paused=false,leaving=false,last=0,accumulator=0,pending=0,selectHeld=false,ready=false;
