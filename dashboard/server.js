@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawn } = require("child_process");
-const {assets: browserAssets} = require("../tools/web-assets");
+const {assets: browserAssets, configs: browserConfigs} = require("../tools/web-assets");
 
 const DASHBOARD = __dirname;
 const ROOT = path.resolve(DASHBOARD, "..");
@@ -324,6 +324,7 @@ async function handle(request, response) {
     if(request.method==="GET" && url.pathname.startsWith("/play/")) {
       const relative=decodeURIComponent(url.pathname.slice(6)) || "index.html";
       if(relative==="assets.json")return json(response,200,browserAssets());
+      if(relative==="configs.json")return json(response,200,browserConfigs());
       if(relative.startsWith("runtime/")) {
         const asset=relative.slice(8);
         if(!browserAssets().includes(asset))return json(response,404,{error:"not found"});

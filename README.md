@@ -23,7 +23,9 @@ Run `make web` with Emscripten installed, then open
 <http://localhost:3030/play/> with the dashboard running. The existing C games
 run as WebAssembly, with keyboard, gamepad and touch input. The editing portal
 includes **Play in browser** and **Save and play in browser**.
-See [the browser guide](web/README.md) for build and standalone hosting details.
+To preview the exact publishable build without the dashboard, run
+`node tools/serve-web.cjs` after `make web` and open <http://127.0.0.1:3031/>.
+See [the browser guide](web/README.md) for testing and the checked website export.
 
 ## Frame timing
 

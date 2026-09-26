@@ -82,7 +82,7 @@ test: $(GAME_TARGETS)
 	python3 tests/gpu_profiler.py
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/gpu_timing.c -o /tmp/gpu-timing-test
 	/tmp/gpu-timing-test
-	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js tests/player_audio.cjs
+	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js tests/player_audio.cjs tests/web_package.cjs
 	sh tests/service_install.sh
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/splash_runtime.c -o /tmp/splash-runtime-test

@@ -1,5 +1,5 @@
 // Read-only integration checks against the running dashboard. No npm dependencies.
-// node tools/platform-browser.cjs [http://localhost:3030] [output-directory]
+// node tools/platform-browser.cjs [http://localhost:3030/play/] [output-directory]
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -67,7 +67,8 @@ const attachProbe = `(() => {
 })();`;
 
 async function main() {
-  const base = process.argv[2] || 'http://localhost:3030';
+  const base = new URL(process.argv[2] || 'http://localhost:3030/play/');
+  if(!base.pathname.endsWith('/'))base.pathname+='/';
   const out = path.resolve(process.argv[3] || 'build/platform-browser'); fs.mkdirSync(out, { recursive: true });
   const chrome = process.env.CHROME || (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : 'chromium');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'platform-browser-'));
@@ -86,7 +87,7 @@ async function main() {
     const endpoint = `http://127.0.0.1:${port}`;
     const info = await (await fetch(`${endpoint}/json/version`)).json();
     browser = new CDP(info.webSocketDebuggerUrl); await browser.open;
-    const source = await (await fetch(`${base}/play/player.js`)).text();
+    const source = await (await fetch(new URL('player.js',base))).text();
     const readyLine = source.split('\n').findIndex(line => /ready=true;/.test(line));
     assert(readyLine>=0, 'Cannot locate initialization checkpoint');
     for (const game of ['phosphor-run','rosey-chop']) for (const mobile of [false,true]) {
@@ -112,7 +113,7 @@ async function main() {
       });
       await page.call('Page.enable');await page.call('Runtime.enable');await page.call('Network.enable');await page.call('Debugger.enable');
       await page.call('Network.setCacheDisabled', {cacheDisabled:true});
-      await page.call('Debugger.setBreakpointByUrl', {urlRegex:'/play/player\\.js(?:\\?.*)?$',lineNumber:readyLine});
+      await page.call('Debugger.setBreakpointByUrl', {url:new URL('player.js',base).href,lineNumber:readyLine});
       await page.call('Page.addScriptToEvaluateOnNewDocument', {source:instrumentation});
       await page.call('Emulation.setDeviceMetricsOverride', {width:mobile?390:1280,height:mobile?844:1000,deviceScaleFactor:1,mobile});
       await page.call('Emulation.setTouchEmulationEnabled', {enabled:mobile,maxTouchPoints:5});
@@ -148,7 +149,7 @@ async function main() {
       }
       try {
         console.log(`Checking ${label}`);
-        await page.call('Page.navigate',{url:`${base}/play/?game=${game}`});await ready();
+        await page.call('Page.navigate',{url:new URL(`?game=${game}`,base).href});await ready();
         report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?6:7);
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
         const title=await capture('title');assert.equal(title.touchVisible,mobile);

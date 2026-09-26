@@ -86,11 +86,16 @@ async function checked(url){const response=await fetch(url,{cache:"no-store"});i
 async function start(){
   if(!Object.hasOwn(titles,id))throw new Error("Unknown game");
   const files=await (await checked("assets.json")).json();
+  const configs=id==="launcher"?{}:await (await checked("configs.json")).json();
   const {default:create}=await import(`./${id}.js`);
   runtime=await create({canvas,onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,
     onLaunch:index=>{leaving=true;location.href=`?game=${ids[index]}`;},printErr:message=>console.warn(message)});
   await Promise.all(files.filter(file=>id==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${id}/`)).map(async file=>{
-    const bytes=new Uint8Array(await (await checked("runtime/"+file)).arrayBuffer());
+    let bytes;
+    if(file.endsWith(".conf")){
+      if(typeof configs[file]!=="string")throw new Error(`Missing game configuration: ${file}`);
+      bytes=new TextEncoder().encode(configs[file]);
+    }else bytes=new Uint8Array(await (await checked("runtime/"+file)).arrayBuffer());
     runtime.FS.mkdirTree("/"+file.slice(0,file.lastIndexOf("/")));runtime.FS.writeFile("/"+file,bytes);
     if(file.endsWith(".wav"))sounds.set(file,bytes);
   }));
@@ -102,7 +107,10 @@ async function start(){
   }
   if(!runtime.ccall("web_init","number",["string"],[config]))throw new Error("Could not initialise the game or WebGL display");
   ready=true;
-  status.textContent=titles[id];canvas.focus();requestAnimationFrame(frame);
+  status.textContent=titles[id];
+  // Embedded games must not steal focus or scroll their parent page.
+  if(window===window.top)canvas.focus({preventScroll:true});
+  requestAnimationFrame(frame);
 }
 window.addEventListener("pagehide",()=>{leaving=true;stopSounds();if(ready)runtime._web_destroy();audio?.close();});
 window.addEventListener("pageshow",event=>{if(event.persisted)location.reload();});
