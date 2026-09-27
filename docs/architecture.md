@@ -42,6 +42,20 @@ WebAudio, `fetch`, fullscreen, and navigation. Both platforms call the shared
 runtime for game lifecycle and use the same renderer, asset handles, viewport
 constants, and game ABI.
 
+## Rendering roadmap
+
+Polygon and mesh rendering must move to the GPU. The software triangle path in
+Phosphor Run's articulated robot is temporary: it currently transforms and
+rasterizes polygons on the CPU, resolves them to pixels, and submits those pixels
+as rectangles.
+
+Replace that path with a platform-neutral rendering capability exposed through
+the Chirky ABI or shared renderer. The Linux implementation must use GLES and the
+browser implementation must use WebGL. Do not add another CPU polygon rasterizer
+or expand polygon output into per-pixel rectangle commands. Preserve Chirky's
+320x240 logical coordinate system and identical game-facing behavior across both
+platforms while allowing each GPU backend to own its native setup and submission.
+
 ## Game catalog
 
 Every game is declared once by `games/<id>/game.conf` beside its `game.c`.
