@@ -30,6 +30,23 @@ EM_JS(void, prepare_sound, (unsigned handle,const void *data,unsigned size,unsig
     Module.onAssetReady(handle,data,size,rate,channels);
 });
 EM_JS(void, play_asset_sound, (unsigned handle), { Module.onAssetSound(handle); });
+EM_JS(int, connect_director, (const char *url,const char *game,const char *world), {
+    return Module.onDirectorConnect(UTF8ToString(url),UTF8ToString(game),UTF8ToString(world)) ? 1 : 0;
+});
+EM_JS(void, disconnect_director, (void), { Module.onDirectorDisconnect(); });
+EM_JS(int, emit_director_event, (const char *json,unsigned size), {
+    return Module.onDirectorEvent(UTF8ToString(json,size)) ? 1 : 0;
+});
+EM_JS(unsigned, read_director_state,
+    (unsigned after_revision,char *text,unsigned capacity,uint32_t *revision), {
+    const update=Module.onDirectorState(after_revision);
+    if(!update)return 0;
+    const size=lengthBytesUTF8(update.text);
+    if(size+1>capacity)return 0;
+    stringToUTF8(update.text,text,capacity);
+    HEAPU32[revision>>2]=update.revision>>>0;
+    return size;
+});
 static chirky_asset request_asset(void *unused,const char *path,enum chirky_asset_type type)
 {
     (void)unused;chirky_asset asset=asset_store_request(assets,path,type);
@@ -52,6 +69,17 @@ static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
 }
 static void sound_play(void *unused,chirky_asset asset)
 { (void)unused;play_asset_sound(asset); }
+static bool director_connect_api(void *unused,const char *url,const char *game,const char *world)
+{ (void)unused;return connect_director(url,game,world)!=0; }
+static bool director_event_api(void *unused,const char *json,size_t size)
+{ (void)unused;return size<=UINT32_MAX && emit_director_event(json,(unsigned)size)!=0; }
+static size_t director_state_api(void *unused,uint32_t after_revision,char *text,
+                                 size_t capacity,uint32_t *revision)
+{
+    (void)unused;
+    if(capacity>UINT32_MAX)return 0;
+    return read_director_state(after_revision,text,(unsigned)capacity,revision);
+}
 static void fill(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)unused;
@@ -87,7 +115,9 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
     api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,.screen_width=288,.screen_height=216,
         .fill_rect=fill,.play_sound=play,.draw_text=text,.button_label=label,
         .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=sprite,.sound_play=sound_play};
+        .draw_sprite=sprite,.sound_play=sound_play,
+        .director_connect=director_connect_api,.director_event=director_event_api,
+        .director_state=director_state_api};
 #ifdef CHIRKY_WEB_LAUNCHER
     (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");return 1;
 #else
@@ -139,6 +169,7 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void)
 #else
     if(game)game->shutdown();game=NULL;
 #endif
+    disconnect_director();
     image_cache_clear(&images,&renderer);
     asset_store_destroy(assets);assets=NULL;
     if(context>0){rect_renderer_destroy(&renderer);emscripten_webgl_destroy_context(context);}

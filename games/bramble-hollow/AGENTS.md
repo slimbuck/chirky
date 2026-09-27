@@ -78,11 +78,12 @@ while sprite pixels remain native-size.
 
 ## Living-World Director
 
-The game can hot-load `runtime/director.conf`; static defaults live in
-`assets/director.conf`. `tools/bramble-director.mjs` is an optional external LLM
-director, not proof that an LLM is currently connected. Before claiming the LLM
-is active, verify its process, credentials, output file, and successful runtime
-reload.
+Static defaults live in `assets/director.conf`. API10 hosts communicate with the
+standalone Node service in `director/server.mjs` through the configured HTTP
+URL. The legacy `runtime/director.conf` hot-load remains only as a fallback for
+hosts without director callbacks. Before claiming the LLM is active, verify the
+service process, `/health`, model credentials, received events, a newer world
+revision, and successful runtime application.
 
 Keep director output bounded to validated long-term, medium-term, and short-term
 state. The deterministic game remains authoritative for movement, collision,

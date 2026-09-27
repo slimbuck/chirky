@@ -362,7 +362,7 @@ static void draw_director(void)
     text(12, 124, "MID", 1, 0x7fc0c0); text(42, 124, clipped, 1, 0xe9e2bd);
     clip_line(clipped, sizeof(clipped), bramble.director.short_focus, 42);
     text(12, 139, "NOW", 1, 0xd88993); text(42, 139, clipped, 1, 0xe9e2bd);
-    snprintf(row, sizeof(row), "REV %lu", bramble.director.revision);
+    snprintf(row, sizeof(row), "REV %u", bramble.director.revision);
     text(12, 159, row, 1, 0x779080);
     center_text(bramble_host->screen_height - 19, "D-PAD CHANGE    X/A CLOSE", 1, 0xf1d784);
 }

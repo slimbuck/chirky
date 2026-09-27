@@ -29,7 +29,7 @@ rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
-Platform API 9 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
+Platform API 10 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
 is held B, and `input->button_pressed[CHIRKY_BUTTON_Y]` is a new Y press.
 The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
 Each game owns what its buttons do. Use `button_label` for SNES names; keyboard

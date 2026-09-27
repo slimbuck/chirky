@@ -241,8 +241,8 @@ from the game list and activates it with B.
 ## Included games
 
 The shared native/browser interface is documented in
-[Platform API 9](docs/platform-api.md): retained assets, sprites, rectangles,
-text, input, sound and timing scopes. See the
+[Platform API 10](docs/platform-api.md): retained assets, sprites, rectangles,
+text, input, sound, timing scopes, and asynchronous world direction. See the
 [Pi platform measurements](docs/performance-platform-pi3.md) for before/after
 results and the asynchronous audio-startup follow-up.
 

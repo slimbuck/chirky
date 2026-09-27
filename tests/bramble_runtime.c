@@ -10,6 +10,9 @@
 const struct chirky_game_api *chirky_game_entry(void);
 static struct asset_store *store;
 static int rectangles, sprites, texts;
+static char emitted_event[256];
+static const char *network_state;
+static uint32_t network_revision;
 
 static chirky_asset request(void *context, const char *path, enum chirky_asset_type type)
 { return asset_store_request(context, path, type); }
@@ -45,6 +48,30 @@ static void sprite(void *context, chirky_asset asset, int x, int y, int width, i
 }
 static void scope(void *context, const char *name, bool begin)
 { (void)context; (void)name; (void)begin; }
+static bool connect_director(void *context, const char *url, const char *game, const char *world)
+{
+    (void)context;
+    assert(!strcmp(url, "http://192.168.137.1:3040"));
+    assert(!strcmp(game, "bramble-hollow") && !strcmp(world, "bramble-hollow-main"));
+    return true;
+}
+static bool emit_director(void *context, const char *json, size_t size)
+{
+    (void)context;
+    assert(size + 1 <= sizeof(emitted_event));
+    memcpy(emitted_event, json, size); emitted_event[size] = 0;
+    return true;
+}
+static size_t state_director(void *context, uint32_t after_revision, char *text,
+                             size_t capacity, uint32_t *revision)
+{
+    (void)context;
+    if (!network_state || network_revision <= after_revision) return 0;
+    size_t size = strlen(network_state);
+    assert(size + 1 <= capacity);
+    memcpy(text, network_state, size + 1); *revision = network_revision;
+    return size;
+}
 
 static void validate_atlas(chirky_asset asset, unsigned columns, unsigned rows)
 {
@@ -142,7 +169,9 @@ int main(void)
     struct chirky_host_api host = {.abi_version = CHIRKY_ABI_VERSION, .screen_width = 288,
         .screen_height = 216, .context = store, .fill_rect = rectangle, .draw_text = lettering,
         .profile_scope = scope, .asset_request = request, .asset_status = status,
-        .asset_data = data, .asset_release = release, .draw_sprite = sprite};
+        .asset_data = data, .asset_release = release, .draw_sprite = sprite,
+        .director_connect = connect_director, .director_event = emit_director,
+        .director_state = state_director};
     const struct chirky_game_api *game = chirky_game_entry();
     assert(game && game->abi_version == CHIRKY_ABI_VERSION);
     assert(game->init(&host, "games/bramble-hollow/game.conf"));
@@ -162,6 +191,17 @@ int main(void)
     struct chirky_input input = {0};
     press(game, &input, CHIRKY_BUTTON_B);
     assert(bramble.phase == BRAMBLE_PLAY && bramble.seeds == 5 && bramble.day == 1);
+    assert(strstr(emitted_event, "\"kind\":\"begin\""));
+    network_state = "version=1\nrevision=2\nlong_theme=Rain is waking the old paths.\n"
+        "long_church_goal=Bring a garden memory to the stained glass.\n"
+        "medium_event=Maple is baking beside the bridge.\nmedium_shop_special=Zara has fresh seeds.\n"
+        "short_focus=Visit Maple after checking the garden.\nweather=mist\ngrowth_boost=3\n"
+        "zebra_line=The mist makes every bell sound near.\nturtle_line=The seedlings are listening.\n"
+        "cat_line=Moonberry buns will be ready soon.\nsheep_line=I found another window story.\n"
+        "nun_line=The blue pane remembers rain.\n";
+    network_revision = 2; bramble.tick = 299;
+    memset(&input, 0, sizeof(input)); game->update(&input);
+    assert(bramble.director.revision == 2 && bramble.weather == BRAMBLE_MIST && bramble.growth_boost == 3);
     float old_x = bramble.x;
     input.buttons[CHIRKY_BUTTON_RIGHT] = true;
     for (int i = 0; i < 10; i++) game->update(&input);

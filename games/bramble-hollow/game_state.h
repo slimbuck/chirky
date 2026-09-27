@@ -36,7 +36,7 @@ struct bramble_npc {
 };
 
 struct bramble_director_state {
-    unsigned long revision;
+    uint32_t revision;
     char long_theme[96];
     char long_church_goal[96];
     char medium_event[96];
@@ -71,6 +71,9 @@ struct bramble_state {
     struct bramble_plant plants[BRAMBLE_PLANTS];
     struct bramble_npc npcs[BRAMBLE_NPCS];
     struct bramble_director_state director;
+    bool director_networked;
+    char director_url[256];
+    char director_world[64];
     char config_dir[512];
     char director_path[640];
     char event_path[640];

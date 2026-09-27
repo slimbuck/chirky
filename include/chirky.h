@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 9
+#define CHIRKY_ABI_VERSION 10
 
 typedef uint32_t chirky_asset;
 enum chirky_asset_type { CHIRKY_ASSET_BLOB, CHIRKY_ASSET_IMAGE, CHIRKY_ASSET_SOUND };
@@ -86,6 +86,13 @@ struct chirky_host_api {
                         int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,
                         unsigned char b,unsigned char a,bool flip_x);
     void (*sound_play)(void *context,chirky_asset sound);
+    /* Optional eventually-consistent world-director transport. The host owns
+       networking and credentials; games emit bounded JSON events and consume
+       opaque, revisioned UTF-8 state without blocking a frame. */
+    bool (*director_connect)(void *context,const char *url,const char *game,const char *world);
+    bool (*director_event)(void *context,const char *json,size_t size);
+    size_t (*director_state)(void *context,uint32_t after_revision,char *text,
+                             size_t capacity,uint32_t *revision);
 };
 
 static inline void chirky_scope(const struct chirky_host_api *api,const char *name,bool begin)

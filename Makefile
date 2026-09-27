@@ -7,7 +7,7 @@ CFLAGS += -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDLIBS += -pthread -ldl -Wl,--no-as-needed -l:libdrm.so.2 -l:libgbm.so.1 -l:libEGL.so.1 -l:libGLESv2.so.2
 
 TARGET := build/chirky-host
-PLATFORM_SOURCES := src/asset_store.c src/audio_mixer.c
+PLATFORM_SOURCES := src/asset_store.c src/audio_mixer.c src/director_client.c
 SOURCES := src/host.c src/input_bindings.c src/rect_renderer.c $(PLATFORM_SOURCES)
 GAME_SOURCES := $(wildcard games/*/game.c)
 GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
@@ -82,7 +82,9 @@ test: $(GAME_TARGETS)
 	python3 tests/gpu_profiler.py
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/gpu_timing.c -o /tmp/gpu-timing-test
 	/tmp/gpu-timing-test
-	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js tests/player_audio.cjs tests/web_package.cjs
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/director_client.c src/director_client.c -pthread -o /tmp/director-client-test
+	/tmp/director-client-test
+	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js tests/director_server.test.mjs tests/player_audio.cjs tests/web_package.cjs
 	sh tests/service_install.sh
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/splash_runtime.c -o /tmp/splash-runtime-test

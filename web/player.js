@@ -6,6 +6,49 @@ const canvas=$("#screen"),status=$("#status");
 let runtime,audio,muted=false,paused=false,leaving=false,last=0,accumulator=0,pending=0,selectHeld=false,ready=false;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
 const assetSounds=new Map();
+let director=null;
+function directorSession(){return crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
+async function syncDirector(){
+  if(!director || director.syncing || leaving)return;
+  director.syncing=true;
+  try{
+    const response=await fetch(`${director.endpoint}/v1/sync`,{
+      method:"POST",headers:{"Content-Type":"application/json","Accept":"text/plain"},
+      body:JSON.stringify({protocol:1,game:director.game,world:director.world,session:director.session,
+        last_revision:director.revision,events:director.events})
+    });
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const acknowledged=Number(response.headers.get("X-Chirky-Ack"));
+    const revision=Number(response.headers.get("X-Chirky-Revision"));
+    const state=await response.text();
+    if(!Number.isSafeInteger(acknowledged) || !Number.isSafeInteger(revision))throw new Error("Invalid director response");
+    director.events=director.events.filter(item=>item.sequence>acknowledged);
+    if(revision>director.revision && state){director.revision=revision;director.state=state;}
+    director.lastError="";
+  }catch(error){
+    if(director && director.lastError!==error.message){director.lastError=error.message;console.warn("World director offline:",error.message);}
+  }finally{if(director)director.syncing=false;}
+}
+function onDirectorConnect(endpoint,game,world){
+  onDirectorDisconnect();
+  try{
+    const parsed=new URL(endpoint,location.href);if(parsed.protocol!=="http:")return false;
+    director={endpoint:parsed.href.replace(/\/+$/,"").replace(/\/v1\/sync$/,""),game,world,
+      session:directorSession(),events:[],nextSequence:1,revision:0,state:"",syncing:false,lastError:"",timer:0};
+    director.timer=setInterval(syncDirector,1000);syncDirector();return true;
+  }catch{return false;}
+}
+function onDirectorDisconnect(){if(director?.timer)clearInterval(director.timer);director=null;}
+function onDirectorEvent(json){
+  if(!director || director.events.length>=32)return false;
+  try{const event=JSON.parse(json);if(!event || Array.isArray(event) || typeof event!=="object")return false;
+    director.events.push({sequence:director.nextSequence++,event});syncDirector();return true;
+  }catch{return false;}
+}
+function onDirectorState(afterRevision){
+  return director && director.revision>afterRevision && director.state?
+    {revision:director.revision,text:director.state}:null;
+}
 function prepareAssetSound(handle,pointer,size,rate,channels){
   if(assetSounds.has(handle))return;
   const frames=size/(2*channels);
@@ -89,6 +132,7 @@ async function start(){
   const configs=id==="launcher"?{}:await (await checked("configs.json")).json();
   const {default:create}=await import(`./${id}.js`);
   runtime=await create({canvas,onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,
+    onDirectorConnect,onDirectorDisconnect,onDirectorEvent,onDirectorState,
     onLaunch:index=>{leaving=true;location.href=`?game=${ids[index]}`;},printErr:message=>console.warn(message)});
   await Promise.all(files.filter(file=>id==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${id}/`)).map(async file=>{
     let bytes;

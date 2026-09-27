@@ -1,7 +1,7 @@
 # Bramble Hollow
 
 A playable proof of concept for a gentle, LLM-directed woodland adventure on
-Chirky Platform API 9.
+Chirky Platform API 10.
 
 ## Controls
 
@@ -12,11 +12,14 @@ Chirky Platform API 9.
 - A: close dialogue or the world controls
 
 The game is complete without a network connection. `assets/director.conf` holds
-the defaults; `runtime/director.conf` is a small hot-reloaded control plane with
-long-, medium-, and short-term state. Run
-`node tools/bramble-director.mjs --once` from the repository root to have a
-model revise it from recent game events, or use `--watch` to keep it running.
-The process reads `OPENAI_API_KEY`; `BRAMBLE_MODEL` defaults to `gpt-6-luna`.
+its defaults. On API10 hosts it sends bounded events to the URL in `game.conf`
+and polls revisioned long-, medium-, and short-term state without blocking a
+frame. Start the standalone service with `node director/server.mjs`; it reads
+`OPENAI_API_KEY`, and `BRAMBLE_MODEL` defaults to `gpt-6-luna`. See
+[`director/README.md`](../../director/README.md) for operation and diagnostics.
+
+Older hosts without the network callbacks retain the `runtime/director.conf`
+file fallback. Networked hosts do not mix remote state with that local file.
 
 The model never controls collision, inventory arithmetic, coordinates, or C
 code. It can choose bounded weather/growth values and write story and dialogue

@@ -63,11 +63,17 @@ static void show_message(const char *message)
 
 static void log_event(const char *kind, const char *detail)
 {
+    char clean_kind[32], clean_detail[128], event[256];
+    copy_clean(clean_kind, sizeof(clean_kind), kind);
+    copy_clean(clean_detail, sizeof(clean_detail), detail);
+    int length = snprintf(event, sizeof(event),
+        "{\"tick\":%u,\"day\":%u,\"kind\":\"%s\",\"detail\":\"%s\"}",
+        bramble.tick, bramble.day, clean_kind, clean_detail);
+    if (length <= 0 || (size_t)length >= sizeof(event)) return;
     FILE *file = fopen(bramble.event_path, "ab");
-    if (!file) return;
-    fprintf(file, "{\"tick\":%u,\"day\":%u,\"kind\":\"%s\",\"detail\":\"%s\"}\n",
-            bramble.tick, bramble.day, kind, detail);
-    fclose(file);
+    if (file) { fprintf(file, "%s\n", event); fclose(file); }
+    if (bramble.director_networked && bramble_host->director_event)
+        bramble_host->director_event(bramble_host->context, event, (size_t)length);
 }
 
 static void director_defaults(struct bramble_director_state *state)
@@ -97,26 +103,23 @@ static void director_defaults(struct bramble_director_state *state)
                "Every coloured pane remembers someone who helped here.");
 }
 
-static bool load_director(void)
+static void parse_director_line(struct bramble_director_state *next,
+                                bool *version, char *line)
 {
-    FILE *file = fopen(bramble.director_path, "rb");
-    if (!file) return false;
-    struct bramble_director_state next = bramble.director;
-    bool version = false;
-    char line[512];
-    while (fgets(line, sizeof(line), file)) {
-        char *key = trim(line), *separator = strchr(key, '=');
-        if (!separator || !*key || *key == '#' || *key == ';') continue;
-        *separator = 0;
-        char *value = trim(separator + 1);
-        key = trim(key);
-        if (!strcmp(key, "version")) version = !strcmp(value, "1");
-        else if (!strcmp(key, "revision")) next.revision = strtoul(value, NULL, 10);
-        else if (!strcmp(key, "weather")) {
-            int weather = weather_value(value);
-            if (weather >= 0) next.weather = weather;
-        } else if (!strcmp(key, "growth_boost")) next.growth_boost = clampi(atoi(value), 1, 3);
-#define COPY_FIELD(name) else if (!strcmp(key, #name)) copy_clean(next.name, sizeof(next.name), value)
+    char *key = trim(line), *separator = strchr(key, '=');
+    if (!separator || !*key || *key == '#' || *key == ';') return;
+    *separator = 0;
+    char *value = trim(separator + 1);
+    key = trim(key);
+    if (!strcmp(key, "version")) *version = !strcmp(value, "1");
+    else if (!strcmp(key, "revision")) {
+        unsigned long parsed = strtoul(value, NULL, 10);
+        if (parsed <= UINT32_MAX) next->revision = (uint32_t)parsed;
+    } else if (!strcmp(key, "weather")) {
+        int weather = weather_value(value);
+        if (weather >= 0) next->weather = weather;
+    } else if (!strcmp(key, "growth_boost")) next->growth_boost = clampi(atoi(value), 1, 3);
+#define COPY_FIELD(name) else if (!strcmp(key, #name)) copy_clean(next->name, sizeof(next->name), value)
         COPY_FIELD(long_theme);
         COPY_FIELD(long_church_goal);
         COPY_FIELD(medium_event);
@@ -128,10 +131,11 @@ static bool load_director(void)
         COPY_FIELD(sheep_line);
         COPY_FIELD(nun_line);
 #undef COPY_FIELD
-    }
-    bool complete = !ferror(file) && version;
-    fclose(file);
-    if (!complete || next.revision < bramble.director.revision) return false;
+}
+
+static bool apply_director(struct bramble_director_state next, bool version)
+{
+    if (!version || next.revision < bramble.director.revision) return false;
     bool changed = next.revision > bramble.director.revision;
     bramble.director = next;
     if (changed) {
@@ -139,6 +143,41 @@ static bool load_director(void)
         bramble.growth_boost = next.growth_boost;
     }
     return changed;
+}
+
+static bool load_director_file(void)
+{
+    FILE *file = fopen(bramble.director_path, "rb");
+    if (!file) return false;
+    struct bramble_director_state next = bramble.director;
+    bool version = false;
+    char line[512];
+    while (fgets(line, sizeof(line), file)) parse_director_line(&next, &version, line);
+    bool complete = !ferror(file);
+    fclose(file);
+    return complete && apply_director(next, version);
+}
+
+static bool load_director_text(char *text, size_t size, uint32_t transport_revision)
+{
+    if (!size || size >= 4096 || text[size]) return false;
+    struct bramble_director_state next = bramble.director;
+    bool version = false;
+    char *save = NULL;
+    for (char *line = strtok_r(text, "\r\n", &save); line; line = strtok_r(NULL, "\r\n", &save))
+        parse_director_line(&next, &version, line);
+    if (next.revision != transport_revision) return false;
+    return apply_director(next, version);
+}
+
+static bool poll_director(void)
+{
+    if (!bramble.director_networked || !bramble_host->director_state) return load_director_file();
+    char text[4096] = {0};
+    uint32_t revision = 0;
+    size_t size = bramble_host->director_state(bramble_host->context,
+        bramble.director.revision, text, sizeof(text), &revision);
+    return size && load_director_text(text, size, revision);
 }
 
 static void init_world(void)
@@ -367,7 +406,7 @@ static void update_world(void)
     }
     for (int i = 0; i < BRAMBLE_TREES; i++) if (bramble.trees[i].regrow) bramble.trees[i].regrow--;
     if (director_refresh_ticks > 0 && !(bramble.tick % (unsigned)director_refresh_ticks)) {
-        if (load_director()) show_message("The village story has shifted a little.");
+        if (poll_director()) show_message("The village story has shifted a little.");
     }
 }
 
@@ -456,6 +495,10 @@ static bool read_config(const char *config)
             int weather = weather_value(value); if (weather >= 0) bramble.weather = (enum bramble_weather)weather;
         } else if (!strcmp(key, "director_refresh_seconds"))
             director_refresh_ticks = clampi(atoi(value), 1, 60) * 60;
+        else if (!strcmp(key, "director_url"))
+            snprintf(bramble.director_url, sizeof(bramble.director_url), "%s", value);
+        else if (!strcmp(key, "director_world"))
+            snprintf(bramble.director_world, sizeof(bramble.director_world), "%s", value);
     }
     bool valid = !ferror(source.stream);
     chirky_file_close(&source);
@@ -477,7 +520,9 @@ static bool game_init(const struct chirky_host_api *api, const char *config)
         !api->draw_sprite || !config) return false;
     memset(&bramble, 0, sizeof(bramble));
     bramble_host = api; input_gate = (struct chirky_input_gate){0};
+    director_refresh_ticks = 300;
     director_defaults(&bramble.director);
+    snprintf(bramble.director_world, sizeof(bramble.director_world), "bramble-hollow-main");
     bramble.day = 1; bramble.minute = 8 * 60; bramble.weather = BRAMBLE_SUN; bramble.growth_boost = 1;
     snprintf(bramble.config_dir, sizeof(bramble.config_dir), "%s", config);
     char *slash = strrchr(bramble.config_dir, '/');
@@ -485,9 +530,12 @@ static bool game_init(const struct chirky_host_api *api, const char *config)
     snprintf(bramble.director_path, sizeof(bramble.director_path), "%s/assets/director.conf", bramble.config_dir);
     snprintf(bramble.event_path, sizeof(bramble.event_path), "%s/runtime/events.log", bramble.config_dir);
     if (!read_config(config)) { bramble_host = NULL; return false; }
-    load_director();
+    load_director_file();
     snprintf(bramble.director_path, sizeof(bramble.director_path), "%s/runtime/director.conf", bramble.config_dir);
-    load_director();
+    if (bramble.director_url[0] && api->director_connect)
+        bramble.director_networked = api->director_connect(api->context, bramble.director_url,
+                                                            "bramble-hollow", bramble.director_world);
+    if (!bramble.director_networked) load_director_file();
     char path[640];
     snprintf(path, sizeof(path), "%s/assets/player.pam", bramble.config_dir);
     bramble.player_art = api->asset_request(api->context, path, CHIRKY_ASSET_IMAGE);

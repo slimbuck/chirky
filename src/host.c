@@ -7,6 +7,7 @@
 #include "trace.h"
 #include "asset_store.h"
 #include "audio_mixer.h"
+#include "director_client.h"
 #include "image_cache.h"
 #include "asset_file.h"
 #include "input_gate.h"
@@ -270,6 +271,7 @@ struct host {
     struct profile profile;
     struct trace_capture trace;
     struct asset_store *assets;
+    struct director_client *director;
     struct audio_mixer *audio;
     char audio_device[128];
     enum audio_mixer_state audio_state;
@@ -328,6 +330,27 @@ static void sound_play(void *context,chirky_asset sound)
         if(i<host->sound_pin_count)audio_mixer_play(host->audio,view.data,view.size,view.rate,view.channels);
     }
     chirky_scope(&host->api,"audio.enqueue",false);
+}
+
+static bool director_connect_api(void *context, const char *url,
+                                 const char *game, const char *world)
+{
+    struct host *host = context;
+    return host->director && director_client_connect(host->director, url, game, world);
+}
+
+static bool director_event_api(void *context, const char *json, size_t size)
+{
+    struct host *host = context;
+    return host->director && director_client_emit(host->director, json, size);
+}
+
+static size_t director_state_api(void *context, uint32_t after_revision,
+                                 char *text, size_t capacity, uint32_t *revision)
+{
+    struct host *host = context;
+    return host->director ? director_client_state(host->director, after_revision,
+                                                   text, capacity, revision) : 0;
 }
 
 static void capture_scope(void *context,const char *name,bool begin)
@@ -733,6 +756,7 @@ static void unload_game(struct host *host)
     host->sound_pin_count=0;
     host->paused=false;host->pause_option=0;
     if (host->game_api != NULL) host->game_api->shutdown();
+    director_client_disconnect(host->director);
     host->game_api = NULL;
     host->active_game = NULL;
     if (host->game_library != NULL) dlclose(host->game_library);
@@ -1934,6 +1958,7 @@ static void cleanup(struct host *host)
     free(host->trace.spans);host->trace.spans=NULL;
     splash_free(&host->launcher_art);
     unload_game(host);
+    director_client_destroy(host->director);host->director=NULL;
     audio_mixer_stop(host->audio);host->audio=NULL;
     splash_free(&host->launcher_art);
     image_cache_clear(&host->images,&host->renderer);
@@ -1996,9 +2021,12 @@ int main(void)
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
         .draw_text=draw_text,.button_label=button_label,.asset_request=request_asset,
         .asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=draw_sprite,.sound_play=sound_play};
+        .draw_sprite=draw_sprite,.sound_play=sound_play,
+        .director_connect=director_connect_api,.director_event=director_event_api,
+        .director_state=director_state_api};
     host.assets=asset_store_create();
-    if(!host.assets){fprintf(stderr,"Could not start asset loader\n");cleanup(&host);return EXIT_FAILURE;}
+    host.director=director_client_create();
+    if(!host.assets || !host.director){fprintf(stderr,"Could not start host services\n");cleanup(&host);return EXIT_FAILURE;}
     update_safe_area(&host);
     splash_load_file_api(&host.launcher_art,&host.api,"assets/launcher/splash.ppm");
     open_inputs(&host.inputs);

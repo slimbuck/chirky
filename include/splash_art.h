@@ -6,7 +6,7 @@
 #include <string.h>
 #include <limits.h>
 
-/* ABI9 optionally uses decoded IMAGE assets; zero handles are invalid.
+/* API10 optionally uses decoded IMAGE assets; zero handles are invalid.
    Legacy callers retain the bounded P6/rectangle path, byte for byte. */
 struct splash_art {
     unsigned char *pixels;

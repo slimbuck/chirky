@@ -1,7 +1,7 @@
-# Platform API 9
+# Platform API 10
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 9`. Native games export
+game report `CHIRKY_ABI_VERSION == 10`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a game-specific Emscripten module.
 
@@ -93,7 +93,33 @@ reference counts. Handles encode a generation so a released slot cannot silently
 become a different asset under its old handle.
 
 `asset_store_retain` is an internal host/store operation for acquiring another
-reference, including native sound pins. It is not a game-facing API9 callback.
+reference, including native sound pins. It is not a game-facing API10 callback.
+
+## World director transport
+
+API10 adds an optional, eventually-consistent transport for bounded external
+world direction. Games call `director_connect` with an HTTP base URL, game id,
+and world id. A successful return means the host accepted the configuration,
+not that the service is currently online. The native host performs network I/O
+on a background thread; the browser host uses asynchronous `fetch`. Neither may
+block a game update or render call.
+
+`director_event` queues one bounded UTF-8 JSON object. It returns false when the
+transport is unavailable or its queue is full; games must remain playable and
+may keep a local diagnostic log. The host adds a per-process session and
+monotonic sequence number. `/v1/sync` acknowledges those numbers so retries are
+idempotent.
+
+`director_state` copies an opaque NUL-terminated UTF-8 state document only when
+the host has a complete revision newer than `after_revision`. It returns the
+byte count excluding the terminator and writes the matching revision. Zero means
+there is no newer state. Games validate the document and retain their previous
+state if parsing fails.
+
+The host owns HTTP, retries, queue bounds, and service lifecycle. The standalone
+director owns persistence and model credentials. Games never call a model API
+or contain an API key. Loss of either the network or director must not stop the
+deterministic simulation.
 
 ## Native loading phases
 
@@ -192,5 +218,5 @@ bytes and `decodeAudioData` instead.
 Page teardown stops WebAudio sources before calling `web_destroy` for an
 initialized game. The C teardown releases game assets, textures, the asset store,
 and WebGL resources; JavaScript closes the audio context. Games use the same
-API9 handles and callbacks in both hosts; native mixer/store lifecycle functions
+API10 handles and callbacks in both hosts; native mixer/store lifecycle functions
 and the JavaScript bridge remain platform internals.

@@ -196,7 +196,7 @@ static void sound(void *context, chirky_asset handle)
 static void legacy_sound(void *context, const char *device, const char *path)
 {
     (void)context; (void)device; (void)path;
-    assert(!"Game fell back to path-based sound with ABI9 callbacks present");
+    assert(!"Game fell back to path-based sound with API10 callbacks present");
 }
 
 static void scope(void *context, const char *name, bool begin)

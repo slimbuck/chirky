@@ -4,7 +4,7 @@ See [the first live Pi measurements](performance-live-pi3.md) for deployment
 validation, gameplay costs, spike examples and measurement limitations.
 
 Build the host and all games together (`make`): the profiling callback arrived
-in ABI8; the current asset/sprite API uses ABI9. Rebuild browser modules with `make web` too.
+in ABI8; the current asset/sprite and director API uses ABI10. Rebuild browser modules with `make web` too.
 An older running host does not support the capture command.
 
 On the Pi, from its checkout, start a capture while playing normally:
