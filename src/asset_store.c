@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "asset_store.h"
+#include "asset_platform.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -13,9 +14,6 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#ifndef __EMSCRIPTEN__
-#include <pthread.h>
-#endif
 
 #define ASSET_PATH_MAX 4096u
 #define ASSET_GENERATION_MAX (UINT32_MAX >> 10)
@@ -33,11 +31,7 @@ struct asset_slot {
 };
 
 struct asset_store {
-#ifndef __EMSCRIPTEN__
-    pthread_t worker;
-    pthread_mutex_t mutex;
-    pthread_cond_t wake;
-#endif
+    struct asset_platform *platform;
     struct asset_slot slots[ASSET_STORE_SLOTS];
     uint64_t epoch;
     bool stop, scan_pending, scanning, prefetch_failed, started;
@@ -61,29 +55,17 @@ struct asset_result {
 
 static void lock_store(struct asset_store *s)
 {
-#ifndef __EMSCRIPTEN__
-    pthread_mutex_lock(&s->mutex);
-#else
-    (void)s;
-#endif
+    asset_platform_lock(s->platform);
 }
 
 static void unlock_store(struct asset_store *s)
 {
-#ifndef __EMSCRIPTEN__
-    pthread_mutex_unlock(&s->mutex);
-#else
-    (void)s;
-#endif
+    asset_platform_unlock(s->platform);
 }
 
 static void wake_store(struct asset_store *s)
 {
-#ifndef __EMSCRIPTEN__
-    pthread_cond_signal(&s->wake);
-#else
-    (void)s;
-#endif
+    asset_platform_signal(s->platform);
 }
 
 static double milliseconds(bool cpu)
@@ -477,14 +459,13 @@ static void run_job(struct asset_store *s, struct asset_job *job)
     unlock_store(s);
 }
 
-#ifndef __EMSCRIPTEN__
 static void *asset_worker(void *arg)
 {
     struct asset_store *s = arg;
     lock_store(s);
     while (!s->stop) {
         struct asset_job job;
-        if (!take_job(s, &job)) { pthread_cond_wait(&s->wake, &s->mutex); continue; }
+        if (!take_job(s, &job)) { asset_platform_wait(s->platform); continue; }
         unlock_store(s);
         run_job(s, &job);
         lock_store(s);
@@ -492,25 +473,21 @@ static void *asset_worker(void *arg)
     unlock_store(s);
     return NULL;
 }
-#else
+
 static void drain_jobs(struct asset_store *s)
 {
     struct asset_job job;
     while (take_job(s, &job)) run_job(s, &job);
 }
-#endif
 
 struct asset_store *asset_store_create(void)
 {
     struct asset_store *s = calloc(1, sizeof(*s));
     if (!s) return NULL;
-#ifndef __EMSCRIPTEN__
-    if (pthread_mutex_init(&s->mutex, NULL)) { free(s); return NULL; }
-    if (pthread_cond_init(&s->wake, NULL)) { pthread_mutex_destroy(&s->mutex); free(s); return NULL; }
-    if (pthread_create(&s->worker, NULL, asset_worker, s)) {
-        pthread_cond_destroy(&s->wake); pthread_mutex_destroy(&s->mutex); free(s); return NULL;
+    s->platform=asset_platform_create();
+    if(!s->platform || !asset_platform_start(s->platform,asset_worker,s)) {
+        asset_platform_destroy(s->platform);free(s);return NULL;
     }
-#endif
     return s;
 }
 
@@ -542,11 +519,8 @@ void asset_store_destroy(struct asset_store *s)
     clear_locked(s);
     wake_store(s);
     unlock_store(s);
-#ifndef __EMSCRIPTEN__
-    pthread_join(s->worker, NULL);
-    pthread_cond_destroy(&s->wake);
-    pthread_mutex_destroy(&s->mutex);
-#endif
+    asset_platform_join(s->platform);
+    asset_platform_destroy(s->platform);
     free(s);
 }
 
@@ -557,9 +531,7 @@ chirky_asset asset_store_request(struct asset_store *s, const char *path, enum c
     lock_store(s);
     chirky_asset handle = request_locked(s, path, type, false);
     unlock_store(s);
-#ifdef __EMSCRIPTEN__
-    drain_jobs(s);
-#endif
+    if(!asset_platform_async(s->platform))drain_jobs(s);
     return handle;
 }
 
@@ -621,9 +593,7 @@ bool asset_store_prefetch(struct asset_store *s, const char *directory)
         else s->prefetch_failed = true;
     }
     unlock_store(s);
-#ifdef __EMSCRIPTEN__
-    drain_jobs(s);
-#endif
+    if(!asset_platform_async(s->platform))drain_jobs(s);
     return ok;
 }
 

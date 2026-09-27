@@ -1,14 +1,11 @@
 #ifndef CHIRKY_H
 #define CHIRKY_H
 
-#ifndef __EMSCRIPTEN__
-#include <linux/input.h>
-#endif
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 10
+#define CHIRKY_ABI_VERSION 11
 
 typedef uint32_t chirky_asset;
 enum chirky_asset_type { CHIRKY_ASSET_BLOB, CHIRKY_ASSET_IMAGE, CHIRKY_ASSET_SOUND };
@@ -38,12 +35,8 @@ enum chirky_button {
 };
 
 struct chirky_input {
-    /* Raw keyboard state is reserved for host setup/recovery. Games use buttons. */
-    bool keys[0x300]; /* Linux KEY_MAX + 1; keep the native ABI layout. */
-    bool pressed[0x300];
     bool buttons[CHIRKY_BUTTON_COUNT];
     bool button_pressed[CHIRKY_BUTTON_COUNT];
-    bool controller_pressed;
 };
 
 struct chirky_host_api {

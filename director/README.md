@@ -15,7 +15,16 @@ node director/server.mjs
 It listens on `0.0.0.0:3040` by default. Bramble's checked-in configuration
 uses `http://192.168.137.1:3040`, the Windows side of the console's private
 network. Set `DIRECTOR_HOST`, `DIRECTOR_PORT`, `DIRECTOR_INTERVAL_MS`, or
-`BRAMBLE_MODEL` to override the defaults. The first model is `gpt-6-luna`.
+`BRAMBLE_MODEL` to override the defaults. The first model is `gpt-6-luna` and
+the default generation interval is 20 seconds. Events received during the
+cooldown are scheduled automatically; they do not need a later player action
+to trigger generation.
+
+The persisted world includes a short revision history. It is supplied to the
+model so immediate dialogue changes promptly without making long-term story
+goals lurch on every interaction. A weather guard changes conditions after at
+most three generated revisions with the same weather. A player's weather
+choice in the world controls is applied to shared director state immediately.
 
 Useful read-only checks:
 

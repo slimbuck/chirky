@@ -1,6 +1,6 @@
 /* Exercise host input and layout without DRM, a controller, or the live Pi. */
 #define main unused_host_main
-#include "../src/host.c"
+#include "../src/platform/linux/host.c"
 #undef main
 #include <assert.h>
 
@@ -116,7 +116,7 @@ static void check_pause_menu(const char *output_dir)
     strcpy(h.games[0].id,"phosphor-run");strcpy(h.games[0].name,"Phosphor Run");h.game_count=1;
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown,.render=fake_pause_render};
     pause_render_host=&h;pause_renders=0;
-    h.active_game=&h.games[0];h.game_api=&fake;
+    h.active_game=&h.games[0];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
     unsigned int saved_updates=game_updates;
     event(&h,1,EV_KEY,KEY_ESC,1);update_host(&h);
     assert(h.paused && h.active_game && current_screen(&h)==SCREEN_PAUSE);
@@ -165,7 +165,7 @@ static void check_launcher_menu(void)
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
     h.inputs.count=2;h.inputs.devices[0].controller=true;
     h.game_count=3;
-    strcpy(h.games[0].id,"hardware-test");strcpy(h.games[0].name,"Hardware Test");
+    strcpy(h.games[0].id,"hardware-test");strcpy(h.games[0].name,"Hardware Test");h.games[0].diagnostic=true;
     strcpy(h.games[1].id,"rosey-chop");strcpy(h.games[1].name,"Rosey Chop");
     strcpy(h.games[2].id,"phosphor-run");strcpy(h.games[2].name,"Phosphor Run");
     qsort(h.games,h.game_count,sizeof(h.games[0]),compare_games);
@@ -176,7 +176,7 @@ static void check_launcher_menu(void)
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.settings_option==2);
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
-    h.active_game=&h.games[2];h.game_api=&fake;
+    h.active_game=&h.games[2];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
     tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_SETTINGS && h.settings_option==2);
     tap(&h,1,KEY_C);assert(current_screen(&h)==SCREEN_LAUNCHER && h.selected_game==2);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
@@ -407,7 +407,7 @@ int main(int argc,char **argv)
     /* Keyboard and controller states are independent; quick taps survive polling. */
     event(&host,1,EV_KEY,KEY_R,1);event(&host,1,EV_KEY,KEY_R,0);update_controller_buttons(&host);
     assert(host.inputs.state.button_pressed[CHIRKY_BUTTON_Y]);
-    event(&host,0,EV_KEY,KEY_ESC,1);assert(!host.inputs.state.pressed[KEY_ESC]);event(&host,0,EV_KEY,KEY_ESC,0);
+    event(&host,0,EV_KEY,KEY_ESC,1);assert(!host.inputs.pressed[KEY_ESC]);event(&host,0,EV_KEY,KEY_ESC,0);
     update_host(&host);
     tap(&host,1,KEY_X);update_host(&host);tap(&host,1,KEY_Q);tap(&host,1,KEY_F1);
     assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_LEFT].code==KEY_A);
@@ -464,12 +464,12 @@ int main(int argc,char **argv)
     assert(!moved.safe_offset_x && !moved.safe_offset_y);
     /* Gameplay chord is Start+Select, not ordinary jump+dash. */
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
-    host.active_game=&host.games[0];host.game_api=&fake;
+    host.active_game=&host.games[0];host.runtime=(struct chirky_runtime){.game=&fake,.active=true};
     event(&host,0,EV_KEY,BTN_SOUTH,1);event(&host,0,EV_KEY,BTN_EAST,1);
     for(int i=0;i<65;i++) update_host(&host);
     assert(host.active_game && game_updates==65);
     event(&host,0,EV_KEY,BTN_SOUTH,0);event(&host,0,EV_KEY,BTN_EAST,0);
-    host.active_game=NULL;host.game_api=NULL;
+    host.active_game=NULL;host.runtime=(struct chirky_runtime){0};
     /* Default calibration with the actual shipped menu labels and artwork. */
     host.safe_x=16;host.safe_y=12;host.safe_offset_x=host.safe_offset_y=0;
     update_safe_area(&host);host.game_count=2;host.selected_game=0;

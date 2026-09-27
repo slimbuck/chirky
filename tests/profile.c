@@ -1,4 +1,4 @@
-#include "../src/profile.h"
+#include "../src/platform/linux/profile.h"
 #include <assert.h>
 #include <stdio.h>
 static void job(struct profile_shared *s,uint64_t begin,uint64_t end,uint64_t pid)

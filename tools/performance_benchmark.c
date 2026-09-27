@@ -2,13 +2,13 @@
    stops/restores the normal host and captures an isolated VC4 kernel trace.
    Custom: OUTPUT MODE LOOPS SHADER LAYERS SCENE [FRAMES [legacy|assets [GAME]]]
    GAME defaults to phosphor-run; rosey-chop is also supported. */
-#include "../src/audio_mixer.h"
+#include "../src/platform/linux/audio_mixer.h"
 /* Host activation normally starts audio even with a quiet sound callback.
    Keep the benchmark free of audio devices and mixer CPU in either mode. */
 static struct audio_mixer *benchmark_audio_start(const char *device) {(void)device;return NULL;}
 #define audio_mixer_start benchmark_audio_start
 #define main unused_host_main
-#include "../src/host.c"
+#include "../src/platform/linux/host.c"
 #undef main
 #undef audio_mixer_start
 #include "../src/rect_renderer.c"
@@ -142,10 +142,10 @@ static bool freeze_gameplay(void)
 {
     struct chirky_input input={0};
     /* Two neutral updates also release a gate that was already blocked. */
-    h.game_api->update(&input);h.game_api->update(&input);
+    chirky_runtime_update(&h.runtime,&input);chirky_runtime_update(&h.runtime,&input);
     input.buttons[CHIRKY_BUTTON_B]=input.button_pressed[CHIRKY_BUTTON_B]=true;
-    h.game_api->update(&input);memset(&input,0,sizeof(input));
-    h.game_api->update(&input);h.game_api->update(&input);
+    chirky_runtime_update(&h.runtime,&input);memset(&input,0,sizeof(input));
+    chirky_runtime_update(&h.runtime,&input);chirky_runtime_update(&h.runtime,&input);
     /* Both module enums use TITLE=0, PLAY=1; garden starts with its phase.
        Copy the native enum representation without aliasing it through int*. */
     const char *name=!strcmp(benchmark_game,"rosey-chop")?"garden":"phase";

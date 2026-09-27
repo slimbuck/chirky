@@ -11,7 +11,7 @@ struct frame_timing {
     uint64_t stamp_us,missed_total;
     bool have_flip;
 };
-/* DRM sequence numbers count display refreshes, not CPU loop iterations. */
+/* Presentation sequence numbers count display refreshes, not CPU loop iterations. */
 static inline void frame_timing_present(struct frame_timing *t,uint32_t sequence,uint64_t stamp_us)
 {
     if (t->have_flip && stamp_us>t->stamp_us) {

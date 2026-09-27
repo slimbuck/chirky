@@ -1,7 +1,9 @@
 "use strict";
 const fs=require("fs"),path=require("path");
 const ROOT=path.resolve(__dirname,"..");
-const games=["phosphor-run","rosey-chop","bramble-hollow","hardware-test"];
+const {gameCatalog}=require("./game-catalog");
+const catalog=gameCatalog(ROOT);
+const games=catalog.games.map(game=>game.id);
 function assets(root=ROOT) {
   const files=["assets/launcher/splash.ppm"];
   function walk(relative) {
@@ -18,7 +20,7 @@ function configs(root=ROOT,files=assets(root)) {
   return Object.fromEntries(files.filter(file=>file.endsWith(".conf"))
     .map(file=>[file,fs.readFileSync(path.join(root,file),"utf8")]));
 }
-module.exports={assets,configs,games,ROOT};
+module.exports={assets,catalog,configs,games,ROOT};
 if(require.main===module) {
   const destination=path.join(ROOT,"build/web");fs.mkdirSync(destination,{recursive:true});
   for(const name of ["index.html","player.js","style.css"])fs.copyFileSync(path.join(ROOT,"web",name),path.join(destination,name));
@@ -29,10 +31,11 @@ if(require.main===module) {
   }
   fs.writeFileSync(path.join(destination,"assets.json"),JSON.stringify(files));
   fs.writeFileSync(path.join(destination,"configs.json"),JSON.stringify(configs(ROOT,files)));
+  fs.writeFileSync(path.join(destination,"catalog.json"),JSON.stringify(catalog,null,2)+"\n");
   const {execFileSync}=require("node:child_process");
   const {hash}=require("./web-package.cjs");
   const git=(...args)=>execFileSync("git",args,{cwd:ROOT,encoding:"utf8"}).trim();
-  const publicFiles=["index.html","player.js","style.css","assets.json","configs.json",
+  const publicFiles=["index.html","player.js","style.css","assets.json","configs.json","catalog.json",
     ...["launcher",...games].flatMap(id=>[id+".js",id+".wasm"]),...files.map(file=>"runtime/"+file)];
   const build={version:1,sourceCommit:git("rev-parse","HEAD"),
     sourceDirty:!!git("status","--porcelain","--untracked-files=normal"),

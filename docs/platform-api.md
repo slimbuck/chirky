@@ -1,7 +1,7 @@
-# Platform API 10
+# Platform API 11
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 10`. Native games export
+game report `CHIRKY_ABI_VERSION == 11`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a game-specific Emscripten module.
 
@@ -18,6 +18,8 @@ rectangle/text drawing, button labels, an optional profiling callback, and the
 asset operations below. Pass `context` back unchanged. Coordinates use the
 logical playable viewport; the host applies its physical offset and clipping.
 Games consume logical buttons and button edges from `struct chirky_input`.
+Raw keyboard and controller-device state belongs to the platform host and is
+not exposed through the portable ABI.
 
 ## Rendering contract
 
@@ -93,11 +95,11 @@ reference counts. Handles encode a generation so a released slot cannot silently
 become a different asset under its old handle.
 
 `asset_store_retain` is an internal host/store operation for acquiring another
-reference, including native sound pins. It is not a game-facing API10 callback.
+reference, including native sound pins. It is not a game-facing API11 callback.
 
 ## World director transport
 
-API10 adds an optional, eventually-consistent transport for bounded external
+API11 includes the optional, eventually-consistent transport for bounded external
 world direction. Games call `director_connect` with an HTTP base URL, game id,
 and world id. A successful return means the host accepted the configuration,
 not that the service is currently online. The native host performs network I/O
@@ -218,5 +220,5 @@ bytes and `decodeAudioData` instead.
 Page teardown stops WebAudio sources before calling `web_destroy` for an
 initialized game. The C teardown releases game assets, textures, the asset store,
 and WebGL resources; JavaScript closes the audio context. Games use the same
-API10 handles and callbacks in both hosts; native mixer/store lifecycle functions
+API11 handles and callbacks in both hosts; native mixer/store lifecycle functions
 and the JavaScript bridge remain platform internals.

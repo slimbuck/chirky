@@ -1,7 +1,7 @@
 "use strict";
 const {test}=require("node:test"),assert=require("node:assert/strict");
 const {defaults,parse,serialize,validate}=require("./launcher");
-const games=[{id:"hardware-test",name:"Hardware Test"},{id:"rosey-chop",name:"Rosey Chop"},{id:"phosphor-run",name:"Phosphor Run"}];
+const games=[{id:"hardware-test",name:"Hardware Test",role:"diagnostic"},{id:"rosey-chop",name:"Rosey Chop",role:"game"},{id:"phosphor-run",name:"Phosphor Run",role:"game"}];
 test("shared launcher roundtrips reordered, renamed, and hidden entries",()=>{
   const items=defaults(games);[items[0],items[1]]=[items[1],items[0]];items[0].label="Garden";items[1].visible=false;
   assert.deepEqual(parse(serialize(items,games),games),items);

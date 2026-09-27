@@ -1,6 +1,7 @@
 #ifndef INPUT_BINDINGS_H
 #define INPUT_BINDINGS_H
 #include "chirky.h"
+#include <linux/input.h>
 
 enum binding_kind { BINDING_NONE, BINDING_KEY, BINDING_ABS };
 struct controller_binding { enum binding_kind kind; unsigned int code; int direction; };

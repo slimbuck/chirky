@@ -75,10 +75,3 @@ test('voice bound, pause and mute release sources so sounds can play again', () 
   created[9].onended();
   assert.equal(run('sources.size'), 1);
 });
-
-test('browser launcher catalog includes Bramble Hollow', () => {
-  const { run } = player();
-  assert.equal(run('ids.length'), 4);
-  assert.equal(run('ids[0]'), 'bramble-hollow');
-  assert.equal(run('titles[ids[0]]'), 'Bramble Hollow');
-});

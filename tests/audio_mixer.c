@@ -15,7 +15,7 @@ static int test_dlclose(void *);
 #define dlopen test_dlopen
 #define dlsym test_dlsym
 #define dlclose test_dlclose
-#include "../src/audio_mixer.c"
+#include "../src/platform/linux/audio_mixer.c"
 #undef dlopen
 #undef dlsym
 #undef dlclose

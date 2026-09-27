@@ -1,7 +1,7 @@
 # Bramble Hollow
 
 A playable proof of concept for a gentle, LLM-directed woodland adventure on
-Chirky Platform API 10.
+Chirky Platform API 11.
 
 ## Controls
 
@@ -12,7 +12,7 @@ Chirky Platform API 10.
 - A: close dialogue or the world controls
 
 The game is complete without a network connection. `assets/director.conf` holds
-its defaults. On API10 hosts it sends bounded events to the URL in `game.conf`
+its defaults. On API11 hosts it sends bounded events to the URL in `game.conf`
 and polls revisioned long-, medium-, and short-term state without blocking a
 frame. Start the standalone service with `node director/server.mjs`; it reads
 `OPENAI_API_KEY`, and `BRAMBLE_MODEL` defaults to `gpt-6-luna`. See

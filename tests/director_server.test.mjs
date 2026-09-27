@@ -7,6 +7,11 @@ import {createDirectorServer, openAIGenerator, parseState} from "../director/ser
 
 const defaultsPath = path.resolve("games/bramble-hollow/assets/director.conf");
 
+test("director state preserves safe conversational punctuation", () => {
+  const parsed = parseState("revision=1\ncat_line=Maple's buns, warm today!\n");
+  assert.equal(parsed.state.cat_line, "Maple's buns, warm today!");
+});
+
 test("OpenAI generator selects the structured block from a multi-item response", async () => {
   const expected = {...parseState(fs.readFileSync(defaultsPath, "utf8")).state,
     medium_event: "A lantern picnic is beginning beside the bridge."};
@@ -22,6 +27,28 @@ test("OpenAI generator selects the structured block from a multi-item response",
   };
   const generate = openAIGenerator({apiKey: "test-key", fetchImpl});
   assert.deepEqual(await generate({state: expected, events: []}), expected);
+});
+
+test("OpenAI generator retries static or incomplete event responses", async () => {
+  const current = parseState(fs.readFileSync(defaultsPath, "utf8")).state;
+  const corrected = {...current,
+    short_focus: "Bring Maple a flower for her market table.",
+    cat_line: "A flower would make my market table especially cheerful.",
+    sheep_line: "I read that market flowers once inspired the window makers."};
+  let calls = 0;
+  const fetchImpl = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    if (++calls === 2) {
+      const user = JSON.parse(request.input[1].content[0].text);
+      assert.match(user.retry_instruction, /short_focus/);
+    }
+    return new Response(JSON.stringify({status: "completed", output: [
+      {type: "message", content: [{type: "output_text", text: JSON.stringify(calls === 1 ? current : corrected)}]}
+    ]}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  const generate = openAIGenerator({apiKey: "test-key", fetchImpl});
+  assert.deepEqual(await generate({state: current, events: [{kind: "talk", detail: "Maple"}]}), corrected);
+  assert.equal(calls, 2);
 });
 
 test("director sync deduplicates events and publishes generated state", async t => {
@@ -67,6 +94,61 @@ test("director sync deduplicates events and publishes generated state", async t 
   assert.equal(response.status, 200);
   assert.equal((await response.json()).revision, 3);
   assert.equal(calls, 2);
+});
+
+test("director schedules cooldown events and supplies recent state history", async t => {
+  const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chirky-director-schedule-"));
+  t.after(() => fs.rmSync(dataDirectory, {recursive: true, force: true}));
+  const calls = [];
+  const generator = async request => {
+    calls.push(structuredClone(request));
+    return {...request.state,
+      short_focus: `A fresh village moment number ${calls.length}.`,
+      zebra_line: `Zara noticed village moment ${calls.length}.`,
+      turtle_line: `Moss noticed village moment ${calls.length}.`};
+  };
+  const app = createDirectorServer({dataDirectory, defaultsPath, generator, generationIntervalMs: 40});
+  const address = await app.listen(0, "127.0.0.1");
+  t.after(() => app.close());
+  const base = `http://127.0.0.1:${address.port}`;
+  const send = sequence => fetch(`${base}/v1/sync`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({protocol: 1, game: "bramble-hollow", world: "scheduled-world",
+      session: "schedule-test", last_revision: 0,
+      events: [{sequence, event: {tick: sequence, day: 1, kind: "talk", detail: sequence === 1 ? "Maple" : "Moss"}}]})});
+  assert.equal((await send(1)).status, 200);
+  for (let tries = 0; tries < 100 && calls.length < 1; tries++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(calls.length, 1);
+  assert.equal((await send(2)).status, 200);
+  for (let tries = 0; tries < 100 && calls.length < 2; tries++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1].events.map(event => event.detail), ["Moss"]);
+  assert.equal(calls[1].history.length, 1);
+  const status = await (await fetch(`${base}/v1/worlds/scheduled-world`)).json();
+  assert.equal(status.pending_events, 0);
+  assert.equal(status.recent_revisions, 2);
+});
+
+test("weather controls publish immediately and repeated generated weather advances", async t => {
+  const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chirky-director-weather-"));
+  t.after(() => fs.rmSync(dataDirectory, {recursive: true, force: true}));
+  const generator = async ({state}) => ({...state});
+  const app = createDirectorServer({dataDirectory, defaultsPath, generator, generationIntervalMs: 0});
+  const address = await app.listen(0, "127.0.0.1");
+  t.after(() => app.close());
+  const base = `http://127.0.0.1:${address.port}`;
+  const response = await fetch(`${base}/v1/sync`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({protocol: 1, game: "bramble-hollow", world: "weather-world",
+      session: "weather-test", last_revision: 0,
+      events: [{sequence: 1, event: {tick: 1, day: 1, kind: "world_control", detail: "mist"}}]})});
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /weather=mist/);
+  for (let tries = 0; tries < 100 && app.getWorld("weather-world").revision < 3; tries++)
+    await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(app.getWorld("weather-world").revision, 3);
+  await app.generateWorld("weather-world", true);
+  await app.generateWorld("weather-world", true);
+  assert.equal(app.getWorld("weather-world").state.weather, "sun");
+  assert.equal(app.getWorld("weather-world").weather_revisions, 1);
 });
 
 test("director rejects malformed and out-of-sequence events", async t => {

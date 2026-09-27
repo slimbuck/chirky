@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
-#include "../src/director_client.h"
+#include "../src/platform/linux/director_client.h"
 #include <arpa/inet.h>
 #include <assert.h>
 #include <pthread.h>

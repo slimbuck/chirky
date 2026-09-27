@@ -15,7 +15,7 @@ function showPage(route) {
   if(route==="games")route="edit";
   if(route.startsWith("games/"))route="edit/"+route.slice(6);
   const id=route.startsWith("edit/")?route.slice(5):"";
-  const game=games.find(game=>game.id===id && game.id!=="hardware-test");
+  const game=games.find(game=>game.id===id && game.role!=="diagnostic");
   const page=game?"game":route==="edit" || id?"edit":route==="launcher"?"launcher":"console";
   if(game) {
     $("#gameTitle").textContent=game.name;$("#gameBreadcrumb").textContent=game.name;
@@ -115,7 +115,7 @@ function renderGames() {
   const signature=JSON.stringify([games,activeGame]);
   if(signature===renderedGames)return;
   renderedGames=signature;
-  const playable=games.filter(game=>game.id!=="hardware-test");
+  const playable=games.filter(game=>game.role!=="diagnostic");
   $("#editGames").innerHTML=playable.map(game=>`<a class="game-card game-link" href="#edit/${game.id}">${game.artwork?`<img class="game-cover" src="${escapeHtml(game.artwork)}" alt="" width="288" height="216" loading="lazy">`:""}<h3>${escapeHtml(game.name)}</h3><p>${escapeHtml(game.description || "")}</p><span class="text-link">Open game editor →</span></a>`).join("");
 
 }

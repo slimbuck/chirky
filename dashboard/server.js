@@ -5,7 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawn } = require("child_process");
-const {assets: browserAssets, configs: browserConfigs, games: browserGames} = require("../tools/web-assets");
+const {assets: browserAssets, catalog: browserCatalog, configs: browserConfigs,
+  games: browserGames} = require("../tools/web-assets");
 
 const DASHBOARD = __dirname;
 const ROOT = path.resolve(DASHBOARD, "..");
@@ -25,7 +26,7 @@ const browserPlayerFiles = new Set(["launcher", ...browserGames]
   .flatMap(id => [`${id}.js`, `${id}.wasm`]));
 
 function isBrowserPlayerFile(relative) {
-  return ["index.html", "player.js", "style.css"].includes(relative) ||
+  return ["index.html", "player.js", "style.css", "catalog.json"].includes(relative) ||
     browserPlayerFiles.has(relative);
 }
 
@@ -120,6 +121,7 @@ function listGames() {
         : [];
       const editors = loadEditors(entry.name).map(({ id, name, type, catalogKind, catalogId }) => ({ id, name, type, catalogKind, catalogId }));
       return { id: values.id || entry.name, name: values.name || entry.name,
+        role: values.role || "game",
         description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors };
     }).filter(Boolean);
 }
@@ -333,6 +335,7 @@ async function handle(request, response) {
       const relative=decodeURIComponent(url.pathname.slice(6)) || "index.html";
       if(relative==="assets.json")return json(response,200,browserAssets());
       if(relative==="configs.json")return json(response,200,browserConfigs());
+      if(relative==="catalog.json")return json(response,200,browserCatalog);
       if(relative.startsWith("runtime/")) {
         const asset=relative.slice(8);
         if(!browserAssets().includes(asset))return json(response,404,{error:"not found"});

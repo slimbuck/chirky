@@ -1,6 +1,6 @@
 "use strict";
 function defaults(games) {
-  return [...games.filter(g=>g.id!=="hardware-test").sort((a,b)=>a.name.localeCompare(b.name)).map(g=>({section:"root",id:g.id,label:g.name.slice(0,24),visible:true})),
+  return [...games.filter(g=>g.role!=="diagnostic").sort((a,b)=>a.name.localeCompare(b.name)).map(g=>({section:"root",id:g.id,label:g.name.slice(0,24),visible:true})),
     {section:"root",id:"settings",label:"Settings",visible:true},{section:"root",id:"power",label:"Power Down",visible:true},
     {section:"settings",id:"input",label:"Input Settings",visible:true},{section:"settings",id:"display",label:"Display Area",visible:true},{section:"settings",id:"hardware",label:"Hardware Test",visible:true}];
 }
@@ -11,7 +11,7 @@ function validate(items,games) {
     const key=`${item.section}/${item.id}`;
     if(!keys.delete(key))throw new Error("Unknown or duplicate launcher item.");
     if(typeof item.visible!=="boolean" || typeof item.label!=="string" || !/^[A-Za-z0-9 .?/-]{1,24}$/.test(item.label) || !item.label.trim())
-      throw new Error("Use a name of 1–24 letters, numbers, spaces, dots, slashes, hyphens, or question marks.");
+      throw new Error("Use a name of 1â€“24 letters, numbers, spaces, dots, slashes, hyphens, or question marks.");
   }
   for(const section of ["root","settings"])if(!items.some(e=>e.section===section && e.visible))throw new Error("Keep at least one visible item in each menu.");
   return items.map(({section,id,label,visible})=>({section,id,label,visible}));

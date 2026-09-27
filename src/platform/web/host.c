@@ -5,6 +5,8 @@
 #include "rect_renderer.h"
 #include "asset_store.h"
 #include "image_cache.h"
+#include "runtime.h"
+#include "viewport.h"
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <GLES2/gl2.h>
@@ -27,7 +29,7 @@ EM_JS(void, launcher_name, (int index,char *text,int capacity), {
 });
 #else
 extern const struct chirky_game_api *chirky_game_entry(void);
-static const struct chirky_game_api *game;
+static struct chirky_runtime runtime;
 #endif
 EM_JS(void, sound, (const char *path), { Module.onSound(UTF8ToString(path)); });
 EM_JS(void, prepare_sound, (unsigned handle,const void *data,unsigned size,unsigned rate,unsigned channels), {
@@ -69,7 +71,8 @@ static void release_asset(void *unused,chirky_asset asset)
 static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
     int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
 {
-    (void)unused;image_cache_draw(&images,&renderer,&api,image,x,y,w,h,sx,sy,sw,sh,r,g,b,a,flip,16,12);
+    (void)unused;image_cache_draw(&images,&renderer,&api,image,x,y,w,h,sx,sy,sw,sh,r,g,b,a,flip,
+        CHIRKY_SAFE_X,CHIRKY_SAFE_Y);
 }
 static void sound_play(void *unused,chirky_asset asset)
 { (void)unused;play_asset_sound(asset); }
@@ -90,7 +93,7 @@ static void fill(void *unused,int x,int y,int w,int h,unsigned char r,unsigned c
     if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
     if(x+w>api.screen_width)w=api.screen_width-x;
     if(y+h>api.screen_height)h=api.screen_height-y;
-    if(w>0 && h>0)rect_renderer_rect(&renderer,x+16,y+12,w,h,r,g,b);
+    if(w>0 && h>0)rect_renderer_rect(&renderer,x+CHIRKY_SAFE_X,y+CHIRKY_SAFE_Y,w,h,r,g,b);
 }
 static void text(void *unused,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
@@ -114,9 +117,10 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
     attrs.alpha=0;attrs.depth=0;attrs.stencil=0;attrs.antialias=0;
     context=emscripten_webgl_create_context("#screen",&attrs);
     if(context<=0 || emscripten_webgl_make_context_current(context)!=EMSCRIPTEN_RESULT_SUCCESS)goto failed;
-    if(!rect_renderer_init(&renderer,320,240))goto failed;
+    if(!rect_renderer_init(&renderer,CHIRKY_FRAMEBUFFER_WIDTH,CHIRKY_FRAMEBUFFER_HEIGHT))goto failed;
     assets=asset_store_create();if(!assets)goto failed;
-    api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,.screen_width=288,.screen_height=216,
+    api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,
+        .screen_width=CHIRKY_VIEWPORT_WIDTH,.screen_height=CHIRKY_VIEWPORT_HEIGHT,
         .fill_rect=fill,.play_sound=play,.draw_text=text,.button_label=label,
         .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
         .draw_sprite=sprite,.sound_play=sound_play,
@@ -128,8 +132,7 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
     char directory[1024];snprintf(directory,sizeof(directory),"%s",config);
     char *slash=strrchr(directory,'/');if(!slash)goto failed;*slash=0;
     if(!asset_store_prefetch(assets,directory) || asset_store_prefetch_state(assets)!=CHIRKY_ASSET_READY)goto failed;
-    game=chirky_game_entry();
-    if(game && game->abi_version==CHIRKY_ABI_VERSION && game->init(&api,config))return 1;
+    if(chirky_runtime_start(&runtime,chirky_game_entry(),&api,config))return 1;
 #endif
 failed:
     web_destroy();return 0;
@@ -140,7 +143,7 @@ EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
         input.buttons[i]=(mask&(1u<<i))!=0;
         input.button_pressed[i]=input.buttons[i] && !(previous&(1u<<i));
     }
-    input.controller_pressed=(mask&~previous)!=0;previous=mask;
+    previous=mask;
 #ifdef CHIRKY_WEB_LAUNCHER
     int count=launcher_count();
     if(count>0) {
@@ -150,12 +153,13 @@ EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
         if(input.button_pressed[CHIRKY_BUTTON_B])launch(selected);
     }
 #else
-    game->update(&input);
+    chirky_runtime_update(&runtime,&input);
 #endif
 }
 EMSCRIPTEN_KEEPALIVE void web_render(void)
 {
-    glViewport(0,0,320,240);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);rect_renderer_begin(&renderer);
+    glViewport(0,0,CHIRKY_FRAMEBUFFER_WIDTH,CHIRKY_FRAMEBUFFER_HEIGHT);
+    glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);rect_renderer_begin(&renderer);
 #ifdef CHIRKY_WEB_LAUNCHER
     splash_draw(&art,&api);launcher_wordmark(&api);
     int count=launcher_count();
@@ -167,7 +171,7 @@ EMSCRIPTEN_KEEPALIVE void web_render(void)
     }
     fill(NULL,8,5,272,18,5,17,23);text(NULL,10,14,"ENTER SELECT - UP DOWN MOVE",1,112,160,170);
 #else
-    game->render();
+    chirky_runtime_render(&runtime);
 #endif
     rect_renderer_flush(&renderer);
 }
@@ -176,7 +180,7 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void)
 #ifdef CHIRKY_WEB_LAUNCHER
     splash_free(&art);
 #else
-    if(game)game->shutdown();game=NULL;
+    chirky_runtime_stop(&runtime);
 #endif
     disconnect_director();
     image_cache_clear(&images,&renderer);

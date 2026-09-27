@@ -1,6 +1,6 @@
 # Chirky Box in the browser
 
-The existing C games compile to WebAssembly using Emscripten. `web/host.c`
+The existing C games compile to WebAssembly using Emscripten. `src/platform/web/host.c`
 implements the host API with WebGL, reusing `src/rect_renderer.c`, the pixel
 font, splash loader and launcher wordmark. Games retain their normal C source
 and file paths. Each game has its own module, avoiding native `dlopen` and
@@ -36,16 +36,11 @@ button saves locally and starts the selected campaign level. C changes require
 
 ## Add a game to the browser
 
-`make web` discovers and compiles every `games/*/game.c`, but browser
-registration has two additional ownership points:
-
-- Add the game id to `tools/web-assets.js`. This controls packaged runtime
-  assets, the build manifest, and the dashboard's `/play/` JS/WASM allowlist.
-- Add the id and title to `web/player.js`. This controls launcher ordering,
-  labels, and the URL selected by the launcher.
-
-`web/host.c` asks the player for the launcher count and labels; do not hardcode
-a second list in C. After rebuilding, restart `dashboard/server.js`, open
+`make web` discovers every `games/*/game.c` and generates `catalog.json` from
+the adjacent manifests through `tools/game-catalog.js`. The dashboard,
+packager, and browser launcher consume that same catalog; do not add another
+game-id list. `src/platform/web/host.c` asks the player for the generated
+launcher count and labels. After rebuilding, restart `dashboard/server.js`, open
 <http://127.0.0.1:3030/play/>, confirm the game appears, select it in the
 launcher, and check that both `<game>.js` and `<game>.wasm` return HTTP 200.
 A direct `?game=<id>` load only verifies the game route, not launcher
@@ -54,7 +49,7 @@ registration.
 Run these focused checks before the full suite:
 
 ```sh
-node --test dashboard/play.test.js tests/player_audio.cjs tests/web_package.cjs
+node --test dashboard/play.test.js tests/game_catalog.test.cjs tests/player_audio.cjs tests/web_package.cjs
 make web
 ```
 
@@ -98,7 +93,7 @@ to obtain a clean source revision rather than a dirty-development marker.
 - Rendering is 320×240 with the normal 288×216 playable area and black border.
   Simulation runs at 60 ticks/second; catch-up is bounded after slow frames.
   Losing focus or hiding the tab pauses play; Resume continues it.
-- The browser launcher includes every game registered in `web/player.js`.
+- The browser launcher includes every game in generated `catalog.json`.
   Pi-specific display calibration, controller setup, power management and
   diagnostics stay in the native host. Browser controls do not change the Pi's
   mappings.

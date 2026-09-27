@@ -197,11 +197,12 @@ int main(void)
         "medium_event=Maple is baking beside the bridge.\nmedium_shop_special=Zara has fresh seeds.\n"
         "short_focus=Visit Maple after checking the garden.\nweather=mist\ngrowth_boost=3\n"
         "zebra_line=The mist makes every bell sound near.\nturtle_line=The seedlings are listening.\n"
-        "cat_line=Moonberry buns will be ready soon.\nsheep_line=I found another window story.\n"
+        "cat_line=Maple's buns, warm and bright.\nsheep_line=I found another window story.\n"
         "nun_line=The blue pane remembers rain.\n";
     network_revision = 2; bramble.tick = 299;
     memset(&input, 0, sizeof(input)); game->update(&input);
     assert(bramble.director.revision == 2 && bramble.weather == BRAMBLE_MIST && bramble.growth_boost == 3);
+    assert(!strcmp(bramble.director.cat_line, "Maple's buns, warm and bright."));
     float old_x = bramble.x;
     input.buttons[CHIRKY_BUTTON_RIGHT] = true;
     for (int i = 0; i < 10; i++) game->update(&input);

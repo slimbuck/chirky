@@ -1,6 +1,6 @@
 /* Reuse the real host font for software screenshots; unused DRM code is stripped. */
 #define main unused_host_main
-#include "../src/host.c"
+#include "../src/platform/linux/host.c"
 #undef main
 #include "../games/rosey-chop/game_state.h"
 #include <assert.h>

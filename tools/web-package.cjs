@@ -27,8 +27,18 @@ function readPackage(directory) {
   assert(build.files && typeof build.files === 'object' && !Array.isArray(build.files));
   const names = Object.keys(build.files);
   assert(!names.includes('build.json'));
-  for (const file of ['index.html', 'player.js', 'style.css', 'assets.json', 'configs.json',
-    ...['launcher', 'phosphor-run', 'rosey-chop', 'hardware-test'].flatMap(id => [id+'.js', id+'.wasm'])])
+  const catalog = JSON.parse(fs.readFileSync(packageFile(root, 'catalog.json')));
+  assert.equal(catalog.version, 1);
+  assert(Array.isArray(catalog.games) && catalog.games.length, 'Empty game catalog');
+  const gameIds = catalog.games.map(game => game.id);
+  for (const game of catalog.games) {
+    assert.match(game.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    assert.equal(typeof game.name, 'string');
+    assert(['game', 'diagnostic'].includes(game.role), `Invalid role for ${game.id}`);
+  }
+  assert.equal(new Set(gameIds).size, gameIds.length, 'Duplicate catalog game id');
+  for (const file of ['index.html', 'player.js', 'style.css', 'assets.json', 'configs.json', 'catalog.json',
+    ...['launcher', ...gameIds].flatMap(id => [id+'.js', id+'.wasm'])])
     assert(names.includes(file), `Missing package file: ${file}`);
   for (const [file, digest] of Object.entries(build.files)) {
     assert.match(digest, /^[a-f0-9]{64}$/);
@@ -41,7 +51,7 @@ function readPackage(directory) {
     if (file.endsWith('.conf'))
       assert.equal(configs[file], fs.readFileSync(packageFile(root, 'runtime/'+file), 'utf8'), `Configuration mismatch: ${file}`);
   }
-  return { root, build, identity: hash(bytes), names: [...names, 'build.json'] };
+  return { root, build, catalog, identity: hash(bytes), names: [...names, 'build.json'] };
 }
 
 function copyToWebsite(bundle, website) {

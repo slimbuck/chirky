@@ -9,6 +9,8 @@
 #include "audio_mixer.h"
 #include "director_client.h"
 #include "image_cache.h"
+#include "runtime.h"
+#include "viewport.h"
 #include "asset_file.h"
 #include "input_gate.h"
 #include "launcher_config.h"
@@ -224,6 +226,9 @@ struct input_set {
     bool pending_buttons[CHIRKY_BUTTON_COUNT];
     bool controller_up_pressed;
     bool controller_down_pressed;
+    bool keys[KEY_MAX + 1];
+    bool pressed[KEY_MAX + 1];
+    bool controller_pressed;
     struct chirky_input state;
 };
 
@@ -233,6 +238,7 @@ struct game_record {
     char description[256];
     char module_path[512];
     char config_path[512];
+    bool diagnostic;
 };
 
 struct host {
@@ -255,7 +261,7 @@ struct host {
     int pause_option;
     struct launcher_config launcher;
     void *game_library;
-    const struct chirky_game_api *game_api;
+    struct chirky_runtime runtime;
     const struct game_record *active_game;
     struct chirky_host_api api;
     int control_fd;
@@ -365,7 +371,7 @@ static void block_transition_input(struct host *host)
     chirky_gate_begin(&host->transition_gate);
     memset(host->inputs.pending_buttons,0,sizeof(host->inputs.pending_buttons));
     memset(host->inputs.state.button_pressed,0,sizeof(host->inputs.state.button_pressed));
-    memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
+    memset(host->inputs.pressed,0,sizeof(host->inputs.pressed));
 }
 
 enum host_screen { SCREEN_LAUNCHER,SCREEN_SETTINGS,SCREEN_INPUT,SCREEN_SETUP,SCREEN_TEST,SCREEN_DISPLAY,SCREEN_GAME,SCREEN_PAUSE };
@@ -581,6 +587,7 @@ static void write_status(const struct host *host)
 
 static bool load_manifest(const char *directory, struct game_record *game)
 {
+    bool valid=true;
     snprintf(game->config_path, sizeof(game->config_path), "games/%s/game.conf", directory);
     FILE *file = fopen(game->config_path, "r");
     if (file == NULL) return false;
@@ -599,24 +606,27 @@ static bool load_manifest(const char *directory, struct game_record *game)
             copy_text(game->description, sizeof(game->description), value);
         else if (strcmp(key, "module") == 0)
             copy_text(game->module_path, sizeof(game->module_path), value);
+        else if (strcmp(key, "role") == 0) {
+            if (strcmp(value,"game") && strcmp(value,"diagnostic")) valid=false;
+            game->diagnostic = strcmp(value, "diagnostic") == 0;
+        }
     }
     fclose(file);
-    return game->id[0] && game->name[0] && game->module_path[0];
+    return valid && !strcmp(game->id,directory) && game->name[0] && game->module_path[0];
 }
 
 static int compare_games(const void *left, const void *right)
 {
     const struct game_record *a=left,*b=right;
-    int hardware_a=!strcmp(a->id,"hardware-test"),hardware_b=!strcmp(b->id,"hardware-test");
-    if(hardware_a!=hardware_b)return hardware_a-hardware_b;
+    if(a->diagnostic!=b->diagnostic)return a->diagnostic-b->diagnostic;
     return strcmp(a->name,b->name);
 }
 
 /* Discovery places the settings utility after all playable games. */
 static int launcher_game_count(const struct host *host)
 {
-    int count=host->game_count;
-    if(count && !strcmp(host->games[count-1].id,"hardware-test"))count--;
+    int count=0;
+    while(count<host->game_count && !host->games[count].diagnostic)count++;
     return count;
 }
 
@@ -671,7 +681,7 @@ static void load_host_config(struct host *host)
 {
     default_bindings(host->bindings);
     default_keyboard_bindings(host->keyboard_bindings);
-    host->safe_x=16; host->safe_y=12;
+    host->safe_x=CHIRKY_SAFE_X; host->safe_y=CHIRKY_SAFE_Y;
     host->safe_offset_x=host->safe_offset_y=0;
     host->frame_timing_enabled=false;
     host->timing_start_held=host->timing_start_toggled=false;
@@ -755,9 +765,8 @@ static void unload_game(struct host *host)
     for(size_t i=0;i<host->sound_pin_count;i++)asset_store_release(host->assets,host->sound_pins[i]);
     host->sound_pin_count=0;
     host->paused=false;host->pause_option=0;
-    if (host->game_api != NULL) host->game_api->shutdown();
+    chirky_runtime_stop(&host->runtime);
     director_client_disconnect(host->director);
-    host->game_api = NULL;
     host->active_game = NULL;
     if (host->game_library != NULL) dlclose(host->game_library);
     host->game_library = NULL;
@@ -790,10 +799,10 @@ static bool activate_game(struct host *host,struct game_record *game)
         unload_game(host);
         return false;
     }
-    host->game_api = entry();
+    const struct chirky_game_api *game_api = entry();
     chirky_scope(&host->api,"assets.game_init",true);
-    bool initialized=host->game_api && host->game_api->abi_version==CHIRKY_ABI_VERSION &&
-        host->game_api->init(&host->api,game->config_path);
+    bool initialized=chirky_runtime_start(&host->runtime,game_api,&host->api,
+                                          game->config_path);
     chirky_scope(&host->api,"assets.game_init",false);
     if (!initialized) {
         fprintf(stderr, "Game initialization failed: %s\n", game->id);
@@ -889,8 +898,8 @@ static void open_settings_screen(struct host *host, int option)
         host->saved_safe_x=host->safe_x;host->saved_safe_y=host->safe_y;
         host->saved_safe_offset_x=host->safe_offset_x;host->saved_safe_offset_y=host->safe_offset_y;
     } else {
-        int hardware=launcher_game_count(host);
-        if(hardware<host->game_count)load_game(host,hardware);
+        int diagnostic=launcher_game_count(host);
+        if(diagnostic<host->game_count)load_game(host,diagnostic);
         host->settings_menu=true;
     }
     block_transition_input(host);
@@ -1458,18 +1467,18 @@ static void process_input_event(struct host *host, struct input_device *device, 
         bool pressed=event->value==1 && !device->keys[event->code];
         device->keys[event->code]=event->value!=0;
         if (!device->controller) {
-            if (pressed) host->inputs.state.pressed[event->code]=true;
+            if (pressed) host->inputs.pressed[event->code]=true;
             bool down=false;
             for (int i=0;i<host->inputs.count;i++) if (!host->inputs.devices[i].controller)
                 down |= host->inputs.devices[i].keys[event->code];
-            host->inputs.state.keys[event->code]=down;
+            host->inputs.keys[event->code]=down;
         }
         if (pressed) {
             host->last_keyboard=!device->controller;
             if (device->controller) {
                 if (event->code==KEY_UP || event->code==BTN_DPAD_UP) host->inputs.controller_up_pressed=true;
                 if (event->code==KEY_DOWN || event->code==BTN_DPAD_DOWN) host->inputs.controller_down_pressed=true;
-                if (!controller_direction_code(event->code)) host->inputs.state.controller_pressed=true;
+                if (!controller_direction_code(event->code)) host->inputs.controller_pressed=true;
             }
             if (!host->ui_wait_release && host->setup.keyboard!=device->controller)
                 setup_offer(&host->setup,(struct controller_binding){BINDING_KEY,event->code,0});
@@ -1531,7 +1540,7 @@ static void update_setup(struct host *host)
 {
     if (controller_buttons_down(&host->inputs)>=2) host->controller_menu_chord_frames++;
     else host->controller_menu_chord_frames=0;
-    if (host->inputs.state.pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
+    if (host->inputs.pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
         host->setup.active=false; host->ui_wait_release=true;
         host->settings_message="CANCELLED - NOTHING CHANGED";
         host->controller_menu_chord_frames=0; return;
@@ -1569,9 +1578,9 @@ static void update_host(struct host *host)
     finish_loading(host);
     poll_audio(host);
     if(host->pending_game) {
-        if(host->inputs.state.pressed[KEY_F1])unload_game(host);
+        if(host->inputs.pressed[KEY_F1])unload_game(host);
         memset(host->inputs.state.button_pressed,0,sizeof(host->inputs.state.button_pressed));
-        memset(host->inputs.state.pressed,0,sizeof(host->inputs.state.pressed));
+        memset(host->inputs.pressed,0,sizeof(host->inputs.pressed));
         return;
     }
     ensure_launcher(host);
@@ -1579,11 +1588,11 @@ static void update_host(struct host *host)
     struct chirky_input *input=&host->inputs.state;
     update_controller_buttons(host);
     update_timing_toggle(host,monotonic_us());
-    if (!host->setup.active && input->pressed[KEY_F12]) snapshot_requested=1;
+    if (!host->setup.active && host->inputs.pressed[KEY_F12]) snapshot_requested=1;
     int direction=menu_direction(host);
     bool confirm=menu_confirmed(input);
-    bool back=input->pressed[KEY_F1] || input->button_pressed[CHIRKY_BUTTON_A];
-    if (host->ui_wait_release && !input->pressed[KEY_F1]) {
+    bool back=host->inputs.pressed[KEY_F1] || input->button_pressed[CHIRKY_BUTTON_A];
+    if (host->ui_wait_release && !host->inputs.pressed[KEY_F1]) {
         bool neutral=buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true);
         for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
         chirky_gate_accept(&host->transition_gate,neutral);
@@ -1592,8 +1601,8 @@ static void update_host(struct host *host)
     else if (host->active_game) {
         if (recovery_chord(&host->inputs)) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
-        bool hardware=!strcmp(host->active_game->id,"hardware-test");
-        if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60 || (hardware && back)) {
+        bool diagnostic=host->active_game->diagnostic;
+        if (host->inputs.pressed[KEY_F1] || host->controller_menu_chord_frames>=60 || (diagnostic && back)) {
             unload_game(host); host->controller_settings=false;
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         } else if(host->paused) {
@@ -1603,9 +1612,9 @@ static void update_host(struct host *host)
                 if(host->pause_option==0)host->paused=false;
                 else {host->settings_menu=false;unload_game(host);}
             }
-        } else if(!hardware && input->button_pressed[CHIRKY_BUTTON_SELECT]) {
+        } else if(!diagnostic && input->button_pressed[CHIRKY_BUTTON_SELECT]) {
             host->paused=true;host->pause_option=0;
-        } else host->game_api->update(input);
+        } else chirky_runtime_update(&host->runtime,input);
     } else if (host->display_settings) {
         if (direction) host->display_option=(host->display_option+direction+6)%6;
         int delta=(int)input->button_pressed[CHIRKY_BUTTON_RIGHT]-
@@ -1628,7 +1637,7 @@ static void update_host(struct host *host)
     } else if (host->controller_settings && host->input_test) {
         if (input->buttons[CHIRKY_BUTTON_A]) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
-        if (input->pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
+        if (host->inputs.pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
             host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         }
     } else if (host->controller_settings) {
@@ -1656,8 +1665,8 @@ static void update_host(struct host *host)
     }
     if(current_screen(host)!=previous_screen) { block_transition_input(host);write_status(host); }
     memset(input->button_pressed,0,sizeof(input->button_pressed));
-    memset(input->pressed,0,sizeof(input->pressed));
-    input->controller_pressed=false; host->inputs.controller_up_pressed=false; host->inputs.controller_down_pressed=false;
+    memset(host->inputs.pressed,0,sizeof(host->inputs.pressed));
+    host->inputs.controller_pressed=false; host->inputs.controller_up_pressed=false; host->inputs.controller_down_pressed=false;
 }
 
 static uint64_t monotonic_us(void)
@@ -1807,7 +1816,7 @@ static void draw_host(struct host *host)
     clear_screen();
     if (host->active_game != NULL) {
         chirky_scope(&host->api,host->active_game->id,true);
-        host->game_api->render();
+        chirky_runtime_render(&host->runtime);
         chirky_scope(&host->api,host->active_game->id,false);
         if(host->paused)draw_pause_menu(host);
     }

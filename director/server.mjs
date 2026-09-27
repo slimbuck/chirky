@@ -11,29 +11,34 @@ const TEXT_FIELDS = [
 ];
 const OUTPUT_FIELDS = [...TEXT_FIELDS, "weather", "growth_boost"];
 const WEATHER = new Set(["sun", "rain", "mist", "wind"]);
+const WEATHER_ORDER = ["sun", "wind", "rain", "mist"];
+const HISTORY_LIMIT = 6;
+const MAX_WEATHER_REVISIONS = 3;
+const DEFAULT_GENERATION_INTERVAL_MS = 20000;
+const COMPLETE_SENTENCE_PATTERN = ".*[.!?]$";
 
 export const schema = {
   type: "object",
   properties: {
-    long_theme: {type: "string", maxLength: 90},
-    long_church_goal: {type: "string", maxLength: 90},
-    medium_event: {type: "string", maxLength: 90},
-    medium_shop_special: {type: "string", maxLength: 90},
-    short_focus: {type: "string", maxLength: 90},
+    long_theme: {type: "string", maxLength: 90, pattern: COMPLETE_SENTENCE_PATTERN},
+    long_church_goal: {type: "string", maxLength: 90, pattern: COMPLETE_SENTENCE_PATTERN},
+    medium_event: {type: "string", maxLength: 90, pattern: COMPLETE_SENTENCE_PATTERN},
+    medium_shop_special: {type: "string", maxLength: 90, pattern: COMPLETE_SENTENCE_PATTERN},
+    short_focus: {type: "string", maxLength: 90, pattern: COMPLETE_SENTENCE_PATTERN},
     weather: {type: "string", enum: [...WEATHER]},
     growth_boost: {type: "integer", enum: [1, 2, 3]},
-    zebra_line: {type: "string", maxLength: 118},
-    turtle_line: {type: "string", maxLength: 118},
-    cat_line: {type: "string", maxLength: 118},
-    sheep_line: {type: "string", maxLength: 118},
-    nun_line: {type: "string", maxLength: 118}
+    zebra_line: {type: "string", maxLength: 118, pattern: COMPLETE_SENTENCE_PATTERN},
+    turtle_line: {type: "string", maxLength: 118, pattern: COMPLETE_SENTENCE_PATTERN},
+    cat_line: {type: "string", maxLength: 118, pattern: COMPLETE_SENTENCE_PATTERN},
+    sheep_line: {type: "string", maxLength: 118, pattern: COMPLETE_SENTENCE_PATTERN},
+    nun_line: {type: "string", maxLength: 118, pattern: COMPLETE_SENTENCE_PATTERN}
   },
   required: OUTPUT_FIELDS,
   additionalProperties: false
 };
 
 function clean(value, limit) {
-  return String(value).replace(/[\r\n=,:;'"<>\x00-\x1f\x7f]/g, " ")
+  return String(value).replace(/[\r\n=\x00-\x1f\x7f]/g, " ")
     .replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
@@ -66,6 +71,23 @@ function validateState(value) {
   return state;
 }
 
+function validateGeneratedState(value, previous, events) {
+  const state = validateState(value);
+  for (const field of TEXT_FIELDS) {
+    if (!/[.!?]$/.test(state[field]))
+      throw new Error(`The model returned incomplete ${field}.`);
+  }
+  if (events.length) {
+    if (state.short_focus === previous.short_focus)
+      throw new Error("The model did not update short_focus for recent events.");
+    const changedDialogue = TEXT_FIELDS.slice(5)
+      .filter(field => state[field] !== previous[field]).length;
+    if (changedDialogue < 2)
+      throw new Error("The model did not update at least two neighbour lines for recent events.");
+  }
+  return state;
+}
+
 export function serializeState(state, revision) {
   const lines = ["version=1", `revision=${revision}`];
   for (const field of TEXT_FIELDS.slice(0, 5)) lines.push(`${field}=${clean(state[field], 90)}`);
@@ -94,33 +116,48 @@ function outputState(response) {
 
 export function openAIGenerator({apiKey, model = "gpt-6-luna", fetchImpl = fetch} = {}) {
   if (!apiKey) return null;
-  return async ({state, events}) => {
-    const response = await fetchImpl("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
-      body: JSON.stringify({
-        model,
-        reasoning: {effort: "none"},
-        max_output_tokens: 4000,
-        store: false,
-        input: [
-          {role: "developer", content: [{type: "input_text", text: [
-            "You are the quiet world director for Bramble Hollow, a gentle woodland adventure.",
-            "Maintain continuity across long-term village story, medium-term event and shop state, and immediate focus and dialogue.",
-            "The player is a small brown bear. Neighbours are Zara the zebra shopkeeper, Moss the turtle gardener, Maple the cat baker, Woolsey the sheep librarian, and penguin nuns Sister Wren and Sister Pippa.",
-            "React gradually and specifically to recent events. Keep every line warm, concise, suitable for all ages, and grounded in the supplied state.",
-            "Weather and growth are suggestions inside strict game-owned bounds. Never invent coordinates, inventory totals, controls, code, danger, combat, or irreversible consequences.",
-            "Return only the object required by the response schema, with no explanation.",
-            "Use plain ASCII with no line breaks or equals signs inside strings."
-          ].join("\n")}]},
-          {role: "user", content: [{type: "input_text", text: JSON.stringify({current: state, recent_events: events})}]}
-        ],
-        text: {verbosity: "low",
-          format: {type: "json_schema", name: "bramble_hollow_state", strict: true, schema}}
-      })
-    });
-    if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${await response.text()}`);
-    return validateState(outputState(await response.json()));
+  return async ({state, history = [], events}) => {
+    let retryInstruction = "";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetchImpl("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
+        body: JSON.stringify({
+          model,
+          reasoning: {effort: "none"},
+          max_output_tokens: 4000,
+          store: false,
+          input: [
+            {role: "developer", content: [{type: "input_text", text: [
+              "You are the quiet world director for Bramble Hollow, a gentle woodland adventure.",
+              "Maintain continuity across long-term village story, medium-term event and shop state, and immediate focus and dialogue.",
+              "The player is a small brown bear. Neighbours are Zara the zebra shopkeeper, Moss the turtle gardener, Maple the cat baker, Woolsey the sheep librarian, and penguin nuns Sister Wren and Sister Pippa.",
+              "Make each revision perceptibly responsive to recent events while preserving story continuity.",
+              "Rewrite short_focus and at least two neighbour lines on every event-driven revision. A neighbour recently visited should respond specifically to what the player did, not merely repeat the standing village theme.",
+              "Use recent_states to avoid repeating wording, conversational beats, and the same weather indefinitely. Weather may last for a few revisions, but should give way naturally and visibly.",
+              "Long-term goals should evolve slowly. Medium-term events should progress after several relevant actions or a new day. Immediate focus and dialogue should change promptly.",
+              "Keep every line warm, concise, suitable for all ages, and grounded in the supplied state.",
+              "Every string must be a complete sentence. Use at most 10 words for story fields and 16 words for neighbour lines; never treat the character limit as a target or end mid-thought.",
+              "Weather and growth are suggestions inside strict game-owned bounds. Never invent coordinates, inventory totals, controls, code, danger, combat, or irreversible consequences.",
+              "Return only the object required by the response schema, with no explanation.",
+              "Use plain ASCII with no line breaks or equals signs inside strings."
+            ].join("\n")}]},
+            {role: "user", content: [{type: "input_text", text: JSON.stringify({
+              current: state, recent_states: history.slice(-4), recent_events: events,
+              ...(retryInstruction ? {retry_instruction: retryInstruction} : {})
+            })}]}
+          ],
+          text: {verbosity: "low",
+            format: {type: "json_schema", name: "bramble_hollow_state", strict: true, schema}}
+        })
+      });
+      if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${await response.text()}`);
+      try { return validateGeneratedState(outputState(await response.json()), state, events); }
+      catch (error) {
+        if (attempt) throw error;
+        retryInstruction = `${error.message} Return a corrected object with complete sentences and visibly responsive immediate state.`;
+      }
+    }
   };
 }
 
@@ -164,12 +201,13 @@ export function createDirectorServer({
   dataDirectory = path.join(ROOT, "director", "data"),
   defaultsPath = DEFAULT_STATE,
   generator = openAIGenerator({apiKey: process.env.OPENAI_API_KEY, model: process.env.BRAMBLE_MODEL || "gpt-6-luna"}),
-  generationIntervalMs = Number(process.env.DIRECTOR_INTERVAL_MS) || 60000,
+  generationIntervalMs = Number(process.env.DIRECTOR_INTERVAL_MS) || DEFAULT_GENERATION_INTERVAL_MS,
   now = () => Date.now()
 } = {}) {
   const defaults = parseState(fs.readFileSync(defaultsPath, "utf8"));
   const worlds = new Map();
   const generating = new Map();
+  const generationTimers = new Map();
   fs.mkdirSync(dataDirectory, {recursive: true});
 
   function persist(world) {
@@ -191,8 +229,12 @@ export function createDirectorServer({
     if (!world || world.version !== 1 || world.id !== id) {
       world = {version: 1, id, revision: defaults.revision, state: defaults.state,
         sessions: {}, events: [], next_event: 1, generation_cursor: 0,
-        last_generated_at: 0, last_error: ""};
+        history: [], weather_revisions: 1, last_generated_at: 0, last_error: ""};
       persist(world);
+    } else {
+      if (!Array.isArray(world.history)) world.history = [];
+      if (!Number.isSafeInteger(world.weather_revisions) || world.weather_revisions < 1)
+        world.weather_revisions = MAX_WEATHER_REVISIONS;
     }
     worlds.set(id, world);
     return world;
@@ -208,8 +250,21 @@ export function createDirectorServer({
     world.last_generated_at = now(); persist(world);
     const task = (async () => {
       try {
-        const next = await generator({state: world.state, events: pending.map(({event}) => event)});
-        world.state = validateState(next);
+        const previous = structuredClone(world.state);
+        const recentStates = world.history.map(item => item.state);
+        const next = validateState(await generator({state: previous, history: recentStates,
+          events: pending.map(({event}) => event)}));
+        let weatherRevisions = next.weather === previous.weather ? world.weather_revisions + 1 : 1;
+        if (weatherRevisions > MAX_WEATHER_REVISIONS) {
+          const index = WEATHER_ORDER.indexOf(previous.weather);
+          next.weather = WEATHER_ORDER[(index + 1) % WEATHER_ORDER.length];
+          weatherRevisions = 1;
+        }
+        world.history.push({revision: world.revision, generated_at: world.last_generated_at,
+          state: previous});
+        if (world.history.length > HISTORY_LIMIT) world.history.splice(0, world.history.length - HISTORY_LIMIT);
+        world.state = next;
+        world.weather_revisions = weatherRevisions;
         world.revision = Math.max(1, world.revision + 1);
         if (pending.length) world.generation_cursor = pending[pending.length - 1].ordinal;
         world.last_error = "";
@@ -225,6 +280,22 @@ export function createDirectorServer({
     return task;
   }
 
+  function scheduleGeneration(id) {
+    if (!generator || generationTimers.has(id)) return;
+    const world = getWorld(id);
+    const delay = Math.max(0, generationIntervalMs - (now() - world.last_generated_at));
+    if (!delay) {
+      generateWorld(id).catch(error => console.error(`Director generation failed for ${id}: ${error.message}`));
+      return;
+    }
+    const timer = setTimeout(() => {
+      generationTimers.delete(id);
+      generateWorld(id).catch(error => console.error(`Director generation failed for ${id}: ${error.message}`));
+    }, delay);
+    timer.unref?.();
+    generationTimers.set(id, timer);
+  }
+
   async function handleSync(request, response) {
     const value = JSON.parse(await readBody(request));
     if (value.protocol !== 1 || value.game !== "bramble-hollow" || !validId(value.world) ||
@@ -233,20 +304,29 @@ export function createDirectorServer({
       throw Object.assign(new Error("Invalid sync request."), {status: 400});
     const world = getWorld(value.world);
     let acknowledged = Number(world.sessions[value.session]) || 0;
-    let accepted = false;
+    let accepted = false, controlledWeather = null;
     for (const item of [...value.events].sort((a, b) => a.sequence - b.sequence)) {
       if (item.sequence <= acknowledged) continue;
       if (item.sequence !== acknowledged + 1)
         throw Object.assign(new Error(`Expected event sequence ${acknowledged + 1}.`), {status: 409});
       world.events.push({ordinal: world.next_event++, session: value.session,
         sequence: item.sequence, received_at: now(), event: item.event});
+      if (item.event.kind === "world_control" && WEATHER.has(item.event.detail))
+        controlledWeather = item.event.detail;
       acknowledged = item.sequence; accepted = true;
     }
     world.sessions[value.session] = acknowledged;
     if (world.events.length > 256) world.events.splice(0, world.events.length - 256);
     if (accepted) {
+      if (controlledWeather && controlledWeather !== world.state.weather) {
+        world.history.push({revision: world.revision, generated_at: now(), state: structuredClone(world.state)});
+        if (world.history.length > HISTORY_LIMIT) world.history.splice(0, world.history.length - HISTORY_LIMIT);
+        world.state.weather = controlledWeather;
+        world.weather_revisions = 1;
+        world.revision = Math.max(1, world.revision + 1);
+      }
       persist(world);
-      generateWorld(world.id).catch(error => console.error(`Director generation failed for ${world.id}: ${error.message}`));
+      scheduleGeneration(world.id);
     }
     const body = serializeState(world.state, world.revision);
     response.writeHead(200, {"Content-Type": "text/plain; charset=utf-8", "Content-Length": Buffer.byteLength(body),
@@ -273,6 +353,7 @@ export function createDirectorServer({
           json(response, 200, {id: world.id, revision: world.revision, state: world.state,
             clients: Object.keys(world.sessions).length,
             pending_events: world.events.filter(event => event.ordinal > world.generation_cursor).length,
+            weather_revisions: world.weather_revisions, recent_revisions: world.history.length,
             last_generated_at: world.last_generated_at, last_error: world.last_error}); return;
         }
         if (request.method === "POST" && match[2]) {
@@ -290,7 +371,11 @@ export function createDirectorServer({
     listen: (port = 3040, host = "0.0.0.0") => new Promise((resolve, reject) => {
       server.once("error", reject); server.listen(port, host, () => { server.off("error", reject); resolve(server.address()); });
     }),
-    close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))};
+    close: () => {
+      for (const timer of generationTimers.values()) clearTimeout(timer);
+      generationTimers.clear();
+      return new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }};
 }
 
 async function main() {

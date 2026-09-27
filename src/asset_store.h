@@ -14,9 +14,9 @@ struct asset_store_metrics {
     size_t bytes_resident;
 };
 
-/* Native calls are thread-safe; one pthread does all filesystem I/O/decoding.
-   Emscripten needs no pthread: request/prefetch run synchronously on files that
-   the host has already asynchronously populated in its virtual filesystem.
+/* Calls are thread-safe when the selected platform scheduler is asynchronous.
+   Linux runs filesystem I/O/decoding on one worker; web drains synchronously
+   after the host has populated its virtual filesystem.
    No game callbacks, game state, audio devices or GPU objects are accessed. */
 struct asset_store *asset_store_create(void);
 void asset_store_destroy(struct asset_store *store);

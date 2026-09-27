@@ -34,10 +34,7 @@ static void copy_clean(char *target, size_t capacity, const char *source)
     size_t out = 0;
     for (; *source && out + 1 < capacity; source++) {
         unsigned char c = (unsigned char)*source;
-        if (c >= 32 && c < 127 && c != '=') {
-            if (strchr(",:;'\"<>", c)) c = ' ';
-            target[out++] = (char)c;
-        }
+        if (c >= 32 && c < 127 && c != '=') target[out++] = (char)c;
     }
     target[out] = 0;
 }

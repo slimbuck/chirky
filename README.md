@@ -26,9 +26,9 @@ includes **Play in browser** and **Save and play in browser**.
 To preview the exact publishable build without the dashboard, run
 `node tools/serve-web.cjs` after `make web` and open <http://127.0.0.1:3031/>.
 See [the browser guide](web/README.md) for testing and the checked website export.
-Adding a game requires registering it in both `tools/web-assets.js` and
-`web/player.js`; compiling a WASM file alone does not add it to the
-dashboard's `/play/` launcher.
+The browser and native launchers are generated from each game's `game.conf`;
+there is no separate game list to maintain. See
+[the architecture guide](docs/architecture.md) for the core/platform boundary.
 
 ## Frame timing
 
@@ -244,7 +244,7 @@ from the game list and activates it with B.
 ## Included games
 
 The shared native/browser interface is documented in
-[Platform API 10](docs/platform-api.md): retained assets, sprites, rectangles,
+[Platform API 11](docs/platform-api.md): retained assets, sprites, rectangles,
 text, input, sound, timing scopes, and asynchronous world direction. See the
 [Pi platform measurements](docs/performance-platform-pi3.md) for before/after
 results and the asynchronous audio-startup follow-up.
@@ -282,5 +282,6 @@ missed display refreshes; it includes a controlled pipeline experiment.
 `make test` checks the asset/editor, game and host input/layout behavior without
 accessing DRM, input devices, or the live Pi. In WSL with Windows Node installed,
 use `make test NODE=node.exe`. The host test writes software-rendered PPM previews
-under `build/`. Host mapping and setup logic lives in `src/input_bindings.c`; evdev
-routing, launcher screens, persistence and the safe viewport remain in `src/host.c`.
+under `build/`. Portable lifecycle and viewport definitions live directly under
+`src/`; DRM, evdev, ALSA, native networking, launcher screens, persistence, and
+input setup live under `src/platform/linux/`.

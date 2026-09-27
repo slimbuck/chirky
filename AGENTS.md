@@ -71,22 +71,40 @@ runtime atlases or introduce a second undocumented generator.
 
 ## Browser Game Registration
 
-- Native and WebAssembly modules are discovered from `games/*/game.c`, but that
-  alone does not make a game available through the dashboard browser launcher.
-- Keep both browser catalogs current when adding or renaming a game:
-  `tools/web-assets.js` controls packaged assets and the dashboard `/play/`
-  module allowlist; `web/player.js` controls launcher order, display names, and
-  query-string navigation.
-- The launcher in `web/host.c` obtains its count and labels from
-  `web/player.js`. Do not restore a hardcoded C game count or name array.
+- Native and WebAssembly modules are discovered from `games/*/game.c`.
+  `tools/game-catalog.js` validates the adjacent `game.conf` files and generates
+  the browser catalog. Do not add a hand-maintained game-id or title list.
+- A manifest id must match its directory and provide `name`, `description`, and
+  `module`. Use `role=diagnostic` for a platform diagnostic and
+  `browser_level_setting=<key>` only when browser campaign links must override
+  a numeric game setting.
+- The launcher in `src/platform/web/host.c` obtains its count and labels from
+  the generated catalog through `web/player.js`. The dashboard allowlist and
+  package validator consume that same catalog.
 - A successful `make web`, a present `build/web/<game>.wasm`, or a working
   direct `/play/?game=<id>` URL does not prove launcher integration. Restart
   the dashboard after server changes, open `http://127.0.0.1:3030/play/`,
   verify the game is visible, select it through the launcher, and check that the
   resulting JS and WASM requests return 200 without console errors.
 - Run `dashboard/play.test.js`, `tests/player_audio.cjs`, and
-  `tests/web_package.cjs` for browser-catalog changes, followed by
+  `tests/game_catalog.test.cjs` and `tests/web_package.cjs` for browser-catalog
+  changes, followed by
   `wsl make test NODE=node.exe` and `wsl make web NODE=node.exe` on Windows.
+
+## Platform Boundaries
+
+- Keep `include/chirky.h`, games, and files directly under `src/` portable.
+  They must not include Linux, Emscripten, DOM, DRM, ALSA, evdev, or socket
+  interfaces.
+- Linux-only implementation belongs in `src/platform/linux/`; the Emscripten C
+  bridge belongs in `src/platform/web/`; browser JavaScript and presentation
+  belong in `web/`.
+- Both hosts use `src/runtime.c` for game lifecycle and `src/viewport.h` for
+  framebuffer defaults. Do not duplicate init/shutdown sequencing or literal
+  320x240/288x216 viewport geometry in a platform host.
+- Platform code must use manifest metadata or generic capabilities instead of
+  branching on a particular game id. See `docs/architecture.md` before changing
+  host ownership or introducing a new platform service.
 
 ## Working Tree
 

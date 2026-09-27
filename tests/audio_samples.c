@@ -1,5 +1,5 @@
 #include "../src/asset_store.h"
-#include "../src/audio_mixer.c"
+#include "../src/platform/linux/audio_mixer.c"
 #include <assert.h>
 
 static struct chirky_asset_view ready(struct asset_store *store,chirky_asset asset)

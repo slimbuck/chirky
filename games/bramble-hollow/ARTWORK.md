@@ -3,7 +3,7 @@
 The title and polished sprite sheets were created with the built-in image
 generation tool from the user's supplied brown-bear reference. Source PNG files
 are retained under `assets/artwork/sources/`. Runtime sprites are 8-bit RGBA PAM
-files so Platform API 10 can preserve transparent pixels.
+files so Platform API 11 can preserve transparent pixels.
 
 `tools/clean-bramble-sprites.ps1` isolates every generated frame, reduces it
 once to its final pixel grid and palette, and packs it into exact runtime cells.

@@ -1,7 +1,7 @@
 /* Offscreen GLES benchmark: no DRM master, modeset, input, or running-game changes.
    Run from the repository root after compiling with --gc-sections and EGL/GLES. */
 #define main unused_host_main
-#include "../src/host.c"
+#include "../src/platform/linux/host.c"
 #undef main
 #include <assert.h>
 extern EGLSurface eglCreatePbufferSurface(EGLDisplay display,EGLConfig config,const EGLint *attributes);

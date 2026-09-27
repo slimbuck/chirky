@@ -29,7 +29,7 @@ rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
-Platform API 10 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
+Platform API 11 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
 is held B, and `input->button_pressed[CHIRKY_BUTTON_Y]` is a new Y press.
 The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
 Each game owns what its buttons do. Use `button_label` for SNES names; keyboard
@@ -58,11 +58,11 @@ mapping and test screens, and ignores Linux key-autorepeat events.
 Adding a new game therefore means copying an existing folder, changing its
 manifest, code, settings, and assets, then choosing **Deploy + build** in the
 dashboard. The native host restarts at the launcher and discovers it
-automatically. Browser registration is separate: add the id to
-`tools/web-assets.js` for packaging and dashboard serving, then add its id and
-title to `web/player.js` for launcher order and navigation. Rebuild with
-`make web`, restart the dashboard, and test selection from `/play/`; loading
-`/play/?game=<id>` directly is not a substitute for testing the launcher.
+automatically. The browser catalog is generated from the same `game.conf`; its
+`id` must match the directory and its `name`, `description`, and `module` are
+required. Rebuild with `make web`, restart the dashboard, and test selection
+from `/play/`; loading `/play/?game=<id>` directly is not a substitute for
+testing the launcher.
 
 ## Dashboard editors
 

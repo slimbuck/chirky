@@ -70,7 +70,7 @@ hash check; compare source, runtime cell, live browser, and Pi output.
 
 Bramble world coordinates are converted to the logical viewport by subtracting
 the camera. They must not include the physical CRT inset. The native host owns
-the calibrated inset, while `web/host.c` supplies its browser equivalent.
+the calibrated inset, while `src/platform/web/host.c` supplies its browser equivalent.
 
 The Pi's calibrated logical viewport may differ from the browser's 288x216
 default. Layout should use the host-reported dimensions for clipping and UI,
@@ -78,7 +78,7 @@ while sprite pixels remain native-size.
 
 ## Living-World Director
 
-Static defaults live in `assets/director.conf`. API10 hosts communicate with the
+Static defaults live in `assets/director.conf`. API11 hosts communicate with the
 standalone Node service in `director/server.mjs` through the configured HTTP
 URL. The legacy `runtime/director.conf` hot-load remains only as a fallback for
 hosts without director callbacks. Before claiming the LLM is active, verify the
@@ -88,3 +88,13 @@ revision, and successful runtime application.
 Keep director output bounded to validated long-term, medium-term, and short-term
 state. The deterministic game remains authoritative for movement, collision,
 inventory, time, and other moment-to-moment mechanics.
+
+Accepted events must eventually reach generation even when the last event in a
+play burst arrives during the model cooldown. Keep the deferred generation
+scheduler and test that it drains pending events without requiring another
+player action. Supply a bounded recent-state history to generation so the model
+can avoid stale weather, repeated dialogue, and stalled medium-term events.
+Player world-control events are authoritative and must update shared weather
+state immediately. Automated tests should cover those contracts; live checks
+should confirm the director has no pending events and that the Pi visibly
+applied the new revision.

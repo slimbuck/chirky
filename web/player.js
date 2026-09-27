@@ -1,8 +1,7 @@
 const $=selector=>document.querySelector(selector);
-const ids=["bramble-hollow","phosphor-run","rosey-chop","hardware-test"];
-const titles={"launcher":"Launcher","bramble-hollow":"Bramble Hollow","phosphor-run":"Phosphor Run","rosey-chop":"Rosey Chop","hardware-test":"Hardware Test"};
 const params=new URLSearchParams(location.search),id=params.get("game") || "launcher";
 const canvas=$("#screen"),status=$("#status");
+let catalog=[],ids=[],titles={launcher:"Launcher"},selectedGame=null;
 let runtime,audio,muted=false,paused=false,leaving=false,last=0,accumulator=0,pending=0,selectHeld=false,ready=false;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
 const assetSounds=new Map();
@@ -96,7 +95,7 @@ function mask(){
 function setPaused(value){
   paused=value;keys.clear();touch.clear();pending=0;last=0;accumulator=0;
   $("#pause").textContent=paused?"Resume":"Pause";
-  status.textContent=(paused?"Paused · ":"")+titles[id];
+  status.textContent=(paused?"Paused · ":"")+(titles[id] || id);
   if(paused)stopSounds();else canvas.focus();
 }
 canvas.addEventListener("keydown",event=>{if(event.code in bindings){event.preventDefault();if(event.repeat && event.code==="Escape")return;if(!event.repeat)pending|=1<<bindings[event.code];keys.add(event.code);unlock();}});
@@ -115,8 +114,8 @@ document.querySelectorAll("[data-button]").forEach(button=>{
 function frame(now){
   if(leaving)return;
   const current=mask(),select=((current|pending)&(1<<11))!==0;
-  if(id==="hardware-test" && ((current|pending)&(1<<6))){leaving=true;location.href="./";return;}
-  if(select && !selectHeld && id!=="hardware-test")setPaused(!paused);
+  if(selectedGame?.role==="diagnostic" && ((current|pending)&(1<<6))){leaving=true;location.href="./";return;}
+  if(select && !selectHeld && selectedGame?.role!=="diagnostic")setPaused(!paused);
   selectHeld=(current&(1<<11))!==0;
   if(!paused){
     if(last)accumulator+=Math.min(now-last,100);
@@ -127,7 +126,16 @@ function frame(now){
 }
 async function checked(url){const response=await fetch(url,{cache:"no-store"});if(!response.ok)throw new Error(`Unable to load ${url} (${response.status})`);return response;}
 async function start(){
-  if(!Object.hasOwn(titles,id))throw new Error("Unknown game");
+  const catalogDocument=await (await checked("catalog.json")).json();
+  if(catalogDocument?.version!==1 || !Array.isArray(catalogDocument.games))throw new Error("Invalid game catalog");
+  catalog=catalogDocument.games;
+  if(!catalog.length || catalog.some(game=>!game || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(game.id) ||
+      typeof game.name!=="string" || !["game","diagnostic"].includes(game.role)))throw new Error("Invalid game catalog");
+  ids=catalog.map(game=>game.id);
+  if(new Set(ids).size!==ids.length)throw new Error("Invalid game catalog");
+  titles={launcher:"Launcher",...Object.fromEntries(catalog.map(game=>[game.id,game.name]))};
+  selectedGame=catalog.find(game=>game.id===id) || null;
+  if(id!=="launcher" && !selectedGame)throw new Error("Unknown game");
   const files=await (await checked("assets.json")).json();
   const configs=id==="launcher"?{}:await (await checked("configs.json")).json();
   const {default:create}=await import(`./${id}.js`);
@@ -146,9 +154,10 @@ async function start(){
   }));
   const config=`games/${id}/game.conf`;
   const level=params.get("level");
-  if(id==="phosphor-run" && level && /^\d+$/.test(level)){
-    const text=runtime.FS.readFile(config,{encoding:"utf8"}).replace(/^start_level=.*$/m,"");
-    runtime.FS.writeFile(config,text+`\nstart_level=${Number(level)}\n`);
+  if(selectedGame?.levelSetting && level && /^\d+$/.test(level)){
+    const text=runtime.FS.readFile(config,{encoding:"utf8"});
+    const setting=selectedGame.levelSetting;
+    runtime.FS.writeFile(config,text.replace(new RegExp(`^${setting}=.*$`,"m"),"")+`\n${setting}=${Number(level)}\n`);
   }
   if(!runtime.ccall("web_init","number",["string"],[config]))throw new Error("Could not initialise the game or WebGL display");
   ready=true;

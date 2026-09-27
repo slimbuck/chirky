@@ -4,6 +4,7 @@ const {games}=require("../tools/web-assets");
 const {isBrowserPlayerFile}=require("./server");
 
 test("dashboard play route serves every packaged browser game",()=>{
+  assert.equal(isBrowserPlayerFile("catalog.json"),true);
   for(const id of ["launcher",...games]) {
     assert.equal(isBrowserPlayerFile(`${id}.js`),true,id);
     assert.equal(isBrowserPlayerFile(`${id}.wasm`),true,id);
