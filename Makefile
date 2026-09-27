@@ -84,7 +84,7 @@ test: $(GAME_TARGETS)
 	/tmp/gpu-timing-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/director_client.c src/director_client.c -pthread -o /tmp/director-client-test
 	/tmp/director-client-test
-	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js tests/director_server.test.mjs tests/player_audio.cjs tests/web_package.cjs
+	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js dashboard/play.test.js tests/director_server.test.mjs tests/player_audio.cjs tests/web_package.cjs
 	sh tests/service_install.sh
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/splash_runtime.c -o /tmp/splash-runtime-test

@@ -21,6 +21,10 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void);
 static struct splash_art art;
 static int selected;
 EM_JS(void, launch, (int index), { Module.onLaunch(index); });
+EM_JS(int, launcher_count, (void), { return Module.onLauncherCount(); });
+EM_JS(void, launcher_name, (int index,char *text,int capacity), {
+    stringToUTF8(Module.onLauncherName(index) || "UNKNOWN",text,capacity);
+});
 #else
 extern const struct chirky_game_api *chirky_game_entry(void);
 static const struct chirky_game_api *game;
@@ -138,9 +142,13 @@ EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
     }
     input.controller_pressed=(mask&~previous)!=0;previous=mask;
 #ifdef CHIRKY_WEB_LAUNCHER
-    if(input.button_pressed[CHIRKY_BUTTON_UP])selected=(selected+2)%3;
-    if(input.button_pressed[CHIRKY_BUTTON_DOWN])selected=(selected+1)%3;
-    if(input.button_pressed[CHIRKY_BUTTON_B])launch(selected);
+    int count=launcher_count();
+    if(count>0) {
+        if(selected>=count)selected=0;
+        if(input.button_pressed[CHIRKY_BUTTON_UP])selected=(selected+count-1)%count;
+        if(input.button_pressed[CHIRKY_BUTTON_DOWN])selected=(selected+1)%count;
+        if(input.button_pressed[CHIRKY_BUTTON_B])launch(selected);
+    }
 #else
     game->update(&input);
 #endif
@@ -150,11 +158,12 @@ EMSCRIPTEN_KEEPALIVE void web_render(void)
     glViewport(0,0,320,240);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);rect_renderer_begin(&renderer);
 #ifdef CHIRKY_WEB_LAUNCHER
     splash_draw(&art,&api);launcher_wordmark(&api);
-    const char *names[]={"PHOSPHOR RUN","ROSEY CHOP","HARDWARE TEST"};
-    for(int i=0;i<3;i++) {
+    int count=launcher_count();
+    for(int i=0;i<count;i++) {
+        char name[48];launcher_name(i,name,sizeof(name));
         int y=api.screen_height-83-i*24;bool active=i==selected;
         fill(NULL,8,y-13,192,20,active?28:5,active?74:17,active?84:23);
-        fill(NULL,12,y-9,3,10,244,194,70);text(NULL,22,y,names[i],1,250,248,236);
+        fill(NULL,12,y-9,3,10,244,194,70);text(NULL,22,y,name,1,250,248,236);
     }
     fill(NULL,8,5,272,18,5,17,23);text(NULL,10,14,"ENTER SELECT - UP DOWN MOVE",1,112,160,170);
 #else

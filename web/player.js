@@ -133,6 +133,7 @@ async function start(){
   const {default:create}=await import(`./${id}.js`);
   runtime=await create({canvas,onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,
     onDirectorConnect,onDirectorDisconnect,onDirectorEvent,onDirectorState,
+    onLauncherCount:()=>ids.length,onLauncherName:index=>titles[ids[index]],
     onLaunch:index=>{leaving=true;location.href=`?game=${ids[index]}`;},printErr:message=>console.warn(message)});
   await Promise.all(files.filter(file=>id==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${id}/`)).map(async file=>{
     let bytes;

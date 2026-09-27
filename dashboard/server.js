@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawn } = require("child_process");
-const {assets: browserAssets, configs: browserConfigs} = require("../tools/web-assets");
+const {assets: browserAssets, configs: browserConfigs, games: browserGames} = require("../tools/web-assets");
 
 const DASHBOARD = __dirname;
 const ROOT = path.resolve(DASHBOARD, "..");
@@ -20,6 +20,14 @@ const configuredRemoteRoot=config.remoteRoot;
 let legacyInstallation=false;
 if (process.env.CHIRKY_DASHBOARD_PORT) config.port=Number(process.env.CHIRKY_DASHBOARD_PORT);
 fs.mkdirSync(CAPTURES, { recursive: true });
+
+const browserPlayerFiles = new Set(["launcher", ...browserGames]
+  .flatMap(id => [`${id}.js`, `${id}.wasm`]));
+
+function isBrowserPlayerFile(relative) {
+  return ["index.html", "player.js", "style.css"].includes(relative) ||
+    browserPlayerFiles.has(relative);
+}
 
 function readOptionalJson(file) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); }
@@ -330,7 +338,7 @@ async function handle(request, response) {
         if(!browserAssets().includes(asset))return json(response,404,{error:"not found"});
         return sendFile(response,path.join(ROOT,asset));
       }
-      if(!/^(index\.html|player\.js|style\.css|(?:launcher|phosphor-run|rosey-chop|hardware-test)\.(?:js|wasm))$/.test(relative))
+      if(!isBrowserPlayerFile(relative))
         return json(response,404,{error:"not found"});
       return sendFile(response,path.join(ROOT,"build","web",relative));
     }
@@ -458,4 +466,5 @@ async function startServer() {
     console.log(`Chirky dashboard: http://127.0.0.1:${config.port}`);
   });
 }
-startServer();
+if (require.main === module) startServer();
+module.exports = {isBrowserPlayerFile};

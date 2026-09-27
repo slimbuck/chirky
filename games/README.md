@@ -57,7 +57,12 @@ mapping and test screens, and ignores Linux key-autorepeat events.
 
 Adding a new game therefore means copying an existing folder, changing its
 manifest, code, settings, and assets, then choosing **Deploy + build** in the
-dashboard. The host restarts at the launcher and discovers it automatically.
+dashboard. The native host restarts at the launcher and discovers it
+automatically. Browser registration is separate: add the id to
+`tools/web-assets.js` for packaging and dashboard serving, then add its id and
+title to `web/player.js` for launcher order and navigation. Rebuild with
+`make web`, restart the dashboard, and test selection from `/play/`; loading
+`/play/?game=<id>` directly is not a substitute for testing the launcher.
 
 ## Dashboard editors
 

@@ -3,9 +3,26 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {createDirectorServer} from "../director/server.mjs";
+import {createDirectorServer, openAIGenerator, parseState} from "../director/server.mjs";
 
 const defaultsPath = path.resolve("games/bramble-hollow/assets/director.conf");
+
+test("OpenAI generator selects the structured block from a multi-item response", async () => {
+  const expected = {...parseState(fs.readFileSync(defaultsPath, "utf8")).state,
+    medium_event: "A lantern picnic is beginning beside the bridge."};
+  const fetchImpl = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    assert.equal(request.text.format.type, "json_schema");
+    assert.equal(request.text.verbosity, "low");
+    assert.equal(request.max_output_tokens, 4000);
+    return new Response(JSON.stringify({status: "completed", output: [
+      {type: "message", content: [{type: "output_text", text: "Preparing the requested state."}]},
+      {type: "message", content: [{type: "output_text", text: JSON.stringify(expected)}]}
+    ]}), {status: 200, headers: {"Content-Type": "application/json"}});
+  };
+  const generate = openAIGenerator({apiKey: "test-key", fetchImpl});
+  assert.deepEqual(await generate({state: expected, events: []}), expected);
+});
 
 test("director sync deduplicates events and publishes generated state", async t => {
   const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chirky-director-"));

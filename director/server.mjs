@@ -74,15 +74,22 @@ export function serializeState(state, revision) {
   return lines.join("\n") + "\n";
 }
 
-function outputText(response) {
+function outputState(response) {
+  if (response.status === "incomplete")
+    throw new Error(`The model response was incomplete: ${response.incomplete_details?.reason || "unknown reason"}.`);
+  const texts = [];
   for (const item of response.output || []) {
     if (item.type !== "message") continue;
     for (const content of item.content || []) {
       if (content.type === "refusal") throw new Error(`Model refusal: ${content.refusal}`);
-      if (content.type === "output_text") return content.text;
+      if (content.type === "output_text") texts.push(content.text);
     }
   }
-  throw new Error("The response did not contain structured output text.");
+  for (const text of [...texts, texts.join("")]) {
+    try { return JSON.parse(text); }
+    catch {}
+  }
+  throw new Error(`The response did not contain valid structured JSON (${texts.length} text blocks).`);
 }
 
 export function openAIGenerator({apiKey, model = "gpt-6-luna", fetchImpl = fetch} = {}) {
@@ -94,7 +101,7 @@ export function openAIGenerator({apiKey, model = "gpt-6-luna", fetchImpl = fetch
       body: JSON.stringify({
         model,
         reasoning: {effort: "none"},
-        max_output_tokens: 700,
+        max_output_tokens: 4000,
         store: false,
         input: [
           {role: "developer", content: [{type: "input_text", text: [
@@ -103,15 +110,17 @@ export function openAIGenerator({apiKey, model = "gpt-6-luna", fetchImpl = fetch
             "The player is a small brown bear. Neighbours are Zara the zebra shopkeeper, Moss the turtle gardener, Maple the cat baker, Woolsey the sheep librarian, and penguin nuns Sister Wren and Sister Pippa.",
             "React gradually and specifically to recent events. Keep every line warm, concise, suitable for all ages, and grounded in the supplied state.",
             "Weather and growth are suggestions inside strict game-owned bounds. Never invent coordinates, inventory totals, controls, code, danger, combat, or irreversible consequences.",
+            "Return only the object required by the response schema, with no explanation.",
             "Use plain ASCII with no line breaks or equals signs inside strings."
           ].join("\n")}]},
           {role: "user", content: [{type: "input_text", text: JSON.stringify({current: state, recent_events: events})}]}
         ],
-        text: {format: {type: "json_schema", name: "bramble_hollow_state", strict: true, schema}}
+        text: {verbosity: "low",
+          format: {type: "json_schema", name: "bramble_hollow_state", strict: true, schema}}
       })
     });
     if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${await response.text()}`);
-    return validateState(JSON.parse(outputText(await response.json())));
+    return validateState(outputState(await response.json()));
   };
 }
 

@@ -34,6 +34,30 @@ reloads them without recompiling. The editor's **Save and play in browser**
 button saves locally and starts the selected campaign level. C changes require
 `make web`; standalone static-site assets must also be refreshed with `make web`.
 
+## Add a game to the browser
+
+`make web` discovers and compiles every `games/*/game.c`, but browser
+registration has two additional ownership points:
+
+- Add the game id to `tools/web-assets.js`. This controls packaged runtime
+  assets, the build manifest, and the dashboard's `/play/` JS/WASM allowlist.
+- Add the id and title to `web/player.js`. This controls launcher ordering,
+  labels, and the URL selected by the launcher.
+
+`web/host.c` asks the player for the launcher count and labels; do not hardcode
+a second list in C. After rebuilding, restart `dashboard/server.js`, open
+<http://127.0.0.1:3030/play/>, confirm the game appears, select it in the
+launcher, and check that both `<game>.js` and `<game>.wasm` return HTTP 200.
+A direct `?game=<id>` load only verifies the game route, not launcher
+registration.
+
+Run these focused checks before the full suite:
+
+```sh
+node --test dashboard/play.test.js tests/player_audio.cjs tests/web_package.cjs
+make web
+```
+
 ## Test and update the website
 
 Chirky owns the browser player, configuration loading and build. Configuration
@@ -52,7 +76,7 @@ node tools/export-web.cjs ../slimbuck.com
 ```
 
 The export command starts a temporary standalone server, runs desktop and mobile
-browser checks for both games, verifies that the package is unchanged, then
+browser checks for every packaged game, verifies that the package is unchanged, then
 replaces only the website's `apps/chirky/` directory with the tested bytes.
 It removes obsolete files there and leaves other apps untouched. Chrome must be
 installed; set `CHROME` to its executable if necessary. Screenshots and results
@@ -74,9 +98,10 @@ to obtain a clean source revision rather than a dirty-development marker.
 - Rendering is 320×240 with the normal 288×216 playable area and black border.
   Simulation runs at 60 ticks/second; catch-up is bounded after slow frames.
   Losing focus or hiding the tab pauses play; Resume continues it.
-- The browser launcher includes both games and Hardware Test. Pi-specific
-  display calibration, controller setup, power management and diagnostics stay
-  in the native host. Browser controls do not change the Pi's mappings.
+- The browser launcher includes every game registered in `web/player.js`.
+  Pi-specific display calibration, controller setup, power management and
+  diagnostics stay in the native host. Browser controls do not change the Pi's
+  mappings.
 - No progress/save-state persistence is added; restarting starts a fresh game.
 
 Built and checked with Emscripten 3.1.5 and Chromium. Physical gamepads, touch

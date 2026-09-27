@@ -26,6 +26,9 @@ includes **Play in browser** and **Save and play in browser**.
 To preview the exact publishable build without the dashboard, run
 `node tools/serve-web.cjs` after `make web` and open <http://127.0.0.1:3031/>.
 See [the browser guide](web/README.md) for testing and the checked website export.
+Adding a game requires registering it in both `tools/web-assets.js` and
+`web/player.js`; compiling a WASM file alone does not add it to the
+dashboard's `/play/` launcher.
 
 ## Frame timing
 

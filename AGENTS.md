@@ -69,6 +69,25 @@ command and one machine-readable manifest for atlas size, cell size, frame
 order, alignment, and important semantic details. Do not manually patch shipped
 runtime atlases or introduce a second undocumented generator.
 
+## Browser Game Registration
+
+- Native and WebAssembly modules are discovered from `games/*/game.c`, but that
+  alone does not make a game available through the dashboard browser launcher.
+- Keep both browser catalogs current when adding or renaming a game:
+  `tools/web-assets.js` controls packaged assets and the dashboard `/play/`
+  module allowlist; `web/player.js` controls launcher order, display names, and
+  query-string navigation.
+- The launcher in `web/host.c` obtains its count and labels from
+  `web/player.js`. Do not restore a hardcoded C game count or name array.
+- A successful `make web`, a present `build/web/<game>.wasm`, or a working
+  direct `/play/?game=<id>` URL does not prove launcher integration. Restart
+  the dashboard after server changes, open `http://127.0.0.1:3030/play/`,
+  verify the game is visible, select it through the launcher, and check that the
+  resulting JS and WASM requests return 200 without console errors.
+- Run `dashboard/play.test.js`, `tests/player_audio.cjs`, and
+  `tests/web_package.cjs` for browser-catalog changes, followed by
+  `wsl make test NODE=node.exe` and `wsl make web NODE=node.exe` on Windows.
+
 ## Working Tree
 
 This repository may contain unrelated user changes. Do not revert or reformat

@@ -6,7 +6,7 @@ const { once } = require('node:events');
 const test = require('node:test');
 const { hash, readPackage, copyToWebsite } = require('../tools/web-package.cjs');
 const { createServer } = require('../tools/serve-web.cjs');
-const { configs } = require('../tools/web-assets.js');
+const { configs, games } = require('../tools/web-assets.js');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chirky-package-test-'));
@@ -23,7 +23,7 @@ function fixture(t) {
   const files = { 'index.html':'<html>Chirky</html>', 'player.js':'// player\r\n', 'style.css':'body{}',
     'assets.json':JSON.stringify([config]), 'configs.json':JSON.stringify({ [config]:text }),
     ['runtime/'+config]:text };
-  for (const id of ['launcher', 'phosphor-run', 'rosey-chop', 'hardware-test']) {
+  for (const id of ['launcher', ...games]) {
     files[id+'.js']='// module'; files[id+'.wasm']=Buffer.from([0,97,115,109]);
   }
   for (const [name, data] of Object.entries(files)) write(name, data);
