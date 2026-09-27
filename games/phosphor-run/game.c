@@ -23,14 +23,18 @@ unsigned int random_state = 0x51a7u;
 enum phase phase;
 float player_x, player_y, velocity_x, velocity_y, camera_x, camera_y;
 float respawn_x, respawn_y;
-int collected_shards, deaths, coyote_timer, jump_buffer, dash_timer;
+int collected_shards, lives, coyote_timer, jump_buffer, dash_timer;
 int death_timer, title_timer, win_timer, frame_number, facing;
+int level_ticks, completed_ticks, level_intro_timer;
+int initial_cursor, score_rank;
+char score_initials[4];
+struct high_score high_scores[CONTENT_LIMIT][HIGH_SCORE_COUNT];
 bool on_ground, touching_left, touching_right, dash_available;
 int player_animation_tick;
 struct robot_motion player_motion;
 enum robot_clip player_robot_clip(void)
 {
-    return phase==PHASE_DEAD?ROBOT_DEATH:dash_timer>0?ROBOT_DASH:
+    return (phase==PHASE_DEAD || phase==PHASE_GAME_OVER)?ROBOT_DEATH:dash_timer>0?ROBOT_DASH:
         !on_ground?(velocity_y>0?ROBOT_JUMP:ROBOT_FALL):
         absolute(velocity_x)>.3f?ROBOT_RUN:ROBOT_IDLE;
 }
@@ -190,12 +194,16 @@ static void begin_level(void)
     camera_y = clampf(respawn_y - 60, 0, fmax_zero(level.height * TILE - host->screen_height));
     memset(particles, 0, sizeof(particles));
     respawn();
+    level_ticks=completed_ticks=0;
+    level_intro_timer=LEVEL_INTRO_TICKS;
+    score_rank=-1;
+    phase=PHASE_LEVEL_INTRO;
 }
 
 static void new_run(void)
 {
     if (!load_level(content.levels[settings.start_level].path)) return;
-    current_level=settings.start_level; deaths=0; facing=1;
+    current_level=settings.start_level; lives=STARTING_LIVES; facing=1;
     begin_level();
 }
 
@@ -210,9 +218,42 @@ static void advance_level(void)
 static void die(void)
 {
     if (phase != PHASE_PLAY) return;
-    phase = PHASE_DEAD; death_timer = 34; deaths++;
+    phase = PHASE_DEAD; death_timer = 34;
+    if (lives>0) lives--;
     burst(player_x + 6, player_y + 7, 20, settings.hazard);
     play(settings.death_sound);
+}
+
+static int qualifying_rank(int ticks)
+{
+    for (int rank=0;rank<HIGH_SCORE_COUNT;rank++)
+        if (high_scores[current_level][rank].ticks==0 ||
+            ticks<high_scores[current_level][rank].ticks) return rank;
+    return -1;
+}
+
+static void submit_score(void)
+{
+    if (score_rank<0 || score_rank>=HIGH_SCORE_COUNT) return;
+    for (int rank=HIGH_SCORE_COUNT-1;rank>score_rank;rank--)
+        high_scores[current_level][rank]=high_scores[current_level][rank-1];
+    high_scores[current_level][score_rank].ticks=completed_ticks;
+    copy_text(high_scores[current_level][score_rank].initials,
+              sizeof(high_scores[current_level][score_rank].initials),score_initials);
+    phase=PHASE_WIN;
+    win_timer=0;
+}
+
+static void finish_level(float x, float y)
+{
+    completed_ticks=level_ticks;
+    score_rank=qualifying_rank(completed_ticks);
+    memcpy(score_initials,"AAA",4);
+    initial_cursor=0;
+    phase=score_rank>=0?PHASE_INITIALS:PHASE_WIN;
+    win_timer=0;
+    burst(x,y,32,settings.phosphor);
+    play(settings.win_sound);
 }
 
 static void collect_world_items(void)
@@ -235,9 +276,7 @@ static void collect_world_items(void)
                 burst(tx*TILE+4,ty*TILE+8,18,settings.amber);
                 play(settings.checkpoint_sound);
             } else if (*tile == 'E' && collected_shards == level.total_shards) {
-                phase = PHASE_WIN; win_timer = 0;
-                burst(tx*TILE+4,ty*TILE+8,32,settings.phosphor);
-                play(settings.win_sound);
+                finish_level(tx*TILE+4,ty*TILE+8);
             }
         }
     }
@@ -255,7 +294,7 @@ static bool held_jump(const struct chirky_input *input)
 
 static void update_play(const struct chirky_input *input)
 {
-    if (input->button_pressed[CHIRKY_BUTTON_L]) { respawn(); return; }
+    if (input->button_pressed[CHIRKY_BUTTON_L]) { die(); return; }
     int direction = 0;
     if (input->buttons[CHIRKY_BUTTON_LEFT]) direction--;
     if (input->buttons[CHIRKY_BUTTON_RIGHT]) direction++;
@@ -326,6 +365,23 @@ static void update_play(const struct chirky_input *input)
     if(camera_y<minimum_camera_y)camera_y=minimum_camera_y;
 }
 
+static void update_initials(const struct chirky_input *input)
+{
+    if (input->button_pressed[CHIRKY_BUTTON_UP]) {
+        score_initials[initial_cursor]=score_initials[initial_cursor]=='Z'?'A':
+            (char)(score_initials[initial_cursor]+1);
+    } else if (input->button_pressed[CHIRKY_BUTTON_DOWN]) {
+        score_initials[initial_cursor]=score_initials[initial_cursor]=='A'?'Z':
+            (char)(score_initials[initial_cursor]-1);
+    }
+    if (input->button_pressed[CHIRKY_BUTTON_LEFT] && initial_cursor>0) initial_cursor--;
+    if (input->button_pressed[CHIRKY_BUTTON_RIGHT] && initial_cursor<2) initial_cursor++;
+    if (input->button_pressed[CHIRKY_BUTTON_B]) {
+        if (initial_cursor<2) initial_cursor++;
+        else submit_score();
+    }
+}
+
 static void game_shutdown(void)
 {
     if(host && host->asset_release)for(int i=0;i<6;i++)host->asset_release(host->context,sound_assets[i]);
@@ -362,7 +418,8 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
         sound_assets[i]=host->asset_request(host->context,sound_path(i),CHIRKY_ASSET_SOUND);
     player_animation_tick=0;
     begin_level();
-    frame_number=0; phase=PHASE_TITLE; title_timer=0; facing=1; deaths=0;
+    memset(high_scores,0,sizeof(high_scores));
+    frame_number=0; phase=PHASE_TITLE; title_timer=0; facing=1; lives=STARTING_LIVES;
     return true;
 }
 
@@ -372,19 +429,36 @@ static void update_gameplay(const struct chirky_input *input)
     if (phase==PHASE_TITLE) {
         title_timer++;
         if (chirky_title_pressed(input)) new_run();
-    } else if (phase==PHASE_PLAY) update_play(input);
+    } else if (phase==PHASE_LEVEL_INTRO) {
+        if (--level_intro_timer<=0) phase=PHASE_PLAY;
+    } else if (phase==PHASE_PLAY) {
+        level_ticks++;
+        update_play(input);
+    }
     else if (phase==PHASE_DEAD) {
-        if (--death_timer<=0) respawn();
+        level_ticks++;
+        if (--death_timer<=0) {
+            if (lives>0) respawn();
+            else phase=PHASE_GAME_OVER;
+        }
+    } else if (phase==PHASE_INITIALS) {
+        update_initials(input);
     } else if (phase==PHASE_WIN) {
         win_timer++;
         if (input->button_pressed[CHIRKY_BUTTON_B]) advance_level();
+    } else if (phase==PHASE_GAME_OVER) {
+        if (input->button_pressed[CHIRKY_BUTTON_B]) {
+            phase=PHASE_TITLE;
+            title_timer=0;
+        }
     }
 }
 
 static void game_render(void)
 {
-    const char *scene=phase==PHASE_TITLE?"scene.title":phase==PHASE_DEAD?"scene.dead":
-        phase==PHASE_WIN?"scene.win":"scene.play";
+    const char *scene=phase==PHASE_TITLE?"scene.title":phase==PHASE_LEVEL_INTRO?"scene.intro":
+        phase==PHASE_DEAD?"scene.dead":phase==PHASE_INITIALS?"scene.initials":
+        phase==PHASE_WIN?"scene.win":phase==PHASE_GAME_OVER?"scene.game-over":"scene.play";
     chirky_scope(host,scene,true);
     if (phase==PHASE_TITLE) render_title(); else render_game();
     chirky_scope(host,scene,false);
@@ -402,7 +476,7 @@ static void game_update(const struct chirky_input *input)
         int intent=(filtered.buttons[CHIRKY_BUTTON_RIGHT]?1:0)-(filtered.buttons[CHIRKY_BUTTON_LEFT]?1:0);
         if(dash_timer>0)intent=facing;
         robot_motion_update(&player_motion,intent,player_x-previous_x,on_ground);
-    } else if(phase!=PHASE_DEAD) player_motion=(struct robot_motion){0};
+    } else if(phase!=PHASE_DEAD && phase!=PHASE_GAME_OVER) player_motion=(struct robot_motion){0};
     player_animation_tick=animation_before==player_robot_clip() && phase==before && current_level==level_before?
         (player_animation_tick+1)%1000000:0;
     if(phase!=before || current_level!=level_before)chirky_gate_begin(&transition_gate);

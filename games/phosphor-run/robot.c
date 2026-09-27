@@ -126,12 +126,27 @@ void robot_motion_update(struct robot_motion *m,int intent,float distance,bool g
 }
 
 bool robot_draw(const struct chirky_host_api *api,int cx,int floor,int facing,enum robot_clip animation,float tick)
-{ return robot_draw_weighted(api,cx,floor,facing,animation,tick,NULL); }
+{ return robot_draw_scaled(api,cx,floor,facing,animation,tick,1); }
+
+static bool robot_draw_at_scale(const struct chirky_host_api *api,int cx,int floor,int facing,
+                                enum robot_clip animation,float tick,
+                                const struct robot_motion *motion,int scale);
+
+bool robot_draw_scaled(const struct chirky_host_api *api,int cx,int floor,int facing,
+                       enum robot_clip animation,float tick,int scale)
+{ return robot_draw_at_scale(api,cx,floor,facing,animation,tick,NULL,scale); }
 
 bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int facing,enum robot_clip animation,float tick,const struct robot_motion *motion)
+{ return robot_draw_at_scale(api,cx,floor,facing,animation,tick,motion,1); }
+
+static bool robot_draw_at_scale(const struct chirky_host_api *api,int cx,int floor,int facing,
+                                enum robot_clip animation,float tick,
+                                const struct robot_motion *motion,int scale)
 {
-    if(!robot_ready() || !api || !api->fill_rect || animation<0 || animation>ROBOT_DEATH)return false;
-    if(cx+16<0 || cx-16>=api->screen_width || floor+30<0 || floor-2>=api->screen_height)return true;
+    if(!robot_ready() || !api || !api->fill_rect || animation<0 || animation>ROBOT_DEATH ||
+       scale<1 || scale>4)return false;
+    if(cx+16*scale<0 || cx-16*scale>=api->screen_width ||
+       floor+30*scale<0 || floor-2*scale>=api->screen_height)return true;
     chirky_scope(api,"robot",true);
     static const char *clip_names[]={"robot.idle","robot.run","robot.jump","robot.fall","robot.dash","robot.death"};
     const char *clip_name=clip_names[animation];
@@ -224,7 +239,8 @@ bool robot_draw_weighted(const struct chirky_host_api *api,int cx,int floor,int 
     for(int y=0;y<SIDE/2;y++)for(int x=0;x<SIDE/2;) {
         uint32_t c=resolved[y*(SIDE/2)+x];int width=1;
         while(x+width<SIDE/2 && resolved[y*(SIDE/2)+x+width]==c)width++;
-        if(c)api->fill_rect(api->context,cx-16+x,floor-2+y,width,1,(c>>16)&255,(c>>8)&255,c&255);
+        if(c)api->fill_rect(api->context,cx-16*scale+x*scale,floor-2*scale+y*scale,
+                           width*scale,scale,(c>>16)&255,(c>>8)&255,c&255);
         x+=width;
     }
     chirky_scope(api,"robot.submit",false);

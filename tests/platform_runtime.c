@@ -277,6 +277,9 @@ static void play_phosphor(void *module, const struct chirky_game_api *game, stru
     const float *x = symbol(module, "player_x"), *y = symbol(module, "player_y");
     const bool *grounded = symbol(module, "on_ground");
     struct chirky_input input = {0};
+    for (unsigned i = 0; i < 120 && strcmp(p->scene, "scene.play"); i++) tick(game, p, &input);
+    assert(!strcmp(p->scene, "scene.play"));
+    tick(game, p, &input); tick(game, p, &input); /* Release the intro transition gate. */
     for (unsigned i = 0; i < 120 && !*grounded; i++) tick(game, p, &input);
     assert(*grounded && !strcmp(p->scene, "scene.play"));
     float old_y = *y;

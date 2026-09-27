@@ -28,6 +28,7 @@ static const uint8_t *glyph(char character)
     static const uint8_t dash[7] = {0,0,0,31,0,0,0};
     static const uint8_t slash[7] = {1,2,2,4,8,8,16};
     static const uint8_t dot[7] = {0,0,0,0,0,0,4};
+    static const uint8_t colon[7] = {0,4,4,0,4,4,0};
     static const uint8_t question[7] = {14,17,1,2,4,0,4};
     static const uint8_t blank[7] = {0,0,0,0,0,0,0};
     if (character >= 'a' && character <= 'z') character -= 32;
@@ -36,6 +37,7 @@ static const uint8_t *glyph(char character)
     if (character == '-') return dash;
     if (character == '/') return slash;
     if (character == '.') return dot;
+    if (character == ':') return colon;
     if (character == ' ') return blank;
     return question;
 }

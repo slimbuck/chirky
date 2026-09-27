@@ -12,8 +12,19 @@
 #define MAX_PARTICLES 96
 #define PLAYER_WIDTH 12
 #define PLAYER_HEIGHT 14
+#define STARTING_LIVES 3
+#define HIGH_SCORE_COUNT 10
+#define LEVEL_INTRO_TICKS 90
 
-enum phase { PHASE_TITLE, PHASE_PLAY, PHASE_DEAD, PHASE_WIN };
+enum phase {
+    PHASE_TITLE,
+    PHASE_LEVEL_INTRO,
+    PHASE_PLAY,
+    PHASE_DEAD,
+    PHASE_INITIALS,
+    PHASE_WIN,
+    PHASE_GAME_OVER
+};
 
 struct colour { unsigned char r, g, b; };
 
@@ -42,6 +53,11 @@ struct particle {
     struct colour colour;
 };
 
+struct high_score {
+    int ticks;
+    char initials[4];
+};
+
 extern const struct chirky_host_api *host;
 extern struct settings settings;
 extern struct level level;
@@ -52,8 +68,12 @@ extern unsigned int random_state;
 extern enum phase phase;
 extern float player_x, player_y, velocity_x, velocity_y, camera_x, camera_y;
 extern float respawn_x, respawn_y;
-extern int collected_shards, deaths, coyote_timer, jump_buffer, dash_timer;
+extern int collected_shards, lives, coyote_timer, jump_buffer, dash_timer;
 extern int death_timer, title_timer, win_timer, frame_number, facing;
+extern int level_ticks, completed_ticks, level_intro_timer;
+extern int initial_cursor, score_rank;
+extern char score_initials[4];
+extern struct high_score high_scores[CONTENT_LIMIT][HIGH_SCORE_COUNT];
 extern bool on_ground, touching_left, touching_right, dash_available;
 extern int player_animation_tick;
 extern struct robot_motion player_motion;

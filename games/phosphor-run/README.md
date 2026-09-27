@@ -7,16 +7,22 @@ A 320×240, 60 Hz platformer for the Chirky CRT host.
 - D-pad: move
 - B: jump; wall-jump while touching a wall; begin, advance, or replay on the corresponding screens
 - Y: air dash
-- L: respawn at the current checkpoint
+- L: sacrifice a life and respawn at the current checkpoint
 - Select: pause; choose Continue Game or Return to Launcher
 
 The game reads SNES buttons directly. Keyboard emulation is configured in the
 host's Input Settings; the default keys are arrows, Z for Y, X for B, A for L
 and Escape for Select. Game prompts always show SNES names.
 
-Collect every shard in the current level to unlock its portal. Each level starts
-with fresh shards, checkpoint, dash, particles, and camera state. The falls count
-continues through the campaign and resets on replay. The host reserves a CRT-safe border; UI and cameras use the remaining logical viewport. The camera follows both axes
+Collect every shard in the current level to unlock its portal. A run starts with
+three lives and ends when all three are lost. Lives carry between campaign levels.
+Each level starts with fresh shards, checkpoint, dash, particles, camera state and
+a 60 Hz timer. Its opening card shows the articulated player at 2× size running
+in place before control begins. A qualifying completion enters the in-memory top
+ten for that level;
+use Up/Down to select each initial and B to advance and submit. Scores last for the
+current game process. The host reserves a CRT-safe border; UI and cameras use the
+remaining logical viewport. The camera follows both axes
 for wider or taller levels. `start_level` in `game.conf` selects the zero-based
 campaign starting position; the default is zero.
 

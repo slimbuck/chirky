@@ -346,6 +346,9 @@ static void check_live_inputs(struct host *host,const char *output_dir)
 int main(int argc,char **argv)
 {
     assert(argc==2);
+    static const uint8_t expected_colon[7]={0,4,4,0,4,4,0};
+    assert(!memcmp(glyph(':'),expected_colon,sizeof(expected_colon)));
+    assert(memcmp(glyph(':'),glyph('?'),sizeof(expected_colon)));
     char directory[]="/tmp/chirky-host-test-XXXXXX";assert(mkdtemp(directory));assert(chdir(directory)==0);
     assert(mkdir("config",0700)==0);
     check_pause_menu(argv[1]);

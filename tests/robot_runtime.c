@@ -12,6 +12,7 @@
 
 static unsigned char pixels[64][64][3];
 static unsigned draws;
+static bool expect_scaled;
 static struct trace_capture capture;
 static void scope(void *context,const char *name,bool begin)
 {
@@ -21,6 +22,7 @@ static void fill(void *context,int x,int y,int w,int h,unsigned char r,unsigned 
 {
     (void)context;draws++;
     assert(w>0 && h>0);
+    if(expect_scaled)assert(!(w&1) && h==2);
     for(int yy=y;yy<y+h;yy++)for(int xx=x;xx<x+w;xx++)if(xx>=0 && xx<64 && yy>=0 && yy<64) {
         pixels[yy][xx][0]=r;pixels[yy][xx][1]=g;pixels[yy][xx][2]=b;
     }
@@ -43,6 +45,10 @@ int main(void)
     uint64_t profiled_hash=hash();
     api.profile_scope=NULL;memset(pixels,0,sizeof(pixels));
     assert(robot_draw(&api,32,4,1,ROBOT_RUN,0));assert(hash()==profiled_hash);
+    memset(pixels,0,sizeof(pixels));draws=0;expect_scaled=true;
+    assert(robot_draw_scaled(&api,32,4,1,ROBOT_RUN,0,2));
+    assert(draws>40 && draws<500);expect_scaled=false;
+    assert(!robot_draw_scaled(&api,32,4,1,ROBOT_RUN,0,0));
     free(capture.spans);capture=(struct trace_capture){0};
     struct robot_motion motion={0},mirror={0};
     FILE *trace=fopen("build/robot-motion.csv","w");assert(trace);

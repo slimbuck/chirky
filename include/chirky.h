@@ -54,9 +54,11 @@ struct chirky_host_api {
                       unsigned char red, unsigned char green,
                       unsigned char blue);
     void (*play_sound)(void *context, const char *device, const char *path);
-    /* Draws the built-in 5x7 font. x is the left edge and y is the bottom-left
-       coordinate of the glyphs' top pixel row; subsequent rows descend by
-       scale pixels. Characters advance by 6*scale. */
+    /* Draws the built-in 5x7 font. It supports A-Z, a-z, 0-9, space, dash,
+       slash, dot and colon; unsupported characters use the question glyph.
+       x is the left edge and y is the bottom-left coordinate of the glyphs'
+       top pixel row; subsequent rows descend by scale pixels. Characters
+       advance by 6*scale. */
     void (*draw_text)(void *context, int x, int y, const char *text, int scale,
                       unsigned char red, unsigned char green,
                       unsigned char blue);

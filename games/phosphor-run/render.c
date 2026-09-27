@@ -29,6 +29,15 @@ static void text(int x, int y, const char *value, int scale, struct colour colou
     host->draw_text(host->context,x,y,value,scale,colour.r,colour.g,colour.b);
 }
 
+static void outlined_text(int x, int y, const char *value, int scale, struct colour colour)
+{
+    static const struct colour black={0,0,0};
+    for (int offset_y=-1;offset_y<=1;offset_y++)
+        for (int offset_x=-1;offset_x<=1;offset_x++)
+            if (offset_x || offset_y) text(x+offset_x,y+offset_y,value,scale,black);
+    text(x,y,value,scale,colour);
+}
+
 static void controller_label(enum chirky_button action, const char *fallback,
                              char *label, size_t capacity)
 {
@@ -140,18 +149,82 @@ static void centered_text(int y, const char *value, int scale, struct colour col
     text((host->screen_width-(int)strlen(visible)*6*scale)/2,y,visible,scale,colour);
 }
 
+static void centered_outlined_text(int y, const char *value, int scale, struct colour colour)
+{
+    char visible[96];
+    int columns=(host->screen_width-12)/(6*scale);
+    snprintf(visible,sizeof(visible),"%.*s",columns,value);
+    outlined_text((host->screen_width-(int)strlen(visible)*6*scale)/2,y,visible,scale,colour);
+}
+
+static void format_time(int ticks, char *value, size_t capacity)
+{
+    int seconds=ticks/60;
+    int hundredths=(ticks%60)*100/60;
+    snprintf(value,capacity,"%02d:%02d.%02d",seconds/60,seconds%60,hundredths);
+}
+
+static void level_name(char *value, size_t capacity)
+{
+    const char *id=content.levels[current_level].id;
+    size_t used=0;
+    for (;*id && used+1<capacity;id++) {
+        char letter=*id=='-'?' ':*id;
+        if (letter>='a' && letter<='z') letter=(char)(letter-'a'+'A');
+        value[used++]=letter;
+    }
+    value[used]='\0';
+}
+
 static void render_hud(void)
 {
-    char line[64];
+    char line[64],clock[24];
     int top=host->screen_height-10;
-    rectangle(4,top-14,host->screen_width-8,20,settings.background);
-    snprintf(line,sizeof(line),"SIGNAL %02d/%02d",collected_shards,level.total_shards);
-    text(8,top,line,1,settings.paper);
-    snprintf(line,sizeof(line),"FALLS %02d",deaths);
-    text(host->screen_width-8-(int)strlen(line)*6,top,line,1,settings.amber);
-    snprintf(line,sizeof(line),"LV %d/%d",current_level+1,content.level_count);
-    centered_text(top,line,1,settings.edge);
+    draw_sprite("shard",8,top-6,false,frame_number,NULL);
+    snprintf(line,sizeof(line),"%02d",level.total_shards-collected_shards);
+    outlined_text(18,top,line,1,settings.paper);
+    snprintf(line,sizeof(line),"LIVES %d",lives);
+    outlined_text(host->screen_width-8-(int)strlen(line)*6,top,line,1,settings.amber);
+    format_time(phase==PHASE_WIN || phase==PHASE_INITIALS?completed_ticks:level_ticks,
+                clock,sizeof(clock));
+    centered_outlined_text(top,clock,1,settings.edge);
     if (dash_available) rectangle(8,top-12,8,3,settings.edge);
+}
+
+static void render_level_intro(int middle)
+{
+    char name[64],line[96];
+    level_name(name,sizeof(name));
+    snprintf(line,sizeof(line),"LEVEL %d - %s",current_level+1,name);
+    centered_outlined_text(middle-26,line,
+        (int)strlen(line)*12<=host->screen_width-24?2:1,settings.paper);
+}
+
+static void render_initials(void)
+{
+    char line[96],clock[24];
+    int top=host->screen_height-35;
+    rectangle(16,22,host->screen_width-32,host->screen_height-44,settings.background);
+    snprintf(line,sizeof(line),"TOP 10 - LEVEL %d",current_level+1);
+    centered_text(top,line,1,settings.phosphor);
+    for (int row=0;row<HIGH_SCORE_COUNT;row++) {
+        struct high_score entry={0};
+        bool pending=row==score_rank;
+        if (pending) {
+            entry.ticks=completed_ticks;
+            copy_text(entry.initials,sizeof(entry.initials),score_initials);
+        } else {
+            int source=row-(row>score_rank && score_rank>=0?1:0);
+            if (source>=0 && source<HIGH_SCORE_COUNT) entry=high_scores[current_level][source];
+        }
+        if (entry.ticks>0) {
+            format_time(entry.ticks,clock,sizeof(clock));
+            snprintf(line,sizeof(line),"%02d  %s  %s",row+1,entry.initials,clock);
+        } else snprintf(line,sizeof(line),"%02d  ---  --:--.--",row+1);
+        text(56,top-15-row*10,line,1,pending?settings.amber:settings.paper);
+        if (pending) rectangle(74+initial_cursor*6,top-18-row*10,5,1,settings.amber);
+    }
+    centered_text(29,"UP/DOWN LETTER  B NEXT",1,settings.edge);
 }
 
 void render_title(void)
@@ -164,7 +237,7 @@ void render_title(void)
         rectangle(0,0,host->screen_width,48,settings.background);
         centered_text(39,"RESTORE THE LAST SIGNAL",1,settings.paper);
         centered_text(27,"D-PAD MOVE / B JUMP / Y DASH",1,settings.edge);
-        centered_text(17,"L RESTART / SELECT PAUSE",1,settings.edge);
+        centered_text(17,"L USE LIFE / SELECT PAUSE",1,settings.edge);
         centered_text(7,"B - BEGIN",1,settings.amber);
         return;
     }
@@ -174,7 +247,7 @@ void render_title(void)
     centered_text(height-54,"RUN",3,settings.amber);
     rectangle(16,height-80,host->screen_width-32,2,settings.edge);
     centered_text(height-98,"RESTORE THE LAST SIGNAL",1,settings.paper);
-    centered_text(height-116,"D-PAD MOVE / L RESTART",1,settings.edge);
+    centered_text(height-116,"D-PAD MOVE / L USE LIFE",1,settings.edge);
     snprintf(line,sizeof(line),"JUMP - %s",jump); centered_text(height-130,line,1,settings.edge);
     snprintf(line,sizeof(line),"DASH - %s",dash); centered_text(height-144,line,1,settings.edge);
     snprintf(line,sizeof(line),"%s - PAUSE",menu); centered_text(height-158,line,1,settings.edge);
@@ -189,20 +262,42 @@ void render_game(void)
     chirky_scope(host,"world",true);render_world();chirky_scope(host,"world",false);
     chirky_scope(host,"particles",true);render_particles();chirky_scope(host,"particles",false);
     chirky_scope(host,"player",true);
-    if (robot_ready() || phase!=PHASE_DEAD || (death_timer&3)<2) render_player();
+    int middle=host->screen_height/2;
+    if (phase==PHASE_LEVEL_INTRO && robot_ready())
+        robot_draw_scaled(host,host->screen_width/2,middle+14,1,ROBOT_RUN,
+                          (float)player_animation_tick,2);
+    else if (robot_ready() || (phase!=PHASE_DEAD && phase!=PHASE_GAME_OVER) || (death_timer&3)<2)
+        render_player();
     chirky_scope(host,"player",false);
     chirky_scope(host,"hud",true);render_hud();chirky_scope(host,"hud",false);
-    int middle=host->screen_height/2;
-    if (phase==PHASE_DEAD) {
+    if (phase==PHASE_LEVEL_INTRO) {
+        render_level_intro(middle);
+    } else if (phase==PHASE_DEAD) {
         rectangle((host->screen_width-170)/2,middle-16,170,32,settings.background);
         centered_text(middle+5,"SIGNAL LOST",2,settings.hazard);
+    } else if (phase==PHASE_INITIALS) {
+        render_initials();
     } else if (phase==PHASE_WIN) {
-        char confirm[32],line[96];
+        char confirm[32],line[96],clock[24];
         controller_label(CHIRKY_BUTTON_B,"B",confirm,sizeof(confirm));
-            rectangle(8,middle-51,host->screen_width-16,102,settings.background);
+        rectangle(8,middle-58,host->screen_width-16,116,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);
+        format_time(completed_ticks,clock,sizeof(clock));
+        snprintf(line,sizeof(line),"TIME %s",clock);
+        centered_text(middle-22,line,1,settings.edge);
+        if (score_rank>=0) {
+            snprintf(line,sizeof(line),"TOP 10 RANK %02d",score_rank+1);
+            centered_text(middle-34,line,1,settings.amber);
+        }
         snprintf(line,sizeof(line),"%s - %s",confirm,current_level+1<content.level_count?"NEXT LEVEL":"RUN AGAIN");
-        centered_text(middle-29,line,1,settings.amber);
+        centered_text(middle-48,line,1,settings.amber);
+    } else if (phase==PHASE_GAME_OVER) {
+        char confirm[32],line[64];
+        controller_label(CHIRKY_BUTTON_B,"B",confirm,sizeof(confirm));
+        rectangle(24,middle-42,host->screen_width-48,84,settings.background);
+        centered_text(middle+15,"GAME OVER",3,settings.hazard);
+        snprintf(line,sizeof(line),"%s - TITLE",confirm);
+        centered_text(middle-24,line,1,settings.amber);
     }
 }

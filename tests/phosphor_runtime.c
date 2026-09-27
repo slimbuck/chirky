@@ -7,9 +7,13 @@
 const struct chirky_game_api *chirky_game_entry(void);
 static unsigned int draws;
 static struct colour pixels[240][320];
+static bool saw_level_title,saw_lives,saw_time,saw_old_level,saw_old_signal,saw_pickup_multiplier;
+static bool saw_hud_panel,saw_intro_panel;
 static void rectangle(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)ctx; draws++;
+    if (x==4 && w==host->screen_width-8 && h==20) saw_hud_panel=true;
+    if (x==12 && w==host->screen_width-24 && h==40) saw_intro_panel=true;
     for (int yy=y;yy<y+h;yy++) for (int xx=x;xx<x+w;xx++)
         if (xx>=0 && xx<320 && yy>=0 && yy<240) pixels[yy][xx]=(struct colour){r,g,b};
 }
@@ -19,6 +23,35 @@ static void text(void *ctx,int x,int y,const char *value,int scale,unsigned char
     (void)ctx;(void)r;(void)g;(void)b;
     assert(x>=0 && x+(int)strlen(value)*6*scale-scale<=host->screen_width);
     assert(y-6*scale>=0 && y+scale<=host->screen_height);
+    if (!strncmp(value,"LEVEL 1 - RELAY SHAFT",21)) saw_level_title=true;
+    if (!strncmp(value,"LIVES ",6)) saw_lives=true;
+    if (strlen(value)==8 && value[2]==':' && value[5]=='.') saw_time=true;
+    if (!strncmp(value,"LV ",3)) saw_old_level=true;
+    if (!strncmp(value,"SIGNAL ",7)) saw_old_signal=true;
+    if (!strncmp(value,"X ",2)) saw_pickup_multiplier=true;
+}
+
+static void neutral(const struct chirky_game_api *api, struct chirky_input *input, int frames)
+{
+    memset(input,0,sizeof(*input));
+    for (int i=0;i<frames;i++) api->update(input);
+}
+
+static void press(const struct chirky_game_api *api, struct chirky_input *input,
+                  enum chirky_button button)
+{
+    memset(input,0,sizeof(*input));
+    input->buttons[button]=input->button_pressed[button]=true;
+    api->update(input);
+    neutral(api,input,2);
+}
+
+static void finish_intro(const struct chirky_game_api *api, struct chirky_input *input)
+{
+    int guard=LEVEL_INTRO_TICKS+2;
+    while (phase==PHASE_LEVEL_INTRO && guard-->0) neutral(api,input,1);
+    assert(phase==PHASE_PLAY);
+    neutral(api,input,2);
 }
 
 int main(void)
@@ -32,8 +65,13 @@ int main(void)
     for(int i=0;i<3600;i++)api->update(&input);
     assert(phase==PHASE_TITLE);
     api->render(); assert(draws>0 && draws<320*240);
-    input.button_pressed[CHIRKY_BUTTON_START]=true; api->update(&input); input.button_pressed[CHIRKY_BUTTON_START]=false;
-    assert(current_level==0 && phase==PHASE_PLAY);
+    press(api,&input,CHIRKY_BUTTON_START);
+    assert(current_level==0 && phase==PHASE_LEVEL_INTRO && lives==STARTING_LIVES);
+    api->render();
+    assert(saw_level_title && saw_lives && saw_time && !saw_old_level &&
+           !saw_old_signal && !saw_pickup_multiplier);
+    assert(!saw_hud_panel && !saw_intro_panel);
+    finish_intro(api,&input);
     const struct animation *shard=content_animation(&content,"shard");
     assert(shard && shard->count==3);
     assert(animation_frame(shard,0)==animation_frame(shard,shard->ticks*3));
@@ -46,9 +84,22 @@ int main(void)
         facing=direction;draws=0;int tick=player_animation_tick;api->render();
         assert(draws>0 && draws<5000 && player_animation_tick==tick);
     }
-    deaths=7;
     for (int stage=0;stage<content.level_count;stage++) {
-        api->update(&input);api->update(&input);
+        if (phase==PHASE_LEVEL_INTRO) finish_intro(api,&input);
+        int expected_rank=0,expected_ticks=stage*120+61;
+        if (stage==1) {
+            for (int rank=0;rank<HIGH_SCORE_COUNT;rank++) {
+                high_scores[stage][rank].ticks=(rank+1)*100;
+                strcpy(high_scores[stage][rank].initials,"OLD");
+            }
+            expected_ticks=250; expected_rank=2;
+        } else if (stage==2) {
+            for (int rank=0;rank<HIGH_SCORE_COUNT;rank++) {
+                high_scores[stage][rank].ticks=rank+1;
+                strcpy(high_scores[stage][rank].initials,"PRO");
+            }
+            expected_ticks=301; expected_rank=-1;
+        }
         int expected_shards=0, exit_x=0,exit_y=0;
         for (int y=0;y<level.height;y++) for (int x=0;x<level.width;x++) {
             expected_shards+=tile_at(x,y)=='o';
@@ -56,34 +107,59 @@ int main(void)
         }
         assert(level.total_shards==expected_shards+collected_shards);
         collected_shards=level.total_shards;
+        level_ticks=expected_ticks-1;
         player_x=exit_x*TILE; player_y=exit_y*TILE;
         velocity_x=velocity_y=0;
-        api->update(&input); assert(phase==PHASE_WIN);
+        api->update(&input);
+        assert(completed_ticks==expected_ticks && score_rank==expected_rank);
         api->render();
+        if (expected_rank>=0) {
+            assert(phase==PHASE_INITIALS);
+            neutral(api,&input,2);
+            if (stage==0) press(api,&input,CHIRKY_BUTTON_UP);
+            press(api,&input,CHIRKY_BUTTON_B);
+            press(api,&input,CHIRKY_BUTTON_B);
+            if (stage==0) press(api,&input,CHIRKY_BUTTON_DOWN);
+            press(api,&input,CHIRKY_BUTTON_B);
+            assert(high_scores[stage][expected_rank].ticks==completed_ticks);
+            assert(!strcmp(high_scores[stage][expected_rank].initials,stage==0?"BAZ":"AAA"));
+            if (stage==1) assert(high_scores[stage][3].ticks==300);
+        }
+        assert(phase==PHASE_WIN);
+        if (stage==2) assert(high_scores[stage][9].ticks==10);
         input.buttons[CHIRKY_BUTTON_B]=true;
         for(int i=0;i<3;i++)api->update(&input);
         assert(phase==PHASE_WIN && current_level==stage);
-        input.buttons[CHIRKY_BUTTON_B]=false;
-        api->update(&input);api->update(&input);
-        input.button_pressed[CHIRKY_BUTTON_B]=true;
-        api->update(&input); input.button_pressed[CHIRKY_BUTTON_B]=false;
-        assert(phase==PHASE_PLAY && collected_shards==0);
+        neutral(api,&input,2);
+        press(api,&input,CHIRKY_BUTTON_B);
+        assert(phase==PHASE_LEVEL_INTRO && collected_shards==0);
         assert(current_level==(stage+1)%content.level_count);
-        assert(deaths==(stage==content.level_count-1?0:7));
+        assert(lives==STARTING_LIVES);
         assert(player_x==level.initial_x && player_y==level.initial_y);
         assert(!on_ground && !touching_left && !touching_right && dash_available);
         assert(camera_x>=0 && camera_y>=0);
     }
+    finish_intro(api,&input);
+    for (int lost=1;lost<=STARTING_LIVES;lost++) {
+        press(api,&input,CHIRKY_BUTTON_L);
+        assert(phase==PHASE_DEAD && lives==STARTING_LIVES-lost);
+        neutral(api,&input,34);
+        assert(phase==((lost==STARTING_LIVES)?PHASE_GAME_OVER:PHASE_PLAY));
+        neutral(api,&input,2);
+    }
+    press(api,&input,CHIRKY_BUTTON_B);
+    assert(phase==PHASE_TITLE);
     settings.start_level=1;
-    api->update(&input);api->update(&input);
-    phase=PHASE_TITLE; input.button_pressed[CHIRKY_BUTTON_B]=true; api->update(&input);
-    assert(current_level==1);
+    press(api,&input,CHIRKY_BUTTON_B);
+    assert(current_level==1 && phase==PHASE_LEVEL_INTRO && lives==STARTING_LIVES);
     /* All UI remains inside the safe viewport; the world uses its own camera. */
     const int sizes[][2]={{288,216},{256,192}};
     for(int i=0;i<2;i++) {
         host_api.screen_width=sizes[i][0];host_api.screen_height=sizes[i][1];
-        phase=PHASE_TITLE;api->render();phase=PHASE_PLAY;api->render();
-        phase=PHASE_DEAD;api->render();phase=PHASE_WIN;api->render();
+        phase=PHASE_TITLE;api->render();phase=PHASE_LEVEL_INTRO;api->render();
+        phase=PHASE_PLAY;api->render();phase=PHASE_DEAD;api->render();
+        phase=PHASE_INITIALS;api->render();phase=PHASE_WIN;api->render();
+        phase=PHASE_GAME_OVER;api->render();
         /* A jump above the map remains below the HUD despite camera lag. */
         memset(&input,0,sizeof(input));input.buttons[CHIRKY_BUTTON_B]=true;
         phase=PHASE_PLAY;player_x=level.width*TILE/2;player_y=level.height*TILE+8;
@@ -105,5 +181,5 @@ int main(void)
     struct animation invalid={0};
     assert(!animation_load("/tmp/phosphor-invalid.sprite",&invalid));
     assert(!invalid.count); remove("/tmp/phosphor-invalid.sprite");
-    puts("Runtime: campaign transitions, replay, selected start, animation timing and cleanup passed.");
+    puts("Runtime: lives, timing, initials, campaign transitions, replay, selected start and cleanup passed.");
 }

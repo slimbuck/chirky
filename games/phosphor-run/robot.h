@@ -17,4 +17,6 @@ bool robot_ready(void);
 /* Pure rendering: repeated renders of the same simulation state are identical. */
 bool robot_draw(const struct chirky_host_api *api, int center_x, int floor_y,
                 int facing, enum robot_clip clip, float tick);
+bool robot_draw_scaled(const struct chirky_host_api *api, int center_x, int floor_y,
+                       int facing, enum robot_clip clip, float tick, int scale);
 #endif
