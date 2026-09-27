@@ -108,6 +108,10 @@ The console exposes the SNES D-pad, **B, Y, A, X, L, R, Start and Select**.
 Games read those buttons directly and choose their gameplay behavior. Labels
 always name SNES buttons, including when playing with a keyboard.
 
+For the tested Raspberry Pi Pico wiring, GP2040-CE firmware files, checksums,
+web configuration and troubleshooting, see the
+[SNES Pico USB controller guide](docs/snes-pico-usb-controller.md).
+
 - D-pad moves through the launcher; B selects; A goes back. Select pauses a game.
 - Rosey Chop: B chops and Y jumps. Phosphor Run: B jumps, Y dashes and L restarts.
 - Title screens wait indefinitely for a fresh face, shoulder, or Start button press.
