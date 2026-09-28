@@ -87,6 +87,67 @@ async function main() {
     const endpoint = `http://127.0.0.1:${port}`;
     const info = await (await fetch(`${endpoint}/json/version`)).json();
     browser = new CDP(info.webSocketDebuggerUrl); await browser.open;
+    const catalogResponse=await fetch(new URL('catalog.json',base));
+    assert.equal(catalogResponse.status,200);
+    const catalog=await catalogResponse.json();
+    assert.equal(catalog.version,1);assert(catalog.games.length>0);
+    // Exercise the real launcher for every manifest entry, including new games.
+    for(const mobile of [false,true]) for(const [index,game] of catalog.games.entries()) {
+      const label=`launcher-${game.id}-${mobile?'mobile':'desktop'}`;
+      const report={label,errors:[],warnings:[],failedRequests:[],checks:[]};reports.push(report);
+      const target=await (await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
+      const page=new CDP(target.webSocketDebuggerUrl);await page.open;
+      const responses=new Map();
+      page.on('Runtime.exceptionThrown',p=>report.errors.push(p.exceptionDetails.text));
+      page.on('Runtime.consoleAPICalled',p=>{
+        if(p.type==='error')report.errors.push(p.args.map(arg=>arg.value ?? arg.description).join(' '));
+        if(p.type==='warning')report.warnings.push(p.args.map(arg=>arg.value ?? arg.description).join(' '));
+      });
+      page.on('Network.responseReceived',p=>{
+        responses.set(p.response.url,p.response.status);
+        if(p.response.url.startsWith(base.href) && p.response.status>=400 && !p.response.url.endsWith('/favicon.ico'))
+          report.failedRequests.push({url:p.response.url,status:p.response.status});
+      });
+      try {
+        await page.call('Page.enable');await page.call('Runtime.enable');await page.call('Network.enable');
+        await page.call('Network.setCacheDisabled',{cacheDisabled:true});
+        await page.call('Emulation.setDeviceMetricsOverride',{width:mobile?390:1280,height:mobile?844:1000,deviceScaleFactor:1,mobile});
+        await page.call('Emulation.setTouchEmulationEnabled',{enabled:mobile,maxTouchPoints:5});
+        async function waitFor(expression) {
+          for(let i=0;i<150;i++){if(await page.eval(expression))return;await delay(100);}
+          throw new Error(`Timed out: ${expression}`);
+        }
+        async function press(code,key,value) {
+          await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(100);
+          await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(100);
+        }
+        await page.call('Page.navigate',{url:base.href});
+        await waitFor('document.querySelector("#status")?.textContent==="Launcher"');
+        if(index===0) {
+          await delay(100);
+          const shot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+          fs.writeFileSync(path.join(out,`launcher-${mobile?'mobile':'desktop'}.png`),Buffer.from(shot.data,'base64'));
+        }
+        await page.eval('document.querySelector("#screen").focus()');
+        for(let i=0;i<index;i++)await press('ArrowDown','ArrowDown',40);
+        await press('Enter','Enter',13);
+        await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(game.name)} && new URL(location.href).searchParams.get('game')===${JSON.stringify(game.id)}`);
+        assert.equal(await page.eval('document.querySelector("#status").textContent'),game.name);
+        for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,base).href),200);
+        await press('Enter','Enter',13);await delay(250);
+        const size=await page.eval('(() => {const r=document.querySelector("#screen").getBoundingClientRect();return {width:r.width,height:r.height};})()');
+        assert.equal(size.width%320,0);assert.equal(size.height,size.width*240/320);
+        const shot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+        fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(shot.data,'base64'));
+        report.checks.push('selected through catalog launcher, JS/WASM HTTP 200, integer canvas scale');report.passed=true;
+      } catch(error){report.failure=error.stack;console.error(`${label}: ${error.message}`);}
+      finally {
+        await page.call('Page.navigate',{url:'about:blank'}).catch(()=>{});page.close();
+        await fetch(`${endpoint}/json/close/${target.id}`).catch(()=>{});
+        fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(reports,null,2));
+        console.log(JSON.stringify(report));
+      }
+    }
     const source = await (await fetch(new URL('player.js',base))).text();
     const readyLine = source.split('\n').findIndex(line => /ready=true;/.test(line));
     assert(readyLine>=0, 'Cannot locate initialization checkpoint');
@@ -154,6 +215,13 @@ async function main() {
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
         const title=await capture('title');assert.equal(title.touchVisible,mobile);
         if(mobile)await click('[data-button="5"]');else{await click('#screen');await key('Enter','Enter',13);}
+        if(game==='phosphor-run') {
+          // The level introduction lasts 90 simulation ticks and consumes input.
+          // Allow it to finish and the player to land before testing jump/dash audio.
+          const targetTicks=(await state()).ticks+120;
+          for(let i=0;i<150 && (await state()).ticks<targetTicks;i++)await delay(100);
+          assert((await state()).ticks>=targetTicks,'Level introduction did not advance');
+        }
         await delay(250);const playing=await capture('playing');assert.notEqual(playing.hash,title.hash);
         if(mobile){await click('[data-button="1"]',350);await click('[data-button="4"]');await click('[data-button="5"]');}
         else{await key('ArrowRight','ArrowRight',39,350);await key('KeyZ','z',90);await key('KeyX','x',88);}

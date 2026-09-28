@@ -70,8 +70,11 @@ node tools/platform-browser.cjs http://127.0.0.1:3031/ build/standalone-checks
 node tools/export-web.cjs ../slimbuck.com
 ```
 
-The export command starts a temporary standalone server, runs desktop and mobile
-browser checks for every packaged game, verifies that the package is unchanged, then
+The export command starts a temporary standalone server, selects every catalog
+entry through the launcher at desktop and mobile sizes, checks module responses
+and integer canvas scaling, and runs detailed input/audio/lifecycle checks for
+Phosphor Run and Rosey Chop. Phosphor checks wait for the level introduction
+before sending gameplay input. It verifies that the package is unchanged, then
 replaces only the website's `apps/chirky/` directory with the tested bytes.
 It removes obsolete files there and leaves other apps untouched. Chrome must be
 installed; set `CHROME` to its executable if necessary. Screenshots and results
