@@ -137,13 +137,33 @@ function resizePlayer(){
   player.classList.toggle("landscape",landscape);
   const touchHeight=getComputedStyle($(".touch")).display==="none"?0:$(".touch").getBoundingClientRect().height+12;
   const touchWidth=landscape?$(".touch").getBoundingClientRect().width+12:0;
-  const availableWidth=Math.max(1,Math.min(fullscreen?innerWidth-18-touchWidth:innerWidth-26,fullscreen?innerWidth:952));
+  const availableWidth=Math.max(1,fullscreen?innerWidth-18-touchWidth:player.clientWidth-4);
   const availableHeight=fullscreen?Math.max(1,innerHeight-player.querySelector("nav").getBoundingClientRect().height-(landscape?0:touchHeight)-32):Infinity;
-  const fit=Math.min(availableWidth/320,availableHeight/240),scale=fit>=1?Math.floor(fit):fit;
-  canvas.style.width=`${320*scale}px`;canvas.style.height=`${240*scale}px`;display.style.width=`${320*scale+2}px`;
+  // CSS pixels can be fractional physical pixels at browser/OS zoom. Quantize
+  // the framebuffer's physical scale, then convert back to CSS dimensions.
+  const density=window.devicePixelRatio || 1;
+  const fit=Math.min(availableWidth/320,availableHeight/240)*density;
+  const scale=(fit>=1?Math.floor(fit+1e-6):fit)/density;
+  // A fractional CSS width is rounded to layout units before compositing and
+  // can still produce uneven pixels. Scale the native-size canvas directly.
+  canvas.style.width="320px";canvas.style.height="240px";
+  canvas.style.transformOrigin="top left";canvas.style.transform=`scale(${scale})`;
+  display.style.width=`${320*scale+2}px`;display.style.height=`${240*scale+2}px`;
+  // Centering and borders can place even an integer-size image between pixels.
+  display.style.position="relative";display.style.left="0px";display.style.top="0px";
+  const rect=canvas.getBoundingClientRect();
+  display.style.left=`${Math.round(rect.left*density)/density-rect.left}px`;
+  display.style.top=`${Math.round(rect.top*density)/density-rect.top}px`;
 }
 document.addEventListener("fullscreenchange",()=>{const full=!!document.fullscreenElement;$("#fullscreen").textContent=full?"Exit full screen":"Full screen";$("#fullscreen").setAttribute("aria-pressed",String(full));resizePlayer();});
 window.addEventListener("resize",resizePlayer);
+// Moving between monitors can change density without changing the CSS viewport.
+function watchPixelDensity(){
+  if(typeof matchMedia!=="function")return;
+  matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener("change",()=>{resizePlayer();watchPixelDensity();},{once:true});
+}
+watchPixelDensity();
+resizePlayer();
 $("#input-settings").onclick=()=>{setPaused(true);settingsOpen=true;draftSettings={...inputSettings,keys:[...inputSettings.keys]};cancelCapture();refreshDraft();$("#settings").showModal();};
 document.querySelectorAll("[data-bind]").forEach(button=>{button.onclick=()=>{captureButton=Number(button.dataset.bind);$("#binding-message").textContent=`Press a key for ${inputNames[captureButton]}.` ;$("#cancel-binding").hidden=false;};});
 $("#settings").addEventListener("keydown",event=>{

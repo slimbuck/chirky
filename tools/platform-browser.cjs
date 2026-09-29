@@ -8,6 +8,26 @@ const { spawn } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// Decode a screenshot scanline to check the actual rasterized pixel widths.
+function pngRow(png, y) {
+  const width=png.readUInt32BE(16), channels=png[25]===2?3:4, chunks=[];
+  assert.equal(png[24],8);assert([2,6].includes(png[25]));
+  for(let p=8;p<png.length;){const size=png.readUInt32BE(p);if(png.toString('ascii',p+4,p+8)==='IDAT')chunks.push(png.subarray(p+8,p+8+size));p+=size+12;}
+  const raw=require('node:zlib').inflateSync(Buffer.concat(chunks)),stride=width*channels;
+  let previous=Buffer.alloc(stride),offset=0;
+  for(let row=0;row<=y;row++){
+    const filter=raw[offset++],decoded=Buffer.alloc(stride);
+    for(let x=0;x<stride;x++){
+      const a=x>=channels?decoded[x-channels]:0,b=previous[x],c=x>=channels?previous[x-channels]:0;
+      const p=a+b-c,pa=Math.abs(p-a),pb=Math.abs(p-b),pc=Math.abs(p-c);
+      const prediction=[0,a,b,Math.floor((a+b)/2),pa<=pb&&pa<=pc?a:pb<=pc?b:c][filter];
+      assert.notEqual(prediction,undefined);decoded[x]=(raw[offset++]+prediction)&255;
+    }
+    previous=decoded;
+  }
+  return {pixels:previous,channels};
+}
+
 class CDP extends EventEmitter {
   constructor(url) {
     super(); this.next = 0; this.pending = new Map(); this.ws = new WebSocket(url);
@@ -91,6 +111,71 @@ async function main() {
     assert.equal(catalogResponse.status,200);
     const catalog=await catalogResponse.json();
     assert.equal(catalog.version,1);assert(catalog.games.length>0);
+    // Keep the same physical pixel grid before/after loading and across games,
+    // including fractional OS scale and narrow windows.
+    const diagnostic=catalog.games.findIndex(game=>game.role==='diagnostic');
+    assert(diagnostic>=0);
+    for(const [width,height,density] of [[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1]]){
+      const label=`layout-${width}-${density}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
+      const page=new CDP(target.webSocketDebuggerUrl);await page.open;
+      const report={label,checks:[],errors:[],warnings:[],failedRequests:[],passed:false};reports.push(report);
+      let held;
+      page.on('Fetch.requestPaused',p=>{held=p.requestId;});
+      async function waitFor(expression){for(let i=0;i<150;i++){if(await page.eval(expression))return;await delay(100);}throw Error(`Timed out: ${expression}`);}
+      const measure=`(()=>{const c=document.querySelector('#screen'),r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,density:devicePixelRatio,buffer:[c.width,c.height],overflow:document.documentElement.scrollWidth>innerWidth};})()`;
+      async function checkLoading(name){
+        for(let i=0;i<150&&!held;i++)await delay(100);assert(held,'WASM request must be held to test loading');
+        const loading=await page.eval(measure);await page.call('Fetch.continueRequest',{requestId:held});held=null;
+        await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(name)}`);
+        const loaded=await page.eval(measure);assert.deepEqual(loaded,loading,'Loading must not resize or move the screen');return loaded;
+      }
+      try{
+        await page.call('Page.enable');await page.call('Runtime.enable');await page.call('Network.enable');
+        await page.call('Network.setCacheDisabled',{cacheDisabled:true});
+        await page.call('Fetch.enable',{patterns:[{urlPattern:'*.wasm'}]});
+        await page.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:density,mobile:false});
+        await page.call('Page.navigate',{url:base.href});
+        const launcher=await checkLoading('Launcher');
+        await page.eval('document.querySelector("#screen").focus()');
+        for(let i=0;i<diagnostic;i++){
+          await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'ArrowDown',key:'ArrowDown',windowsVirtualKeyCode:40});await delay(80);
+          await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'ArrowDown',key:'ArrowDown',windowsVirtualKeyCode:40});await delay(80);
+        }
+        await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyX',key:'x',windowsVirtualKeyCode:88});await delay(80);
+        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyX',key:'x',windowsVirtualKeyCode:88});
+        const game=await checkLoading(catalog.games[diagnostic].name);
+        report.screen=game;
+        assert.deepEqual(game,launcher,'Launcher and game must use the same screen size');
+        assert.deepEqual(game.buffer,[320,240]);assert(!game.overflow);
+        const physicalScale=game.width*density/320;
+        assert(Math.abs(physicalScale-Math.round(physicalScale))<.001,'Each game pixel must use whole physical pixels');
+        assert(Math.abs(game.x*density-Math.round(game.x*density))<.03);
+        assert(Math.abs(game.y*density-Math.round(game.y*density))<.03);
+        const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+        fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(screenshot.data,'base64'));
+        await page.eval(`(()=>{document.querySelector('#pause').focus();document.querySelector('#pause').click();const gl=document.querySelector('#screen').getContext('webgl');gl.enable(gl.SCISSOR_TEST);for(let x=0;x<320;x++){gl.scissor(x,0,1,240);gl.clearColor(x%2,0,1-x%2,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.disable(gl.SCISSOR_TEST);})()`);
+        const stripes=Buffer.from((await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64');
+        fs.writeFileSync(path.join(out,`${label}-pixels.png`),stripes);
+        const {pixels,channels}=pngRow(stripes,Math.round((game.y+game.height/2)*density));
+        const start=Math.round(game.x*density),step=Math.round(physicalScale);
+        // Check every column of the CRT-safe game viewport. The surrounding
+        // native black border can overlap the page's decorative screen border.
+        const runs=[];
+        for(let x=16*step;x<(320-16)*step;x++){
+          const offset=(start+x)*channels,red=pixels[offset];
+          assert(red===0 || red===255,'Pixel edges must not be blurred');
+          assert.equal(pixels[offset+1],0);assert.equal(pixels[offset+2],255-red);
+          if(runs.at(-1)?.red===red)runs.at(-1).width++;else runs.push({red,width:1});
+        }
+        // DOM bounds can round a physical pixel differently from the compositor;
+        // measure complete color runs, excluding only the two clipped end runs.
+        assert(runs.length>=287);
+        for(const run of runs.slice(1,-1))assert.equal(run.width,step,'Every game pixel must have the same physical width');
+        report.checks.push('stable loading and launcher/game size; native framebuffer; uniform screenshot pixel widths at display scale');report.passed=true;
+      }catch(error){report.failure=error.stack;console.error(`${label}: ${error.message}`);}
+      finally{await page.call('Page.navigate',{url:'about:blank'}).catch(()=>{});page.close();await fetch(`${endpoint}/json/close/${target.id}`).catch(()=>{});console.log(JSON.stringify(report));}
+    }
+    if(process.argv.includes('--layout-only')){assert(reports.every(report=>report.passed),'Layout checks failed');return;}
     // Exercise the real launcher for every manifest entry, including new games.
     for(const mobile of [false,true]) for(const [index,game] of catalog.games.entries()) {
       const label=`launcher-${game.id}-${mobile?'mobile':'desktop'}`;

@@ -1,4 +1,4 @@
-:root{color-scheme:dark;font:16px system-ui;background:#080e12;color:#eae9db}
+:root{color-scheme:dark;font:16px system-ui;background:#080e12;color:#eae9db;scrollbar-gutter:stable}
 *{box-sizing:border-box}body{margin:0}main{max-width:1000px;margin:auto;padding:24px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:22px;letter-spacing:.04em}#status{color:#a7c1ba;font-size:14px}
 #display{background:#000;border:1px solid #2a4a46;border-radius:8px;overflow:hidden;margin:16px auto;width:322px;flex-shrink:0}canvas{display:block;width:320px;height:240px;image-rendering:pixelated;outline:none}canvas:focus-visible{outline:2px solid #f4c246;outline-offset:-2px}
 nav{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}button,nav a,select{font:inherit;color:inherit;background:#15302f;border:1px solid #34544e;border-radius:5px;padding:10px 14px;text-decoration:none;cursor:pointer}button:hover,nav a:hover{background:#254740}button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #f4c246;outline-offset:2px}button:disabled{opacity:.5}.help{text-align:center;font-size:14px;line-height:1.8;color:#9cb0ab}

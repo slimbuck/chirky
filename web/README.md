@@ -86,7 +86,9 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 - Touch controls support simultaneous movement/actions and Auto/Show/Hide.
   Pointer cancellation or loss of focus clears held inputs.
 - Full screen toggles the whole player, including touch controls and navigation.
-  Canvas scaling uses integer multiples of 320x240 whenever space permits.
+  The 320x240 framebuffer uses whole physical screen pixels at browser/OS zoom
+  levels whenever space permits. Its size is set before WASM loading, and the
+  launcher and games share the same sizing rules. No game sprite sizes change.
   Unsupported fullscreen browsers display an explanatory message.
 - Losing focus or hiding the tab pauses play. Resume continues the run.
 - Games still render into the normal CRT-safe logical viewport. Simulation
