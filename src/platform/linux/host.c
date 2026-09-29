@@ -405,16 +405,16 @@ static void copy_text(char *destination, size_t capacity, const char *source)
 
 static const char *const button_config_keys[CHIRKY_BUTTON_COUNT] = {
     "bind_left", "bind_right", "bind_up", "bind_down",
-    "bind_y", "bind_b", "bind_a", "bind_x", "bind_l", "bind_r", "bind_start", "bind_select"
+    "bind_primary", "bind_secondary", "bind_start", "bind_menu"
 };
 
 static const char *const button_names[CHIRKY_BUTTON_COUNT] = {
-    "LEFT", "RIGHT", "UP", "DOWN", "Y", "B", "A", "X", "L", "R", "START", "SELECT"
+    "LEFT", "RIGHT", "UP", "DOWN", "PRIMARY", "SECONDARY", "START", "MENU"
 };
 
 static const char *const keyboard_config_keys[CHIRKY_BUTTON_COUNT] = {
     "key_left", "key_right", "key_up", "key_down",
-    "key_y", "key_b", "key_a", "key_x", "key_l", "key_r", "key_start", "key_select"
+    "key_primary", "key_secondary", "key_start", "key_menu"
 };
 
 static int binding_button_for_key(const char *key)
@@ -426,12 +426,26 @@ static int binding_button_for_key(const char *key)
     return -1;
 }
 
-/* Read old action mappings once, then save only SNES button names. */
+/* Read old action mappings once, then save only Chirky input names. */
 static int legacy_binding_for_key(const char *key)
 {
     const char *names[]={"bind_jump","bind_dash","bind_confirm","bind_menu",
                          "key_jump","key_dash","key_confirm","key_menu"};
     for (int i=0;i<8;i++) if (!strcmp(key,names[i])) return i;
+    return -1;
+}
+
+/* -2 identifies retired SNES bindings, removed on the next save. */
+static int snes_binding_for_key(const char *key)
+{
+    int offset;
+    if (!strncmp(key,"bind_",5)) { offset=0; key+=5; }
+    else if (!strncmp(key,"key_",4)) { offset=CHIRKY_BUTTON_COUNT; key+=4; }
+    else return -1;
+    if (!strcmp(key,"b")) return offset+CHIRKY_BUTTON_PRIMARY;
+    if (!strcmp(key,"y")) return offset+CHIRKY_BUTTON_SECONDARY;
+    if (!strcmp(key,"select")) return offset+CHIRKY_BUTTON_MENU;
+    if (!strcmp(key,"a") || !strcmp(key,"x") || !strcmp(key,"l") || !strcmp(key,"r")) return -2;
     return -1;
 }
 
@@ -452,12 +466,12 @@ static bool save_bindings(const struct host *host)
         char *key=trim(parsed), *separator=strchr(key,'=');
         if (separator) *separator=0;
         key=trim(key);
-        if (binding_button_for_key(key)<0 && legacy_binding_for_key(key)<0 && strcmp(key,"safe_x") && strcmp(key,"safe_y") && strcmp(key,"safe_offset_x") && strcmp(key,"safe_offset_y") && strcmp(key,"input_version"))
+        if (binding_button_for_key(key)<0 && legacy_binding_for_key(key)<0 && snes_binding_for_key(key)==-1 && strcmp(key,"safe_x") && strcmp(key,"safe_y") && strcmp(key,"safe_offset_x") && strcmp(key,"safe_offset_y") && strcmp(key,"input_version"))
             fputs(line,target);
     }
     bool failed=source && ferror(source);
     if (source) fclose(source);
-    fputs("\ninput_version=3\n",target);
+    fputs("\ninput_version=4\n",target);
     fprintf(target,"safe_x=%d\nsafe_y=%d\n",host->safe_x,host->safe_y);
     fprintf(target,"safe_offset_x=%d\nsafe_offset_y=%d\n",host->safe_offset_x,host->safe_offset_y);
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
@@ -686,7 +700,8 @@ static void load_host_config(struct host *host)
     host->frame_timing_enabled=false;
     host->timing_start_held=host->timing_start_toggled=false;
     int input_version=0;
-    struct controller_binding legacy[8]={0};
+    struct controller_binding legacy[8]={0}, snes[2*CHIRKY_BUTTON_COUNT]={0};
+    bool snes_supplied[2*CHIRKY_BUTTON_COUNT]={0};
     bool supplied[2*CHIRKY_BUTTON_COUNT]={0}, old_supplied[8]={0};
     FILE *file=fopen(HOST_CONFIG_PATH,"r");
     if (!file) return;
@@ -702,23 +717,31 @@ static void load_host_config(struct host *host)
         else if (!strcmp(key,"safe_offset_y")) { int n=atoi(value); if(n>=-24 && n<=24)host->safe_offset_y=n; }
         else if (!strcmp(key,"input_version")) input_version=atoi(value);
         else {
-            int button=binding_button_for_key(key), old=legacy_binding_for_key(key);
+            int button=binding_button_for_key(key), old=legacy_binding_for_key(key), previous=snes_binding_for_key(key);
             struct controller_binding parsed;
             if (!parse_binding(value,&parsed)) continue;
             if (button>=0 && (button<CHIRKY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
                 if (button<CHIRKY_BUTTON_COUNT) host->bindings[button]=parsed;
                 else host->keyboard_bindings[button-CHIRKY_BUTTON_COUNT]=parsed;
                 supplied[button]=true;
+            } else if (previous>=0 && (previous<CHIRKY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
+                snes[previous]=parsed; snes_supplied[previous]=true;
             } else if (old>=0 && (old<4 || keyboard_binding_valid(parsed))) {
                 legacy[old]=parsed; old_supplied[old]=true;
             }
         }
     }
     fclose(file);
+    if (input_version<4) for (int i=0;i<2*CHIRKY_BUTTON_COUNT;i++) {
+        if (!snes_supplied[i] || supplied[i]) continue;
+        if (i<CHIRKY_BUTTON_COUNT) host->bindings[i]=snes[i];
+        else host->keyboard_bindings[i-CHIRKY_BUTTON_COUNT]=snes[i];
+        supplied[i]=true;
+    }
     if (input_version<3) {
-        const int targets[]={CHIRKY_BUTTON_Y,CHIRKY_BUTTON_B,-1,CHIRKY_BUTTON_SELECT,
-            CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_Y,CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_B,
-            CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_START,CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_SELECT};
+        const int targets[]={CHIRKY_BUTTON_SECONDARY,CHIRKY_BUTTON_PRIMARY,-1,CHIRKY_BUTTON_MENU,
+            CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_SECONDARY,CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_PRIMARY,
+            CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_START,CHIRKY_BUTTON_COUNT+CHIRKY_BUTTON_MENU};
         for (int i=0;i<8;i++) {
             int target=targets[i];
             if (target<0 || !old_supplied[i] || supplied[target]) continue;
@@ -728,10 +751,12 @@ static void load_host_config(struct host *host)
         }
         /* A legacy Confirm has no separate game button. Dash owns B; if Dash
            was absent, retain custom Confirm as B except the obsolete Start default. */
-        if (!supplied[CHIRKY_BUTTON_B] && old_supplied[2] &&
+        if (!supplied[CHIRKY_BUTTON_PRIMARY] && old_supplied[2] &&
             !(input_version<2 && legacy[2].kind==BINDING_KEY && legacy[2].code==BTN_TR2)) {
-            host->bindings[CHIRKY_BUTTON_B]=legacy[2]; supplied[CHIRKY_BUTTON_B]=true;
+            host->bindings[CHIRKY_BUTTON_PRIMARY]=legacy[2]; supplied[CHIRKY_BUTTON_PRIMARY]=true;
         }
+    }
+    if (input_version<4) {
         /* New defaults must not turn a retained custom input into two buttons. */
         for (int source=0;source<2;source++) {
             struct controller_binding *map=source?host->keyboard_bindings:host->bindings;
@@ -1012,8 +1037,8 @@ static void menu_row(struct host *host, int y, const char *label, bool selected)
 
 static void menu_footer(struct host *host, bool can_go_back)
 {
-    char confirm[32],back[32],line[80]; button_label(host,CHIRKY_BUTTON_B,confirm,sizeof(confirm));
-    button_label(host,CHIRKY_BUTTON_A,back,sizeof(back));
+    char confirm[32],back[32],line[80]; button_label(host,CHIRKY_BUTTON_PRIMARY,confirm,sizeof(confirm));
+    button_label(host,CHIRKY_BUTTON_SECONDARY,back,sizeof(back));
     if (can_go_back) snprintf(line,sizeof(line),"%s SELECT - %s BACK",confirm,back);
     else snprintf(line,sizeof(line),"%s SELECT - UP DOWN MOVE",confirm);
     menu_text(host,10,14,line,1,112,160,170);
@@ -1112,12 +1137,12 @@ static void held_input_names(const struct host *host, bool keyboard, char *line,
 
 static void draw_live_inputs(struct host *host)
 {
-    int cell=(host->api.screen_width-20)/6;
+    int cell=(host->api.screen_width-20)/4;
     menu_text(host,10,87,"PAD GREEN / KEY GOLD",1,155,175,180);
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         bool pad=binding_down(&host->inputs,&host->bindings[i],false);
         bool key=binding_down(&host->inputs,&host->keyboard_bindings[i],true);
-        int x=10+(i%6)*cell, y=61-(i/6)*21;
+        int x=10+(i%4)*cell, y=61-(i/4)*21;
         fill_rect(host,x,y,cell-2,18,pad||key?45:22,pad||key?65:32,pad||key?58:38);
         menu_text(host,x+2,y+14,button_names[i],1,pad||key?250:130,pad||key?245:150,pad||key?220:157);
         fill_rect(host,x+2,y+2,(cell-6)/2,3,pad?93:40,pad?220:60,pad?153:60);
@@ -1143,18 +1168,18 @@ static void draw_controller_settings(struct host *host)
             setup->wait_release?"RELEASE ALL INPUTS":"PRESS NOW");
         menu_text(host,10,height-74,line,1,112,180,190);
         menu_text(host,10,99,setup->message,1,244,160,70);
-        menu_text(host,10,12,setup->keyboard?"F1 CANCEL - SAVES AFTER ALL 12":"HOLD TWO BUTTONS TO CANCEL",1,112,160,170);
+        menu_text(host,10,12,setup->keyboard?"F1 CANCEL - SAVES AFTER ALL 8":"HOLD TWO BUTTONS TO CANCEL",1,112,160,170);
     } else if (host->input_test) {
         menu_text(host,10,height-22,"TEST BUTTONS",2,238,240,232);
         menu_text(host,10,height-49,"PRESS ANY KEYS OR BUTTONS",1,112,180,190);
         menu_text(host,10,height-64,"BOTH SOURCES LIGHT UP BELOW",1,112,180,190);
-        menu_text(host,10,12,"HOLD A 1 SECOND TO RETURN",1,112,160,170);
+        menu_text(host,10,12,"HOLD SECONDARY 1 SECOND TO RETURN",1,112,160,170);
     } else {
         menu_text(host,10,height-19,"INPUT SETTINGS",2,238,240,232);
         menu_text(host,10,height-35,host->settings_message?host->settings_message:"",1,244,194,70);
-        const char *labels[]={"MAP SNES CONTROLLER","MAP KEYBOARD TO SNES","TEST BUTTONS","BACK"};
+        const char *labels[]={"MAP CONTROLLER","MAP KEYBOARD","TEST BUTTONS","BACK"};
         for (int i=0;i<4;i++) menu_row(host,height-48-i*16,labels[i],host->selected_option==i);
-        menu_text(host,10,12,"B SELECT - A BACK",1,112,160,170);
+        menu_text(host,10,12,"PRIMARY SELECT - SECONDARY BACK",1,112,160,170);
     }
     draw_live_inputs(host);
 }
@@ -1516,7 +1541,7 @@ static void process_input(struct host *host, int fd)
 
 static bool menu_confirmed(const struct chirky_input *input)
 {
-    return input->button_pressed[CHIRKY_BUTTON_B];
+    return input->button_pressed[CHIRKY_BUTTON_PRIMARY];
 }
 
 static int menu_direction(const struct host *host)
@@ -1591,7 +1616,7 @@ static void update_host(struct host *host)
     if (!host->setup.active && host->inputs.pressed[KEY_F12]) snapshot_requested=1;
     int direction=menu_direction(host);
     bool confirm=menu_confirmed(input);
-    bool back=host->inputs.pressed[KEY_F1] || input->button_pressed[CHIRKY_BUTTON_A];
+    bool back=host->inputs.pressed[KEY_F1] || input->button_pressed[CHIRKY_BUTTON_SECONDARY];
     if (host->ui_wait_release && !host->inputs.pressed[KEY_F1]) {
         bool neutral=buttons_released(&host->inputs,false) && buttons_released(&host->inputs,true);
         for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)neutral &= !input->button_pressed[i];
@@ -1602,17 +1627,17 @@ static void update_host(struct host *host)
         if (recovery_chord(&host->inputs)) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         bool diagnostic=host->active_game->diagnostic;
-        if (host->inputs.pressed[KEY_F1] || host->controller_menu_chord_frames>=60 || (diagnostic && back)) {
+        if (host->inputs.pressed[KEY_F1] || host->controller_menu_chord_frames>=60 || (diagnostic && input->button_pressed[CHIRKY_BUTTON_MENU])) {
             unload_game(host); host->controller_settings=false;
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         } else if(host->paused) {
             if(direction)host->pause_option=(host->pause_option+direction+2)%2;
-            else if(back || input->button_pressed[CHIRKY_BUTTON_SELECT])host->paused=false;
+            else if(back || input->button_pressed[CHIRKY_BUTTON_MENU])host->paused=false;
             else if(confirm) {
                 if(host->pause_option==0)host->paused=false;
                 else {host->settings_menu=false;unload_game(host);}
             }
-        } else if(!diagnostic && input->button_pressed[CHIRKY_BUTTON_SELECT]) {
+        } else if(!diagnostic && input->button_pressed[CHIRKY_BUTTON_MENU]) {
             host->paused=true;host->pause_option=0;
         } else chirky_runtime_update(&host->runtime,input);
     } else if (host->display_settings) {
@@ -1635,7 +1660,7 @@ static void update_host(struct host *host)
             else host->settings_message="SAVE FAILED - TRY AGAIN";
         }
     } else if (host->controller_settings && host->input_test) {
-        if (input->buttons[CHIRKY_BUTTON_A]) host->controller_menu_chord_frames++;
+        if (input->buttons[CHIRKY_BUTTON_SECONDARY]) host->controller_menu_chord_frames++;
         else host->controller_menu_chord_frames=0;
         if (host->inputs.pressed[KEY_F1] || host->controller_menu_chord_frames>=60) {
             host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
@@ -1755,7 +1780,7 @@ static void draw_pause_menu(struct host *host)
         fill_rect(host,x+12,row-9,3,10,selected?244:70,selected?194:110,70);
         menu_text(host,x+22,row,labels[i],1,selected?250:170,selected?248:185,selected?236:190);
     }
-    menu_text(host,x+12,y+10,"B SELECT - A BACK",1,112,160,170);
+    menu_text(host,x+12,y+10,"PRIMARY OK - SECONDARY BACK",1,112,160,170);
 }
 
 static void capture_gpu_resolve(struct host *host,const struct profile_shared *shared)
@@ -2057,7 +2082,7 @@ int main(void)
         cleanup(&host);
         return EXIT_FAILURE;
     }
-    puts("Chirky host running. Menus: B selects, A goes back. Games: Select pauses, F1 recovers, F12 snapshots.");
+    puts("Chirky host running. Menus: Primary selects, Secondary goes back. Games: Menu pauses, F1 recovers, F12 snapshots.");
     while (host.running && !stop_requested) {
         if (!next_frame(&host)) host.running = false;
     }

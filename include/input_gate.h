@@ -3,10 +3,10 @@
 #include "chirky.h"
 #include <string.h>
 
-/* A fresh face, shoulder, or Start press begins a title screen. Select pauses. */
+/* A fresh Primary, Secondary, or Start press begins a title. Menu pauses. */
 static inline bool chirky_title_pressed(const struct chirky_input *input)
 {
-    for(int button=CHIRKY_BUTTON_Y;button<=CHIRKY_BUTTON_START;button++)
+    for(int button=CHIRKY_BUTTON_PRIMARY;button<=CHIRKY_BUTTON_START;button++)
         if(input->button_pressed[button])return true;
     return false;
 }

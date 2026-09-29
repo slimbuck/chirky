@@ -191,7 +191,7 @@ static void update_gameplay(const struct chirky_input *input)
     if (garden.phase != PLAY) {
         garden.result_age++;
         if ((garden.phase == TITLE && chirky_title_pressed(input)) ||
-            (garden.phase != TITLE && garden.result_age > 40 && input->button_pressed[CHIRKY_BUTTON_B])) reset_run();
+            (garden.phase != TITLE && garden.result_age > 40 && input->button_pressed[CHIRKY_BUTTON_PRIMARY])) reset_run();
         return;
     }
     /* A storm or sting takes precedence over a final chop on the same tick. */
@@ -204,7 +204,7 @@ static void update_gameplay(const struct chirky_input *input)
     garden.x = clamp_value(garden.x+dx*speed, 10, WORLD_W-10);
     garden.y = clamp_value(garden.y+dy*speed, 16, WORLD_H-10);
     if (garden.jump_cooldown) garden.jump_cooldown--;
-    if (input->button_pressed[CHIRKY_BUTTON_Y] && garden.z == 0 && !garden.jump_cooldown) {
+    if (input->button_pressed[CHIRKY_BUTTON_SECONDARY] && garden.z == 0 && !garden.jump_cooldown) {
         garden.vz = 3.5f; garden.jump_cooldown = 36; sound("jump");
     }
     if (garden.vz || garden.z) {
@@ -214,7 +214,7 @@ static void update_gameplay(const struct chirky_input *input)
     update_wasp();
     if (garden.phase != PLAY) return;
     if (garden.chop) garden.chop--;
-    if (!garden.chop && (input->buttons[CHIRKY_BUTTON_B] || input->button_pressed[CHIRKY_BUTTON_B])) chop();
+    if (!garden.chop && (input->buttons[CHIRKY_BUTTON_PRIMARY] || input->button_pressed[CHIRKY_BUTTON_PRIMARY])) chop();
     if (!garden.remaining) finish(WON);
 }
 

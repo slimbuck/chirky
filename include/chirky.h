@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 11
+#define CHIRKY_ABI_VERSION 12
 
 typedef uint32_t chirky_asset;
 enum chirky_asset_type { CHIRKY_ASSET_BLOB, CHIRKY_ASSET_IMAGE, CHIRKY_ASSET_SOUND };
@@ -23,14 +23,10 @@ enum chirky_button {
     CHIRKY_BUTTON_RIGHT,
     CHIRKY_BUTTON_UP,
     CHIRKY_BUTTON_DOWN,
-    CHIRKY_BUTTON_Y,
-    CHIRKY_BUTTON_B,
-    CHIRKY_BUTTON_A,
-    CHIRKY_BUTTON_X,
-    CHIRKY_BUTTON_L,
-    CHIRKY_BUTTON_R,
+    CHIRKY_BUTTON_PRIMARY,
+    CHIRKY_BUTTON_SECONDARY,
     CHIRKY_BUTTON_START,
-    CHIRKY_BUTTON_SELECT,
+    CHIRKY_BUTTON_MENU,
     CHIRKY_BUTTON_COUNT
 };
 
@@ -62,7 +58,7 @@ struct chirky_host_api {
     void (*draw_text)(void *context, int x, int y, const char *text, int scale,
                       unsigned char red, unsigned char green,
                       unsigned char blue);
-    /* Writes the current host-facing label for a logical SNES button as a
+    /* Writes the current host-facing label for a logical Chirky button as a
        NUL-terminated string when capacity is nonzero. Games should display
        this label instead of naming a keyboard key. */
     void (*button_label)(void *context, enum chirky_button action,

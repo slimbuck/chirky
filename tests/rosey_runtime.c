@@ -38,7 +38,7 @@ static void effect(void *ctx, const char *device, const char *path)
     char magic[4]; assert(fread(magic,1,4,f)==4 && !memcmp(magic,"RIFF",4)); fclose(f); sounds++;
 }
 static void label(void *ctx, enum chirky_button action, char *s, size_t n)
-{ (void)ctx; snprintf(s,n,"%s",action==CHIRKY_BUTTON_Y ? "Y" : "B"); }
+{ (void)ctx; snprintf(s,n,"%s",action==CHIRKY_BUTTON_SECONDARY ? "Y" : "B"); }
 static void preview(const char *name)
 {
     draws=0; game->render(); assert(draws>0 && draws<(garden.phase==TITLE?320*240:5000));
@@ -52,8 +52,8 @@ static void begin(void)
 {
     memset(&controls,0,sizeof(controls));
     game->update(&controls);game->update(&controls);
-    garden.result_age=41; controls.button_pressed[CHIRKY_BUTTON_B]=true;
-    game->update(&controls); controls.button_pressed[CHIRKY_BUTTON_B]=false;
+    garden.result_age=41; controls.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;
+    game->update(&controls); controls.button_pressed[CHIRKY_BUTTON_PRIMARY]=false;
     assert(garden.phase==PLAY && garden.elapsed==0 && garden.remaining==18);
     game->update(&controls);game->update(&controls);
 }
@@ -88,9 +88,9 @@ int main(void)
         controls.buttons[CHIRKY_BUTTON_RIGHT]=nearest->x>garden.x+2;
         controls.buttons[CHIRKY_BUTTON_UP]=nearest->y<garden.y-2;
         controls.buttons[CHIRKY_BUTTON_DOWN]=nearest->y>garden.y+2;
-        controls.buttons[CHIRKY_BUTTON_B]=true;
+        controls.buttons[CHIRKY_BUTTON_PRIMARY]=true;
         float dx=garden.wasp_x-garden.x,dy=garden.wasp_y-garden.y;
-        controls.button_pressed[CHIRKY_BUTTON_Y]=garden.wasp_life && dx*dx+dy*dy<40*40;
+        controls.button_pressed[CHIRKY_BUTTON_SECONDARY]=garden.wasp_life && dx*dx+dy*dy<40*40;
         game->update(&controls);
     }
     assert(garden.phase==WON && garden.remaining==0);
@@ -111,8 +111,8 @@ int main(void)
     preview("wasp");
     garden.z=garden.vz=0; garden.wasp_x=garden.x; garden.wasp_y=garden.y;
     game->update(&controls); assert(garden.phase==STUNG); preview("sting"); begin();
-    controls.button_pressed[CHIRKY_BUTTON_Y]=true; game->update(&controls);
-    controls.button_pressed[CHIRKY_BUTTON_Y]=false; assert(garden.z>0);
+    controls.button_pressed[CHIRKY_BUTTON_SECONDARY]=true; game->update(&controls);
+    controls.button_pressed[CHIRKY_BUTTON_SECONDARY]=false; assert(garden.z>0);
     for (int i=0;i<35;i++) game->update(&controls);
     assert(garden.z==0 && garden.vz==0);
     garden.elapsed=garden.storm_ticks-1; game->update(&controls);
@@ -127,15 +127,15 @@ int main(void)
     assert(!game->init(&test_host,"/tmp/rosey-missing-config"));
     assert(game->init(&test_host,"games/rosey-chop/game.conf"));
     memset(&controls,0,sizeof(controls));
-    controls.buttons[CHIRKY_BUTTON_B]=controls.button_pressed[CHIRKY_BUTTON_B]=true;
+    controls.buttons[CHIRKY_BUTTON_PRIMARY]=controls.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;
     game->update(&controls);assert(garden.phase==PLAY);
-    controls.button_pressed[CHIRKY_BUTTON_B]=false;
+    controls.button_pressed[CHIRKY_BUTTON_PRIMARY]=false;
     for(int i=0;i<10;i++)game->update(&controls);
     assert(garden.chop==0); /* Beginning a run must not also chop. */
-    controls.buttons[CHIRKY_BUTTON_Y]=controls.button_pressed[CHIRKY_BUTTON_Y]=true;
+    controls.buttons[CHIRKY_BUTTON_SECONDARY]=controls.button_pressed[CHIRKY_BUTTON_SECONDARY]=true;
     game->update(&controls);assert(garden.z==0 && garden.chop==0);
     memset(&controls,0,sizeof(controls));game->update(&controls);game->update(&controls);
-    controls.buttons[CHIRKY_BUTTON_B]=controls.button_pressed[CHIRKY_BUTTON_B]=true;
+    controls.buttons[CHIRKY_BUTTON_PRIMARY]=controls.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;
     game->update(&controls);assert(garden.chop>0);
     game->shutdown();
     assert(sounds>0);

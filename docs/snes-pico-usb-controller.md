@@ -136,10 +136,10 @@ On Windows, run `joy.cpl`, select the GP2040-CE Generic controller, open
 **Properties > Test**, and check every direction and button. Inputs must return
 to neutral immediately after release.
 
-On Chirky, open **Settings > Input Settings > Map SNES controller** and follow
-the prompts for all twelve SNES inputs. The Pico firmware translates the serial
+On Chirky, open **Settings > Input Settings > Map controller** and follow
+the prompts for all eight Chirky inputs. The Pico firmware translates the serial
 SNES protocol into a standard USB controller; Chirky then maps that USB device
-to its logical SNES buttons.
+to its logical Chirky inputs (B to Primary, Y to Secondary, Start to Start, and Select to Menu).
 
 ## Troubleshooting
 

@@ -224,21 +224,21 @@ static void render_initials(void)
         text(56,top-15-row*10,line,1,pending?settings.amber:settings.paper);
         if (pending) rectangle(74+initial_cursor*6,top-18-row*10,5,1,settings.amber);
     }
-    centered_text(29,"UP/DOWN LETTER  B NEXT",1,settings.edge);
+    centered_text(29,"UP/DOWN LETTER  PRIMARY NEXT",1,settings.edge);
 }
 
 void render_title(void)
 {
     char jump[32],dash[32],menu[32],line[96];
-    controller_label(CHIRKY_BUTTON_B,"B",jump,sizeof(jump));
-    controller_label(CHIRKY_BUTTON_Y,"Y",dash,sizeof(dash));
-    controller_label(CHIRKY_BUTTON_SELECT,"SELECT",menu,sizeof(menu));
+    controller_label(CHIRKY_BUTTON_PRIMARY,"PRIMARY",jump,sizeof(jump));
+    controller_label(CHIRKY_BUTTON_SECONDARY,"SECONDARY",dash,sizeof(dash));
+    controller_label(CHIRKY_BUTTON_MENU,"MENU",menu,sizeof(menu));
     if (splash_draw(&title_art,host)) {
         rectangle(0,0,host->screen_width,48,settings.background);
         centered_text(39,"RESTORE THE LAST SIGNAL",1,settings.paper);
-        centered_text(27,"D-PAD MOVE / B JUMP / Y DASH",1,settings.edge);
-        centered_text(17,"L USE LIFE / SELECT PAUSE",1,settings.edge);
-        centered_text(7,"B - BEGIN",1,settings.amber);
+        centered_text(27,"PRIMARY JUMP / SECONDARY DASH",1,settings.edge);
+        centered_text(17,"START USE LIFE / MENU PAUSE",1,settings.edge);
+        centered_text(7,"PRIMARY - BEGIN",1,settings.amber);
         return;
     }
     render_background();
@@ -247,7 +247,7 @@ void render_title(void)
     centered_text(height-54,"RUN",3,settings.amber);
     rectangle(16,height-80,host->screen_width-32,2,settings.edge);
     centered_text(height-98,"RESTORE THE LAST SIGNAL",1,settings.paper);
-    centered_text(height-116,"D-PAD MOVE / L USE LIFE",1,settings.edge);
+    centered_text(height-116,"ARROWS MOVE / START USE LIFE",1,settings.edge);
     snprintf(line,sizeof(line),"JUMP - %s",jump); centered_text(height-130,line,1,settings.edge);
     snprintf(line,sizeof(line),"DASH - %s",dash); centered_text(height-144,line,1,settings.edge);
     snprintf(line,sizeof(line),"%s - PAUSE",menu); centered_text(height-158,line,1,settings.edge);
@@ -279,7 +279,7 @@ void render_game(void)
         render_initials();
     } else if (phase==PHASE_WIN) {
         char confirm[32],line[96],clock[24];
-        controller_label(CHIRKY_BUTTON_B,"B",confirm,sizeof(confirm));
+        controller_label(CHIRKY_BUTTON_PRIMARY,"B",confirm,sizeof(confirm));
         rectangle(8,middle-58,host->screen_width-16,116,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);
@@ -294,7 +294,7 @@ void render_game(void)
         centered_text(middle-48,line,1,settings.amber);
     } else if (phase==PHASE_GAME_OVER) {
         char confirm[32],line[64];
-        controller_label(CHIRKY_BUTTON_B,"B",confirm,sizeof(confirm));
+        controller_label(CHIRKY_BUTTON_PRIMARY,"B",confirm,sizeof(confirm));
         rectangle(24,middle-42,host->screen_width-48,84,settings.background);
         centered_text(middle+15,"GAME OVER",3,settings.hazard);
         snprintf(line,sizeof(line),"%s - TITLE",confirm);

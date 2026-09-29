@@ -155,7 +155,7 @@ static void action_line(int y, enum chirky_button action, const char *verb)
 {
     char key[24], line[64];
     if (host->button_label) host->button_label(host->context,action,key,sizeof(key));
-    else snprintf(key,sizeof(key),"%s",action == CHIRKY_BUTTON_Y ? "Y" : "B");
+    else snprintf(key,sizeof(key),"%s",action == CHIRKY_BUTTON_SECONDARY ? "SECONDARY" : "PRIMARY");
     int key_width = (host->screen_width-48)/6-3-(int)strlen(verb);
     if (key_width < 1) key_width = 1;
     if (key_width > 22) key_width = 22;
@@ -175,9 +175,9 @@ static void overlay(void)
         center(top+55,"CHOP EVERY BLACK ROSE",1,0xffedcc);
         center(top+68,"BEFORE THE RAIN ARRIVES",1,0xffedcc);
         center(top+84,"ONE WASP STING ENDS THE RUN",1,0xe9b76a);
-        action_line(top+101,CHIRKY_BUTTON_B,"CHOP / HOLD TO SWEEP");
-        action_line(top+113,CHIRKY_BUTTON_Y,"JUMP TO DODGE");
-        center(top+125,"SELECT - PAUSE",1,0xaacb9f);
+        action_line(top+101,CHIRKY_BUTTON_PRIMARY,"CHOP / HOLD TO SWEEP");
+        action_line(top+113,CHIRKY_BUTTON_SECONDARY,"JUMP TO DODGE");
+        center(top+125,"MENU - PAUSE",1,0xaacb9f);
         center(top+139,"PRESS A BUTTON TO BEGIN",1,0xffedcc);
     } else {
         bool won = garden.phase == WON;
@@ -190,7 +190,7 @@ static void overlay(void)
         else snprintf(line,sizeof(line),"%s",garden.phase == STUNG ? "KEEP MOVING AND TIME YOUR JUMP" : "HOLD CHOP AS YOU RUN PAST");
         center(top+87,line,1,0xf7d6b4);
         center(top+109,won ? "LEVEL 1 COMPLETE" : "THE GARDEN NEEDS YOU",1,0xffb8c6);
-        action_line(top+135,CHIRKY_BUTTON_B,"PLAY AGAIN");
+        action_line(top+135,CHIRKY_BUTTON_PRIMARY,"PLAY AGAIN");
     }
 }
 

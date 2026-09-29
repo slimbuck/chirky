@@ -1,0 +1,40 @@
+name: Publish chirky.org
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: publish-chirky-org
+  cancel-in-progress: false
+jobs:
+  publish:
+    # Enable after the hosting stack and repository variables are configured.
+    if: vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y emscripten libdrm2 libgbm1 libegl1 libgles2
+      - name: Test and build
+        run: make test && make web
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Verify and publish
+        env:
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+          CHROME: /usr/bin/google-chrome
+        run: node tools/publish-web.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-publish-checks
+          path: build/publish-checks/

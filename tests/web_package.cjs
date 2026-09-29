@@ -6,6 +6,7 @@ const { once } = require('node:events');
 const test = require('node:test');
 const { hash, readPackage, copyToWebsite } = require('../tools/web-package.cjs');
 const { createServer } = require('../tools/serve-web.cjs');
+const { verifyPublished } = require('../tools/publish-web.cjs');
 const { catalog, configs, games } = require('../tools/web-assets.js');
 
 function fixture(t) {
@@ -73,6 +74,7 @@ test('standalone preview serves exact build with WASM MIME, but not .conf or arb
   t.after(() => new Promise(resolve => server.close(resolve)));
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}/`;
+  await verifyPublished(readPackage(f.source),new URL(base));
   const response = await fetch(base+'phosphor-run.wasm');
   assert.equal(response.headers.get('content-type'), 'application/wasm');
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), fs.readFileSync(path.join(f.source, 'phosphor-run.wasm')));

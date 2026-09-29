@@ -1,7 +1,7 @@
-# Platform API 11
+# Platform API 12
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 11`. Native games export
+game report `CHIRKY_ABI_VERSION == 12`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a game-specific Emscripten module.
 
@@ -62,8 +62,7 @@ the position and dimensions of the logical viewport, never individual sprites.
 the bottom-left coordinate of the glyphs' top pixel row; the remaining rows
 descend in logical coordinates. Each character advances by `6 * scale` and each
 set font pixel occupies `scale` square logical pixels. Use `button_label` when
-showing controls so the game names logical SNES buttons rather than host-specific
-keyboard keys. With nonzero capacity, the callback writes a NUL-terminated label.
+showing controls so the game names logical Chirky inputs or the current platform binding. With nonzero capacity, the callback writes a NUL-terminated label.
 
 ## Asset operations
 

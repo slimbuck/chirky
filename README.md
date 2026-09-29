@@ -25,7 +25,8 @@ run as WebAssembly, with keyboard, gamepad and touch input. The editing portal
 includes **Play in browser** and **Save and play in browser**.
 To preview the exact publishable build without the dashboard, run
 `node tools/serve-web.cjs` after `make web` and open <http://127.0.0.1:3031/>.
-See [the browser guide](web/README.md) for testing and the checked website export.
+See [the browser guide](web/README.md) for testing and
+[web deployment](deploy/WEB.md) for publishing directly to chirky.org.
 The browser and native launchers are generated from each game's `game.conf`;
 there is no separate game list to maintain. See
 [the architecture guide](docs/architecture.md) for the core/platform boundary.
@@ -107,55 +108,42 @@ Run from SSH while the CRT is connected:
 ./build/chirky-host
 ```
 
-The console exposes the SNES D-pad, **B, Y, A, X, L, R, Start and Select**.
-Games read those buttons directly and choose their gameplay behavior. Labels
-always name SNES buttons, including when playing with a keyboard.
+Chirky exposes eight logical inputs: **Left, Right, Up, Down, Primary,
+Secondary, Start and Menu**. Games use these names; physical controllers and
+keyboards are mapped by the host. Both platforms use the same game-facing API.
 
-For the tested Raspberry Pi Pico wiring, GP2040-CE firmware files, checksums,
-web configuration and troubleshooting, see the
-[SNES Pico USB controller guide](docs/snes-pico-usb-controller.md).
+| Chirky input | Default SNES controller | Default keyboard |
+| --- | --- | --- |
+| Arrows | D-pad | Arrow keys |
+| Primary | B | X |
+| Secondary | Y | Z |
+| Start | Start | Enter |
+| Menu | Select | Escape |
 
-- D-pad moves through the launcher; B selects; A goes back. Select pauses a game.
-- Rosey Chop: B chops and Y jumps. Phosphor Run: B jumps, Y dashes and L restarts.
-- Title screens wait indefinitely for a fresh face, shoulder, or Start button press.
-- Select opens Pause: Continue Game or Return to Launcher. A goes back to the game; B selects.
-- Pausing freezes gameplay and resumes the same run. B replays after a game ends.
-- F1 is a keyboard recovery/cancel shortcut; F12 captures a snapshot outside setup.
-- The physical Start + Select recovery chord is retained outside input setup.
+The Pi defaults match the tested SNES/Pico adapter. See the
+[controller wiring guide](docs/snes-pico-usb-controller.md) for that hardware.
 
-Default keyboard emulation:
+- Primary selects menu items; Secondary goes back. Menu pauses gameplay.
+- Rosey Chop: Primary chops and Secondary jumps.
+- Phosphor Run: Primary jumps, Secondary dashes, Start uses a life to retry.
+- Bramble Hollow: Primary interacts/closes dialogue, Secondary cycles or uses
+  a dialogue service, Start opens/closes world controls.
+- Hardware Test: Primary toggles motion, Secondary plays sound, Menu leaves.
+- Start, Primary or Secondary begins a title screen after inputs are released.
+- F1 is native recovery/cancel, F12 captures a Pi snapshot. The physical
+  Start + Select recovery chord remains available outside input setup.
 
-| SNES input | Keyboard key |
-| --- | --- |
-| D-pad | Arrow keys |
-| Y | Z |
-| B | X |
-| A | C |
-| X | S |
-| L | A |
-| R | D |
-| Start | Enter |
-| Select | Escape |
+Choose **Settings > Input Settings**, then **Map controller** or **Map keyboard**.
+Both wizards capture the eight Chirky inputs in the order above, with Primary
+before Secondary. Release inputs between prompts. Duplicate bindings are
+rejected; completed mappings save atomically. F1 cancels keyboard setup; holding
+two controller buttons for one second cancels controller setup. F1/F12 remain
+reserved. Cancellation and failed saves preserve the previous mapping.
 
-The launcher lists Phosphor Run, Rosey Chop, **Settings**, then **Power Down**.
-Settings contains **Input Settings**, **Display Area**, and **Hardware Test**.
-
-Choose **Settings > Input Settings**, then **Map SNES controller** or **Map keyboard to SNES**.
-Both wizards ask for Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
-Screen changes consume the opening press and wait for two neutral frames before
-accepting another. Holding B cannot open a submenu and activate its first item.
-Release all inputs between prompts. Each physical input maps to one SNES button;
-duplicates are rejected. Start and Select can be assigned during setup without
-activating navigation. F1/F12 remain reserved. F1 cancels the draft; holding two
-controller buttons for one second also cancels. Only a completed 12-input sequence
-is saved atomically; cancellation or a failed save keeps the previous mapping.
-
-The live display remains visible during mapping. Every SNES button has a green
-controller indicator and a gold keyboard indicator, so simultaneous inputs from
-both sources are visible. The PAD and KEY lines show held raw controller button
-codes/axes and keyboard key names, including unmapped inputs; NONE means released
-and MORE signals overflow. **Test buttons** suspends normal navigation so B and
-Select can be tested too. Hold A for one second, or press F1, to leave testing.
+Green controller and gold keyboard indicators show both sources independently.
+**Test buttons** suspends navigation; hold Secondary for one second or press F1
+to return. Screen transitions consume the opening press and wait for two neutral
+updates before accepting input on the next screen.
 
 Choose **Settings > Display Area** to calibrate CRT overscan. Up/Down selects Side Margin,
 Top/Bottom Margin, Horizontal, Vertical, Save or Back; Left/Right adjusts the selected value. Keep all
@@ -171,18 +159,16 @@ without changing its dimensions. Positive values move right/up; negative values
 move left/down. The full region stays inside the 320×240 output: horizontal
 movement is limited to ±Side Margin and vertical movement to ±Top/Bottom Margin.
 Reducing a margin clamps the corresponding position if necessary. Save persists
-size and position; Back or A restores both. Old configurations are centred
+size and position; Back or Secondary restores both. Old configurations are centred
 by default. Position is saved as `safe_offset_x` / `safe_offset_y`; drawing adds
 these offsets to the existing margins, with no scaling or additional render pass.
 
-`input_version=3` stores SNES mappings as `bind_b`, `key_b`, `bind_start`, etc.
-Older mappings migrate on load: Jump becomes Y, Dash becomes B, Menu becomes
-Select and keyboard Confirm becomes Start. B now handles both gameplay and
-choosing items; a separate old controller Confirm binding is used only when Dash
-was absent (except the obsolete Start default). Explicit SNES mappings take
-precedence. New defaults that conflict with retained custom inputs are left
-unbound until configured. Saving removes obsolete action keys. `safe_x` and
-`safe_y` continue to store display margins.
+`input_version=4` saves `bind_primary`, `key_primary`, `bind_secondary`,
+`bind_start`, `bind_menu` and directional bindings. Existing SNES B/Y/Select
+bindings migrate to Primary/Secondary/Menu; earlier action mappings still migrate.
+Explicit new names take precedence. Conflicting new defaults are left unbound.
+Retired A/X/L/R bindings are removed when saving. Host and all games must be
+rebuilt together for ABI 12. `safe_x` and `safe_y` retain display margins.
 
 The program uses `/dev/dri/card0` and reads Linux evdev keyboard devices under
 `/dev/input`. The `retro` user is already a member of the `video`, `render`,
@@ -227,8 +213,8 @@ a dedicated editing page for each.
 **Edit launcher** changes menu names, order, and visibility. **Apply to console**
 saves `config/launcher.conf` on both the laptop and Pi and reloads the menu without
 restarting the running game. Each section must retain at least one visible item. Settings always includes a Back row,
-selected with B; A also goes back. Hardware Test uses B for motion, X for sound,
-and A to return.
+selected with Primary; Secondary also goes back. Hardware Test uses Primary for
+motion, Secondary for sound, and Menu to return.
 Names support up to 24 characters using the CRT font. Cancel discards the draft.
 Deployment preserves the Pi’s existing launcher configuration; use Apply to console
 to change it. Missing or invalid configuration falls back to the default menu.
@@ -239,7 +225,7 @@ console. **Restart console software** uses the existing Pi build. Put local SSH 
 
 The dashboard and CRT launcher both include a deliberate Pi power-down action.
 The dashboard asks for confirmation; the launcher keeps `POWER DOWN` separate
-from the game list and activates it with B.
+from the game list and activates it with Primary.
 
 ## Included games
 

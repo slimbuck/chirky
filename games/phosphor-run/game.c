@@ -284,17 +284,17 @@ static void collect_world_items(void)
 
 static bool pressed_jump(const struct chirky_input *input)
 {
-    return input->button_pressed[CHIRKY_BUTTON_B];
+    return input->button_pressed[CHIRKY_BUTTON_PRIMARY];
 }
 
 static bool held_jump(const struct chirky_input *input)
 {
-    return input->buttons[CHIRKY_BUTTON_B];
+    return input->buttons[CHIRKY_BUTTON_PRIMARY];
 }
 
 static void update_play(const struct chirky_input *input)
 {
-    if (input->button_pressed[CHIRKY_BUTTON_L]) { die(); return; }
+    if (input->button_pressed[CHIRKY_BUTTON_START]) { die(); return; }
     int direction = 0;
     if (input->buttons[CHIRKY_BUTTON_LEFT]) direction--;
     if (input->buttons[CHIRKY_BUTTON_RIGHT]) direction++;
@@ -314,7 +314,7 @@ static void update_play(const struct chirky_input *input)
         burst(player_x+6,player_y,5,settings.edge);
     }
 
-    bool dash_pressed = input->button_pressed[CHIRKY_BUTTON_Y];
+    bool dash_pressed = input->button_pressed[CHIRKY_BUTTON_SECONDARY];
     if (dash_pressed && dash_available && dash_timer == 0) {
         dash_timer = settings.dash_frames;
         dash_available = false;
@@ -376,7 +376,7 @@ static void update_initials(const struct chirky_input *input)
     }
     if (input->button_pressed[CHIRKY_BUTTON_LEFT] && initial_cursor>0) initial_cursor--;
     if (input->button_pressed[CHIRKY_BUTTON_RIGHT] && initial_cursor<2) initial_cursor++;
-    if (input->button_pressed[CHIRKY_BUTTON_B]) {
+    if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) {
         if (initial_cursor<2) initial_cursor++;
         else submit_score();
     }
@@ -445,9 +445,9 @@ static void update_gameplay(const struct chirky_input *input)
         update_initials(input);
     } else if (phase==PHASE_WIN) {
         win_timer++;
-        if (input->button_pressed[CHIRKY_BUTTON_B]) advance_level();
+        if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) advance_level();
     } else if (phase==PHASE_GAME_OVER) {
-        if (input->button_pressed[CHIRKY_BUTTON_B]) {
+        if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) {
             phase=PHASE_TITLE;
             title_timer=0;
         }

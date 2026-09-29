@@ -8,20 +8,16 @@ void default_bindings(struct controller_binding *bindings)
     bindings[CHIRKY_BUTTON_RIGHT]=(struct controller_binding){BINDING_ABS,ABS_HAT0X,1};
     bindings[CHIRKY_BUTTON_UP]=(struct controller_binding){BINDING_ABS,ABS_HAT0Y,-1};
     bindings[CHIRKY_BUTTON_DOWN]=(struct controller_binding){BINDING_ABS,ABS_HAT0Y,1};
-    bindings[CHIRKY_BUTTON_Y]=(struct controller_binding){BINDING_KEY,BTN_SOUTH,0};
-    bindings[CHIRKY_BUTTON_B]=(struct controller_binding){BINDING_KEY,BTN_EAST,0};
-    bindings[CHIRKY_BUTTON_A]=(struct controller_binding){BINDING_KEY,BTN_NORTH,0};
-    bindings[CHIRKY_BUTTON_X]=(struct controller_binding){BINDING_KEY,BTN_C,0};
-    bindings[CHIRKY_BUTTON_L]=(struct controller_binding){BINDING_KEY,BTN_WEST,0};
-    bindings[CHIRKY_BUTTON_R]=(struct controller_binding){BINDING_KEY,BTN_Z,0};
+    bindings[CHIRKY_BUTTON_SECONDARY]=(struct controller_binding){BINDING_KEY,BTN_SOUTH,0};
+    bindings[CHIRKY_BUTTON_PRIMARY]=(struct controller_binding){BINDING_KEY,BTN_EAST,0};
     bindings[CHIRKY_BUTTON_START]=(struct controller_binding){BINDING_KEY,BTN_TR2,0};
-    bindings[CHIRKY_BUTTON_SELECT]=(struct controller_binding){BINDING_KEY,BTN_TL2,0};
+    bindings[CHIRKY_BUTTON_MENU]=(struct controller_binding){BINDING_KEY,BTN_TL2,0};
 }
 
 void default_keyboard_bindings(struct controller_binding *bindings)
 {
     const unsigned int codes[]={KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,
-        KEY_Z,KEY_X,KEY_C,KEY_S,KEY_A,KEY_D,KEY_ENTER,KEY_ESC};
+        KEY_X,KEY_Z,KEY_ENTER,KEY_ESC};
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) bindings[i]=(struct controller_binding){BINDING_KEY,codes[i],0};
 }
 

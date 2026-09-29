@@ -2,6 +2,7 @@
 /run/
 /snapshots/
 /dashboard/config.local.json
+/deploy/AWS.local.md
 /dashboard/captures/
 __pycache__/
 *.py[cod]

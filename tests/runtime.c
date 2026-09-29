@@ -14,7 +14,7 @@ static bool init(const struct chirky_host_api *host,const char *config)
 }
 static void shutdown(void) { shutdowns++; }
 static void update(const struct chirky_input *input)
-{ assert(input->buttons[CHIRKY_BUTTON_B]);updates++; }
+{ assert(input->buttons[CHIRKY_BUTTON_PRIMARY]);updates++; }
 static void render(void) { renders++; }
 
 int main(void)
@@ -23,7 +23,7 @@ int main(void)
     struct chirky_host_api host={.abi_version=CHIRKY_ABI_VERSION};
     const struct chirky_game_api game={.abi_version=CHIRKY_ABI_VERSION,
         .init=init,.shutdown=shutdown,.update=update,.render=render};
-    struct chirky_input input={0};input.buttons[CHIRKY_BUTTON_B]=true;
+    struct chirky_input input={0};input.buttons[CHIRKY_BUTTON_PRIMARY]=true;
 
     should_start=false;
     assert(!chirky_runtime_start(&runtime,&game,&host,"games/test/game.conf"));

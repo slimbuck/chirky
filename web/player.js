@@ -69,7 +69,28 @@ function playAssetSound(handle){
   const source=audio.createBufferSource();source.buffer=buffer;source.connect(audio.destination);
   sources.add(source);source.onended=()=>sources.delete(source);source.start();
 }
-const bindings={ArrowLeft:0,ArrowRight:1,ArrowUp:2,ArrowDown:3,KeyZ:4,KeyX:5,Enter:5,KeyC:6,KeyV:7,KeyA:8,KeyS:9,Space:10,Escape:11};
+const inputNames=["Left","Right","Up","Down","Primary","Secondary","Start","Menu"];
+const defaultKeys=["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyX","KeyZ","Enter","Escape"];
+const settingsKey="chirky.inputs.v1";
+function validKeys(value){return Array.isArray(value) && value.length===8 && new Set(value).size===8 && value.every(code=>typeof code==="string" && /^(Arrow(Left|Right|Up|Down)|Key[A-Z]|Digit[0-9]|Numpad[0-9]|Enter|Escape|Space|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Backspace|Tab|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|Backquote)$/.test(code));}
+function loadInputSettings(){
+  try{const saved=JSON.parse(localStorage.getItem(settingsKey));if(saved?.version===1 && validKeys(saved.keys) && ["auto","show","hide"].includes(saved.touch))return saved;}catch{}
+  return {version:1,keys:[...defaultKeys],touch:"auto"};
+}
+let inputSettings=loadInputSettings(),bindings={},draftSettings=null,captureButton=null,settingsOpen=false;
+function keyName(code){return code.replace(/^Key|^Digit/,"").replace(/^Arrow/,"").replace("Escape","Esc");}
+function refreshInputSettings(){
+  bindings=Object.fromEntries(inputSettings.keys.map((code,index)=>[code,index]));
+  $("#player").setAttribute("data-touch",inputSettings.touch);
+  $("#control-help").textContent=inputNames.map((name,index)=>`${name}: ${keyName(inputSettings.keys[index])}`).join(" · ");
+}
+function refreshDraft(){
+  document.querySelectorAll("[data-bind]").forEach(button=>{const index=Number(button.dataset.bind);button.textContent=`${inputNames[index]}: ${keyName(draftSettings.keys[index])}`;});
+  $("#touch-mode").value=draftSettings.touch;
+}
+function cancelCapture(){captureButton=null;$("#cancel-binding").hidden=true;$("#binding-message").textContent="";}
+function closeSettings(){cancelCapture();settingsOpen=false;draftSettings=null;$("#settings").close();canvas.focus();resizePlayer();}
+refreshInputSettings();
 function stopSounds(){for(const source of sources)source.stop();sources.clear();}
 function unlock(){if(!audio)audio=new AudioContext();audio.resume().catch(()=>{});}
 async function playSound(path){
@@ -84,7 +105,7 @@ async function playSound(path){
 }
 function mask(){
   let value=0;for(const key of keys)value|=1<<bindings[key];for(const button of touch.values())value|=1<<button;
-  const mapping=[5,6,4,7,8,9,-1,-1,11,10,-1,-1,2,3,0,1];
+  const mapping=[4,-1,5,-1,-1,-1,-1,-1,7,6,-1,-1,2,3,0,1];
   for(const pad of navigator.getGamepads?.() || [])if(pad?.mapping==="standard"){
     pad.buttons.forEach((button,index)=>{if(button.pressed && mapping[index]>=0)value|=1<<mapping[index];});
     if(pad.axes[0]<-.45)value|=1;if(pad.axes[0]>.45)value|=2;
@@ -98,7 +119,7 @@ function setPaused(value){
   status.textContent=(paused?"Paused · ":"")+(titles[id] || id);
   if(paused)stopSounds();else canvas.focus();
 }
-canvas.addEventListener("keydown",event=>{if(event.code in bindings){event.preventDefault();if(event.repeat && event.code==="Escape")return;if(!event.repeat)pending|=1<<bindings[event.code];keys.add(event.code);unlock();}});
+canvas.addEventListener("keydown",event=>{if(!settingsOpen && event.code in bindings){event.preventDefault();if(event.repeat && bindings[event.code]===7)return;if(!event.repeat)pending|=1<<bindings[event.code];keys.add(event.code);unlock();}});
 window.addEventListener("keyup",event=>keys.delete(event.code));
 canvas.addEventListener("pointerdown",()=>{unlock();canvas.focus();});
 window.addEventListener("blur",()=>{if(runtime)setPaused(true);});
@@ -106,17 +127,53 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden && runtime)
 $("#pause").onclick=()=>{unlock();setPaused(!paused);};
 $("#restart").onclick=()=>location.reload();
 $("#mute").onclick=()=>{muted=!muted;if(muted)stopSounds();$("#mute").textContent=muted?"Unmute":"Mute";$("#mute").setAttribute("aria-pressed",String(muted));};
-$("#fullscreen").onclick=()=>{$("#display").requestFullscreen().catch(error=>{status.textContent=error.message;});canvas.focus();unlock();};
+$("#fullscreen").onclick=async()=>{
+  unlock();try{if(document.fullscreenElement)await document.exitFullscreen();else if($("#player").requestFullscreen)await $("#player").requestFullscreen();else throw new Error("Fullscreen is unavailable in this browser.");}catch(error){status.textContent=error.message;}canvas.focus();
+};
+function resizePlayer(){
+  if(typeof innerWidth!=="number")return;
+  const fullscreen=!!document.fullscreenElement,player=$("#player"),display=$("#display");
+  const landscape=fullscreen && innerWidth>innerHeight && getComputedStyle($(".touch")).display!=="none";
+  player.classList.toggle("landscape",landscape);
+  const touchHeight=getComputedStyle($(".touch")).display==="none"?0:$(".touch").getBoundingClientRect().height+12;
+  const touchWidth=landscape?$(".touch").getBoundingClientRect().width+12:0;
+  const availableWidth=Math.max(1,Math.min(fullscreen?innerWidth-18-touchWidth:innerWidth-26,fullscreen?innerWidth:952));
+  const availableHeight=fullscreen?Math.max(1,innerHeight-player.querySelector("nav").getBoundingClientRect().height-(landscape?0:touchHeight)-32):Infinity;
+  const fit=Math.min(availableWidth/320,availableHeight/240),scale=fit>=1?Math.floor(fit):fit;
+  canvas.style.width=`${320*scale}px`;canvas.style.height=`${240*scale}px`;display.style.width=`${320*scale+2}px`;
+}
+document.addEventListener("fullscreenchange",()=>{const full=!!document.fullscreenElement;$("#fullscreen").textContent=full?"Exit full screen":"Full screen";$("#fullscreen").setAttribute("aria-pressed",String(full));resizePlayer();});
+window.addEventListener("resize",resizePlayer);
+$("#input-settings").onclick=()=>{setPaused(true);settingsOpen=true;draftSettings={...inputSettings,keys:[...inputSettings.keys]};cancelCapture();refreshDraft();$("#settings").showModal();};
+document.querySelectorAll("[data-bind]").forEach(button=>{button.onclick=()=>{captureButton=Number(button.dataset.bind);$("#binding-message").textContent=`Press a key for ${inputNames[captureButton]}.` ;$("#cancel-binding").hidden=false;};});
+$("#settings").addEventListener("keydown",event=>{
+  if(captureButton===null)return;
+  event.preventDefault();event.stopPropagation();if(event.repeat)return;
+  const next=[...draftSettings.keys];next[captureButton]=event.code;
+  if(!validKeys(next)){$("#binding-message").textContent=draftSettings.keys.includes(event.code)?"That key is already assigned. Choose another key.":"Choose a letter, number, arrow, or control key.";return;}
+  draftSettings.keys=next;cancelCapture();refreshDraft();
+});
+$("#settings").addEventListener("cancel",event=>{event.preventDefault();if(captureButton!==null)cancelCapture();else closeSettings();});
+$("#cancel-binding").onclick=cancelCapture;
+$("#cancel-settings").onclick=closeSettings;
+$("#reset-bindings").onclick=()=>{cancelCapture();draftSettings={version:1,keys:[...defaultKeys],touch:"auto"};refreshDraft();};
+$("#touch-mode").onchange=()=>{draftSettings.touch=$("#touch-mode").value;};
+$("#save-settings").onclick=()=>{
+  if(captureButton!==null)return;
+  try{localStorage.setItem(settingsKey,JSON.stringify(draftSettings));}catch{$("#binding-message").textContent="Could not save settings. Allow browser storage and try again.";return;}
+  inputSettings=draftSettings;refreshInputSettings();closeSettings();
+};
 document.querySelectorAll("[data-button]").forEach(button=>{
-  button.onpointerdown=event=>{event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,Number(button.dataset.button));pending|=1<<Number(button.dataset.button);unlock();};
+  button.onpointerdown=event=>{event.preventDefault();if(settingsOpen)return;button.setPointerCapture(event.pointerId);touch.set(event.pointerId,Number(button.dataset.button));pending|=1<<Number(button.dataset.button);unlock();};
   button.onpointerup=button.onpointercancel=button.onlostpointercapture=event=>touch.delete(event.pointerId);
 });
 function frame(now){
   if(leaving)return;
-  const current=mask(),select=((current|pending)&(1<<11))!==0;
-  if(selectedGame?.role==="diagnostic" && ((current|pending)&(1<<6))){leaving=true;location.href="./";return;}
+  const current=settingsOpen?0:mask(),select=!settingsOpen && ((current|pending)&(1<<7))!==0;
+  if(selectedGame?.role==="diagnostic" && select){leaving=true;location.href="./";return;}
   if(select && !selectHeld && selectedGame?.role!=="diagnostic")setPaused(!paused);
-  selectHeld=(current&(1<<11))!==0;
+  selectHeld=(current&(1<<7))!==0;
+  if(paused)pending=0;
   if(!paused){
     if(last)accumulator+=Math.min(now-last,100);
     while(accumulator>=1000/60 && !leaving){runtime._web_tick(current|pending);pending=0;accumulator-=1000/60;}
@@ -161,6 +218,7 @@ async function start(){
   }
   if(!runtime.ccall("web_init","number",["string"],[config]))throw new Error("Could not initialise the game or WebGL display");
   ready=true;
+  resizePlayer();
   status.textContent=titles[id];
   // Embedded games must not steal focus or scroll their parent page.
   if(window===window.top)canvas.focus({preventScroll:true});

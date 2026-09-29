@@ -162,7 +162,7 @@ static void text(void *context, int x, int y, const char *value, int scale,
 static void label(void *context, enum chirky_button button, char *value, size_t capacity)
 {
     on_main(context);
-    snprintf(value, capacity, "%s", button == CHIRKY_BUTTON_Y ? "Y" : "B");
+    snprintf(value, capacity, "%s", button == CHIRKY_BUTTON_SECONDARY ? "Y" : "B");
 }
 
 static void sprite(void *context, chirky_asset handle, int x, int y, int w, int h,
@@ -283,20 +283,20 @@ static void play_phosphor(void *module, const struct chirky_game_api *game, stru
     for (unsigned i = 0; i < 120 && !*grounded; i++) tick(game, p, &input);
     assert(*grounded && !strcmp(p->scene, "scene.play"));
     float old_y = *y;
-    input.buttons[CHIRKY_BUTTON_B] = input.button_pressed[CHIRKY_BUTTON_B] = true;
+    input.buttons[CHIRKY_BUTTON_PRIMARY] = input.button_pressed[CHIRKY_BUTTON_PRIMARY] = true;
     tick(game, p, &input);
     assert(*y > old_y);
     expect_played(p, "/jump.wav");
-    input.button_pressed[CHIRKY_BUTTON_B] = false;
+    input.button_pressed[CHIRKY_BUTTON_PRIMARY] = false;
     input.buttons[CHIRKY_BUTTON_RIGHT] = true;
     float old_x = *x;
     for (unsigned i = 0; i < 6; i++) tick(game, p, &input);
     assert(*x > old_x);
-    input.button_pressed[CHIRKY_BUTTON_Y] = true;
+    input.button_pressed[CHIRKY_BUTTON_SECONDARY] = true;
     tick(game, p, &input);
     expect_played(p, "/dash.wav");
     input = (struct chirky_input){0};
-    input.button_pressed[CHIRKY_BUTTON_L] = true; /* Real respawn input. */
+    input.button_pressed[CHIRKY_BUTTON_START] = true; /* Real respawn input. */
     tick(game, p, &input);
     input = (struct chirky_input){0};
     for (unsigned i = 0; i < 120; i++) tick(game, p, &input);
@@ -309,7 +309,7 @@ static void play_rosey(void *module, const struct chirky_game_api *game, struct 
     const struct garden_state *garden_state = symbol(module, "garden");
     assert(garden_state->phase == PLAY && garden_state->remaining == garden_state->total);
     struct chirky_input input = {0};
-    input.button_pressed[CHIRKY_BUTTON_Y] = true;
+    input.button_pressed[CHIRKY_BUTTON_SECONDARY] = true;
     tick(game, p, &input);
     assert(garden_state->z > 0);
     expect_played(p, "/jump.wav");
@@ -331,9 +331,9 @@ static void play_rosey(void *module, const struct chirky_game_api *game, struct 
         input.buttons[CHIRKY_BUTTON_RIGHT] = nearest->x > garden_state->x + 2;
         input.buttons[CHIRKY_BUTTON_UP] = nearest->y < garden_state->y - 2;
         input.buttons[CHIRKY_BUTTON_DOWN] = nearest->y > garden_state->y + 2;
-        input.buttons[CHIRKY_BUTTON_B] = true;
+        input.buttons[CHIRKY_BUTTON_PRIMARY] = true;
         float dx = garden_state->wasp_x - garden_state->x, dy = garden_state->wasp_y - garden_state->y;
-        input.button_pressed[CHIRKY_BUTTON_Y] = garden_state->wasp_life && dx * dx + dy * dy < 40 * 40;
+        input.button_pressed[CHIRKY_BUTTON_SECONDARY] = garden_state->wasp_life && dx * dx + dy * dy < 40 * 40;
         tick(game, p, &input);
     }
     assert(garden_state->phase == WON && !garden_state->remaining);
@@ -343,7 +343,7 @@ static void play_rosey(void *module, const struct chirky_game_api *game, struct 
     expect_played(p, "/win.wav");
     input = (struct chirky_input){0};
     for (unsigned i = 0; i < 45; i++) tick(game, p, &input);
-    input.button_pressed[CHIRKY_BUTTON_B] = true;
+    input.button_pressed[CHIRKY_BUTTON_PRIMARY] = true;
     tick(game, p, &input);
     assert(garden_state->phase == PLAY && garden_state->remaining == garden_state->total);
 }
@@ -386,7 +386,7 @@ static void run_cycle(struct asset_store *store, const char *module_directory,
     else assert(((const struct garden_state *)symbol(module, "garden"))->phase == TITLE);
     /* Match the benchmark's frozen-gameplay transition, including gate release. */
     tick(game, &p, &input); tick(game, &p, &input);
-    input.buttons[CHIRKY_BUTTON_B] = input.button_pressed[CHIRKY_BUTTON_B] = true;
+    input.buttons[CHIRKY_BUTTON_PRIMARY] = input.button_pressed[CHIRKY_BUTTON_PRIMARY] = true;
     tick(game, &p, &input);
     unsigned title_sprites = p.sprites;
     p.steady = true;

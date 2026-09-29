@@ -130,7 +130,7 @@ async function main() {
         }
         await page.eval('document.querySelector("#screen").focus()');
         for(let i=0;i<index;i++)await press('ArrowDown','ArrowDown',40);
-        await press('Enter','Enter',13);
+        await press('KeyX','x',88);
         await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(game.name)} && new URL(location.href).searchParams.get('game')===${JSON.stringify(game.id)}`);
         assert.equal(await page.eval('document.querySelector("#status").textContent'),game.name);
         for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,base).href),200);
@@ -214,7 +214,7 @@ async function main() {
         report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?6:7);
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
         const title=await capture('title');assert.equal(title.touchVisible,mobile);
-        if(mobile)await click('[data-button="5"]');else{await click('#screen');await key('Enter','Enter',13);}
+        if(mobile)await click('[data-button="4"]');else{await click('#screen');await key('KeyX','x',88);}
         if(game==='phosphor-run') {
           // The level introduction lasts 90 simulation ticks and consumes input.
           // Allow it to finish and the player to land before testing jump/dash audio.
@@ -236,7 +236,32 @@ async function main() {
         if(mobile)await click('[data-button="5"]');else{await click('#screen');await key('KeyX','x',88);}
         await delay(100);assert.equal((await state()).audit.starts,starts);
         await click('#mute');assert(!(await state()).muted);report.checks.push('pause freezes updates, resume, mute/unmute');
+        await click('#input-settings');
+        assert(await page.eval('document.querySelector("#settings").open'));
+        await click('[data-bind="4"]');await key('KeyZ','z',90);
+        assert.match(await page.eval('document.querySelector("#binding-message").textContent'),/already assigned/);
+        await key('KeyQ','q',81);
+        const settingsShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+        fs.writeFileSync(path.join(out,`${label}-settings.png`),Buffer.from(settingsShot.data,'base64'));
+        await click('#save-settings');assert(!await page.eval('document.querySelector("#settings").open'));
+        await click('#pause');await click('#screen');await page.eval('__platformProbe.masks.length=0');await key('KeyQ','q',81);
+        assert((await state()).masks.some(mask=>mask&(1<<4)));
+        await click('#fullscreen');await delay(200);
+        assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
+        const full=await capture('fullscreen');assert.equal(full.rect.width%320,0);
+        if(mobile)assert(full.touchVisible);
+        if(mobile){
+          await page.call('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});await delay(200);
+          const landscape=await capture('fullscreen-landscape');assert.equal(landscape.rect.width%320,0);
+          assert(await page.eval('Array.from(document.querySelectorAll(".touch button, #fullscreen")).every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})'),'Fullscreen controls must stay onscreen');
+          await page.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(150);
+        }
+        await click('#fullscreen');await delay(150);assert(!await page.eval('!!document.fullscreenElement'));
+        report.checks.push('key remapping, duplicate rejection, full player fullscreen toggle');
         await click('#restart');await delay(150);await ready();await capture('restarted');
+        assert.equal(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys[4]'),'KeyQ');
+        await click('#input-settings');await click('#reset-bindings');await click('#save-settings');await click('#pause');
+        report.checks.push('bindings persist across reload; reset restores defaults');
         report.lifecycle=await page.eval('JSON.parse(sessionStorage.getItem("platform-browser-lifecycle")||"[]")');
         report.destroys=report.lifecycle.filter(event=>event.event==='destroy-end');
         assert.equal(report.destroys.length,1,'Restart did not call web_destroy exactly once');

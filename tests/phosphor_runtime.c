@@ -117,21 +117,21 @@ int main(void)
             assert(phase==PHASE_INITIALS);
             neutral(api,&input,2);
             if (stage==0) press(api,&input,CHIRKY_BUTTON_UP);
-            press(api,&input,CHIRKY_BUTTON_B);
-            press(api,&input,CHIRKY_BUTTON_B);
+            press(api,&input,CHIRKY_BUTTON_PRIMARY);
+            press(api,&input,CHIRKY_BUTTON_PRIMARY);
             if (stage==0) press(api,&input,CHIRKY_BUTTON_DOWN);
-            press(api,&input,CHIRKY_BUTTON_B);
+            press(api,&input,CHIRKY_BUTTON_PRIMARY);
             assert(high_scores[stage][expected_rank].ticks==completed_ticks);
             assert(!strcmp(high_scores[stage][expected_rank].initials,stage==0?"BAZ":"AAA"));
             if (stage==1) assert(high_scores[stage][3].ticks==300);
         }
         assert(phase==PHASE_WIN);
         if (stage==2) assert(high_scores[stage][9].ticks==10);
-        input.buttons[CHIRKY_BUTTON_B]=true;
+        input.buttons[CHIRKY_BUTTON_PRIMARY]=true;
         for(int i=0;i<3;i++)api->update(&input);
         assert(phase==PHASE_WIN && current_level==stage);
         neutral(api,&input,2);
-        press(api,&input,CHIRKY_BUTTON_B);
+        press(api,&input,CHIRKY_BUTTON_PRIMARY);
         assert(phase==PHASE_LEVEL_INTRO && collected_shards==0);
         assert(current_level==(stage+1)%content.level_count);
         assert(lives==STARTING_LIVES);
@@ -141,16 +141,16 @@ int main(void)
     }
     finish_intro(api,&input);
     for (int lost=1;lost<=STARTING_LIVES;lost++) {
-        press(api,&input,CHIRKY_BUTTON_L);
+        press(api,&input,CHIRKY_BUTTON_START);
         assert(phase==PHASE_DEAD && lives==STARTING_LIVES-lost);
         neutral(api,&input,34);
         assert(phase==((lost==STARTING_LIVES)?PHASE_GAME_OVER:PHASE_PLAY));
         neutral(api,&input,2);
     }
-    press(api,&input,CHIRKY_BUTTON_B);
+    press(api,&input,CHIRKY_BUTTON_PRIMARY);
     assert(phase==PHASE_TITLE);
     settings.start_level=1;
-    press(api,&input,CHIRKY_BUTTON_B);
+    press(api,&input,CHIRKY_BUTTON_PRIMARY);
     assert(current_level==1 && phase==PHASE_LEVEL_INTRO && lives==STARTING_LIVES);
     /* All UI remains inside the safe viewport; the world uses its own camera. */
     const int sizes[][2]={{288,216},{256,192}};
@@ -161,7 +161,7 @@ int main(void)
         phase=PHASE_INITIALS;api->render();phase=PHASE_WIN;api->render();
         phase=PHASE_GAME_OVER;api->render();
         /* A jump above the map remains below the HUD despite camera lag. */
-        memset(&input,0,sizeof(input));input.buttons[CHIRKY_BUTTON_B]=true;
+        memset(&input,0,sizeof(input));input.buttons[CHIRKY_BUTTON_PRIMARY]=true;
         phase=PHASE_PLAY;player_x=level.width*TILE/2;player_y=level.height*TILE+8;
         velocity_x=0;velocity_y=settings.jump_speed;dash_timer=0;
         on_ground=touching_left=touching_right=false;

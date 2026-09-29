@@ -32,7 +32,7 @@ int main(int argc,char **argv)
     chirky_game_entry_fn entry=NULL;void *symbol=dlsym(library,"chirky_game_entry");memcpy(&entry,&symbol,sizeof(entry));assert(entry);
     const struct chirky_game_api *game=entry();assert(game->abi_version==CHIRKY_ABI_VERSION);
     assert(game->init(&h.api,"games/rosey-chop/game.conf"));
-    struct chirky_input input={0};input.button_pressed[CHIRKY_BUTTON_B]=true;game->update(&input);
+    struct chirky_input input={0};input.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;game->update(&input);
     /* RGBA/UNSIGNED_BYTE is the guaranteed GLES2 readback pair. RGB is not. */
     unsigned char baseline[320*240*4],result[320*240*4];
     for(int mode=0;mode<2;mode++) {

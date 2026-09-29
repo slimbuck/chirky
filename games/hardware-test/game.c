@@ -178,8 +178,8 @@ static void game_update(const struct chirky_input *input)
     if (input->buttons[CHIRKY_BUTTON_RIGHT]) dx += manual_speed;
     if (input->buttons[CHIRKY_BUTTON_UP]) dy += manual_speed;
     if (input->buttons[CHIRKY_BUTTON_DOWN]) dy -= manual_speed;
-    if (input->button_pressed[CHIRKY_BUTTON_B]) automatic = !automatic;
-    if (input->button_pressed[CHIRKY_BUTTON_X])
+    if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) automatic = !automatic;
+    if (input->button_pressed[CHIRKY_BUTTON_SECONDARY])
         host->play_sound(host->context, settings.sound_device, settings.sound);
 
     if (dx != 0 || dy != 0) {
@@ -220,7 +220,7 @@ static void game_render(void)
                             rgb[0], rgb[1], rgb[2]);
         }
     }
-    host->draw_text(host->context,10,12,"B MOTION - X SOUND - A BACK",1,238,240,232);
+    host->draw_text(host->context,10,12,"PRIMARY MOVE / SECONDARY SOUND",1,238,240,232);
 }
 
 static const struct chirky_game_api api = {

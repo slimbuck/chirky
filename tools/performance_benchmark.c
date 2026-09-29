@@ -143,7 +143,7 @@ static bool freeze_gameplay(void)
     struct chirky_input input={0};
     /* Two neutral updates also release a gate that was already blocked. */
     chirky_runtime_update(&h.runtime,&input);chirky_runtime_update(&h.runtime,&input);
-    input.buttons[CHIRKY_BUTTON_B]=input.button_pressed[CHIRKY_BUTTON_B]=true;
+    input.buttons[CHIRKY_BUTTON_PRIMARY]=input.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;
     chirky_runtime_update(&h.runtime,&input);memset(&input,0,sizeof(input));
     chirky_runtime_update(&h.runtime,&input);chirky_runtime_update(&h.runtime,&input);
     /* Both module enums use TITLE=0, PLAY=1; garden starts with its phase.

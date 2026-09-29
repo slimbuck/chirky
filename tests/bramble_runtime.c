@@ -189,7 +189,7 @@ int main(void)
     snprintf(bramble.event_path, sizeof(bramble.event_path), "/tmp/bramble-runtime-events.log");
     unlink(bramble.event_path);
     struct chirky_input input = {0};
-    press(game, &input, CHIRKY_BUTTON_B);
+    press(game, &input, CHIRKY_BUTTON_PRIMARY);
     assert(bramble.phase == BRAMBLE_PLAY && bramble.seeds == 5 && bramble.day == 1);
     assert(strstr(emitted_event, "\"kind\":\"begin\""));
     network_state = "version=1\nrevision=2\nlong_theme=Rain is waking the old paths.\n"
@@ -207,33 +207,33 @@ int main(void)
     input.buttons[CHIRKY_BUTTON_RIGHT] = true;
     for (int i = 0; i < 10; i++) game->update(&input);
     assert(bramble.x > old_x);
-    neutral(game, &input); press(game, &input, CHIRKY_BUTTON_Y);
+    neutral(game, &input); press(game, &input, CHIRKY_BUTTON_SECONDARY);
     assert(bramble.cycling);
-    press(game, &input, CHIRKY_BUTTON_X); assert(bramble.phase == BRAMBLE_DIRECTOR);
+    press(game, &input, CHIRKY_BUTTON_START); assert(bramble.phase == BRAMBLE_DIRECTOR);
     enum bramble_weather old_weather = bramble.weather;
     press(game, &input, CHIRKY_BUTTON_RIGHT);
     assert(bramble.weather == (old_weather + 1) % BRAMBLE_WEATHER_COUNT);
-    press(game, &input, CHIRKY_BUTTON_A); assert(bramble.phase == BRAMBLE_PLAY);
+    press(game, &input, CHIRKY_BUTTON_START); assert(bramble.phase == BRAMBLE_PLAY);
     bramble.cycling = false;
     bramble.x = bramble.trees[0].x; bramble.y = bramble.trees[0].y;
-    for (int i = 0; i < 3; i++) { bramble.action_cooldown = 0; press(game, &input, CHIRKY_BUTTON_B); }
+    for (int i = 0; i < 3; i++) { bramble.action_cooldown = 0; press(game, &input, CHIRKY_BUTTON_PRIMARY); }
     assert(bramble.wood == 2 && bramble.trees[0].regrow > 0);
     bramble.x = bramble.plants[2].x; bramble.y = bramble.plants[2].y;
     bramble.action_cooldown = 0;
-    press(game, &input, CHIRKY_BUTTON_B);
+    press(game, &input, CHIRKY_BUTTON_PRIMARY);
     assert(bramble.seeds == 4 && bramble.plants[2].stage == 1);
     bramble.plants[2].stage = 3;
-    press(game, &input, CHIRKY_BUTTON_B);
+    press(game, &input, CHIRKY_BUTTON_PRIMARY);
     assert(bramble.coins == 2 && bramble.plants[2].stage == 0);
     bramble.x = bramble.npcs[2].x; bramble.y = bramble.npcs[2].y;
-    press(game, &input, CHIRKY_BUTTON_B); assert(bramble.phase == BRAMBLE_DIALOG);
-    press(game, &input, CHIRKY_BUTTON_Y); assert(bramble.buns == 1 && bramble.coins == 0);
-    press(game, &input, CHIRKY_BUTTON_A); assert(bramble.phase == BRAMBLE_PLAY);
+    press(game, &input, CHIRKY_BUTTON_PRIMARY); assert(bramble.phase == BRAMBLE_DIALOG);
+    press(game, &input, CHIRKY_BUTTON_SECONDARY); assert(bramble.buns == 1 && bramble.coins == 0);
+    press(game, &input, CHIRKY_BUTTON_PRIMARY); assert(bramble.phase == BRAMBLE_PLAY);
     bramble.x = 122; bramble.y = 146;
     unsigned old_day = bramble.day;
-    press(game, &input, CHIRKY_BUTTON_B);
+    press(game, &input, CHIRKY_BUTTON_PRIMARY);
     assert(bramble.phase == BRAMBLE_DIALOG && bramble.dialog_service == BRAMBLE_REST);
-    press(game, &input, CHIRKY_BUTTON_Y);
+    press(game, &input, CHIRKY_BUTTON_SECONDARY);
     assert(bramble.phase == BRAMBLE_PLAY && bramble.day == old_day + 1 && bramble.minute == 8 * 60);
     assert(strstr(bramble.message, "new morning"));
     game->render(); assert(rectangles > 30 && sprites > 3 && texts > 3);

@@ -29,13 +29,13 @@ rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
-Platform API 11 exposes SNES inputs directly: `input->buttons[CHIRKY_BUTTON_B]`
-is held B, and `input->button_pressed[CHIRKY_BUTTON_Y]` is a new Y press.
-The full set is Left, Right, Up, Down, Y, B, A, X, L, R, Start and Select.
-Each game owns what its buttons do. Use `button_label` for SNES names; keyboard
-emulation belongs to the host, so games must not read raw keyboard state.
-The host reserves Select for its pause menu; A resumes, B selects an option. Rebuild host and all game
-modules together when upgrading from the previous action-based ABI.
+Platform API 12 exposes eight Chirky inputs: Left, Right, Up, Down, Primary,
+Secondary, Start and Menu. `input->buttons[CHIRKY_BUTTON_PRIMARY]` is held
+Primary; `input->button_pressed[CHIRKY_BUTTON_SECONDARY]` is a new Secondary
+press. Use `button_label` for the host's current label. Games must not read raw
+keyboard state or assume a controller model. Primary selects and Secondary goes
+back in menus. Menu belongs to the host for pause (or leaving diagnostics).
+Start is available to games. Rebuild both hosts and all modules for this ABI.
 
 The complete host/game contract, including logical CRT-safe coordinates,
 bottom-left drawing, top-down image source rectangles, retained assets, and
@@ -48,9 +48,9 @@ For screen/phase changes, use the shared `include/input_gate.h` helper. Keep a
 `chirky_input_gate` in game state, pass each update through
 `chirky_gate_filter`, and call `chirky_gate_begin` when changing a title,
 result, gameplay phase or level. It suppresses held buttons and new-press flags
-until all SNES inputs have been neutral for two updates. The update that finishes
+until all Chirky inputs have been neutral for two updates. The update that finishes
 release detection is also consumed; the next fresh press belongs to the new
-screen. This prevents B from both beginning a run and performing its gameplay
+screen. This prevents Primary from both beginning a run and performing its gameplay
 action. Normal gameplay holds and repeated chopping are unchanged after release.
 The host uses the same rule for all launcher/settings transitions, including
 mapping and test screens, and ignores Linux key-autorepeat events.

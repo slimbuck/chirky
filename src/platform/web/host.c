@@ -108,7 +108,7 @@ static void play(void *unused,const char *device,const char *path)
 static void label(void *unused,enum chirky_button button,char *out,size_t size)
 {
     (void)unused;
-    const char *names[]={"LEFT","RIGHT","UP","DOWN","Z","X / ENTER","C","V","A","S","SPACE","ESC"};
+    const char *names[]={"LEFT","RIGHT","UP","DOWN","PRIMARY","SECONDARY","START","MENU"};
     snprintf(out,size,"%s",button>=0 && button<CHIRKY_BUTTON_COUNT?names[button]:"?");
 }
 EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
@@ -150,7 +150,7 @@ EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
         if(selected>=count)selected=0;
         if(input.button_pressed[CHIRKY_BUTTON_UP])selected=(selected+count-1)%count;
         if(input.button_pressed[CHIRKY_BUTTON_DOWN])selected=(selected+1)%count;
-        if(input.button_pressed[CHIRKY_BUTTON_B])launch(selected);
+        if(input.button_pressed[CHIRKY_BUTTON_PRIMARY])launch(selected);
     }
 #else
     chirky_runtime_update(&runtime,&input);
@@ -169,7 +169,7 @@ EMSCRIPTEN_KEEPALIVE void web_render(void)
         fill(NULL,8,y-13,192,20,active?28:5,active?74:17,active?84:23);
         fill(NULL,12,y-9,3,10,244,194,70);text(NULL,22,y,name,1,250,248,236);
     }
-    fill(NULL,8,5,272,18,5,17,23);text(NULL,10,14,"ENTER SELECT - UP DOWN MOVE",1,112,160,170);
+    fill(NULL,8,5,272,18,5,17,23);text(NULL,10,14,"PRIMARY SELECT - ARROWS MOVE",1,112,160,170);
 #else
     chirky_runtime_render(&runtime);
 #endif

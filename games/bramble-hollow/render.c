@@ -327,11 +327,11 @@ static void draw_dialog(void)
     text(15, y + 7, bramble.dialog_name, 1, 0x5f3529);
     wrapped_text(15, y + 19, bramble.dialog_text, 42, 3, 0x3d3a32);
     if (bramble.dialog_service != BRAMBLE_NO_SERVICE) {
-        const char *service = bramble.dialog_service == BRAMBLE_SHOP ? "Y TRADE" :
-                              bramble.dialog_service == BRAMBLE_BAKERY ? "Y BUY BUN" : "Y REST";
+        const char *service = bramble.dialog_service == BRAMBLE_SHOP ? "SECONDARY TRADE" :
+                              bramble.dialog_service == BRAMBLE_BAKERY ? "SECONDARY BUY BUN" : "SECONDARY REST";
         text(15, y + 49, service, 1, 0x4d7446);
     }
-    text(bramble_host->screen_width - 58, y + 49, "B CLOSE", 1, 0x765e45);
+    text(bramble_host->screen_width - 88, y + 49, "PRIMARY CLOSE", 1, 0x765e45);
 }
 
 static void clip_line(char *output, size_t capacity, const char *input, int columns)
@@ -364,7 +364,7 @@ static void draw_director(void)
     text(12, 139, "NOW", 1, 0xd88993); text(42, 139, clipped, 1, 0xe9e2bd);
     snprintf(row, sizeof(row), "REV %u", bramble.director.revision);
     text(12, 159, row, 1, 0x779080);
-    center_text(bramble_host->screen_height - 19, "D-PAD CHANGE    X/A CLOSE", 1, 0xf1d784);
+    center_text(bramble_host->screen_height - 19, "ARROWS CHANGE / START CLOSE", 1, 0xf1d784);
 }
 
 static void draw_title(void)
@@ -375,7 +375,7 @@ static void draw_title(void)
         center_text(94, "HOLLOW", 3, 0xf3dfaa);
     }
     rect(0, bramble_host->screen_height - 24, bramble_host->screen_width, 24, 0x1d2d25);
-    center_text(bramble_host->screen_height - 20, "PRESS B TO BEGIN", 1, 0xffe6a1);
+    center_text(bramble_host->screen_height - 20, "PRESS PRIMARY TO BEGIN", 1, 0xffe6a1);
     center_text(bramble_host->screen_height - 10, "A LIVING WOODLAND STORY", 1, 0xa9d096);
 }
 

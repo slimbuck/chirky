@@ -410,11 +410,11 @@ static void update_world(void)
 static void update_play(const struct chirky_input *input)
 {
     update_world();
-    if (input->button_pressed[CHIRKY_BUTTON_X]) {
+    if (input->button_pressed[CHIRKY_BUTTON_START]) {
         bramble.phase = BRAMBLE_DIRECTOR; bramble.director_cursor = 0;
         chirky_gate_begin(&input_gate); return;
     }
-    if (input->button_pressed[CHIRKY_BUTTON_Y]) {
+    if (input->button_pressed[CHIRKY_BUTTON_SECONDARY]) {
         bramble.cycling = !bramble.cycling;
         show_message(bramble.cycling ? "Bell bright, basket ready. Off we go!" : "Bicycle parked beside the path.");
         log_event("travel", bramble.cycling ? "mounted_bicycle" : "dismounted_bicycle");
@@ -429,15 +429,15 @@ static void update_play(const struct chirky_input *input)
     float nx = bramble.x + dx * speed, ny = bramble.y + dy * speed;
     if (!blocked(nx, bramble.y)) bramble.x = nx;
     if (!blocked(bramble.x, ny)) bramble.y = ny;
-    if (input->button_pressed[CHIRKY_BUTTON_B] && !bramble.action_cooldown) interact();
+    if (input->button_pressed[CHIRKY_BUTTON_PRIMARY] && !bramble.action_cooldown) interact();
     update_camera();
 }
 
 static void update_dialog(const struct chirky_input *input)
 {
     update_world();
-    if (input->button_pressed[CHIRKY_BUTTON_Y] && bramble.dialog_service != BRAMBLE_NO_SERVICE) use_service();
-    if (input->button_pressed[CHIRKY_BUTTON_A] || input->button_pressed[CHIRKY_BUTTON_B]) {
+    if (input->button_pressed[CHIRKY_BUTTON_SECONDARY] && bramble.dialog_service != BRAMBLE_NO_SERVICE) use_service();
+    if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) {
         bramble.phase = BRAMBLE_PLAY; chirky_gate_begin(&input_gate);
     }
 }
@@ -445,7 +445,7 @@ static void update_dialog(const struct chirky_input *input)
 static void update_director(const struct chirky_input *input)
 {
     update_world();
-    if (input->button_pressed[CHIRKY_BUTTON_X] || input->button_pressed[CHIRKY_BUTTON_A]) {
+    if (input->button_pressed[CHIRKY_BUTTON_START] || input->button_pressed[CHIRKY_BUTTON_SECONDARY]) {
         bramble.phase = BRAMBLE_PLAY; chirky_gate_begin(&input_gate); return;
     }
     if (input->button_pressed[CHIRKY_BUTTON_UP]) bramble.director_cursor = (bramble.director_cursor + 2) % 3;

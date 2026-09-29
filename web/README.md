@@ -4,7 +4,7 @@ The existing C games compile to WebAssembly using Emscripten. `src/platform/web/
 implements the host API with WebGL, reusing `src/rect_renderer.c`, the pixel
 font, splash loader and launcher wordmark. Games retain their normal C source
 and file paths. Each game has its own module, avoiding native `dlopen` and
-colliding game symbols. The Pi build and ABI remain compatible.
+colliding game symbols. Both hosts and all modules use ABI 12 and must be rebuilt together.
 
 ## Build and run
 
@@ -53,54 +53,45 @@ node --test dashboard/play.test.js tests/game_catalog.test.cjs tests/player_audi
 make web
 ```
 
-## Test and update the website
+## Test and publish
 
-Chirky owns the browser player, configuration loading and build. Configuration
-files are transported in `configs.json`, retaining their original `.conf` names
-inside WASM; this also works on CDNs that block `.conf` URLs. Embedded players
-do not steal focus on startup. No website-specific player edits are needed.
+`build/web/` is the standalone site published at **chirky.org**. The player,
+catalog, assets and configuration all come from this repository. Slimbuck links
+to the site and no longer receives exported game files. Configuration files are
+transported through `configs.json`, retaining their original paths inside WASM.
 
-`build/web/build.json` records the source commit, whether the source tree had
-uncommitted changes, and SHA-256 hashes for every packaged file. It describes the
-last build, not subsequent edits. Rebuild before testing or exporting new changes.
+`build.json` records the source commit, dirty status, and SHA-256 file hashes.
+Rebuild after changes. Test a local build with:
 
 ```sh
-node --test tests/web_package.cjs tests/player_audio.cjs
-node tools/platform-browser.cjs http://127.0.0.1:3031/ build/standalone-checks
-node tools/export-web.cjs ../slimbuck.com
+node tools/publish-web.cjs --check
 ```
 
-The export command starts a temporary standalone server, selects every catalog
-entry through the launcher at desktop and mobile sizes, checks module responses
-and integer canvas scaling, and runs detailed input/audio/lifecycle checks for
-Phosphor Run and Rosey Chop. Phosphor checks wait for the level introduction
-before sending gameplay input. It verifies that the package is unchanged, then
-replaces only the website's `apps/chirky/` directory with the tested bytes.
-It removes obsolete files there and leaves other apps untouched. Chrome must be
-installed; set `CHROME` to its executable if necessary. Screenshots and results
-go to `build/web-export-checks/`. Export does not commit, push or publish.
-
-The website build copies this bundle unchanged. Review and commit both
-repositories as appropriate; pushing the website's `main` branch triggers its
-existing deployment. Its post-deployment checker verifies the published files
-and reports the Chirky source commit. Commit Chirky and rebuild before a release
-to obtain a clean source revision rather than a dirty-development marker.
+This exercises every game through the launcher at desktop/mobile sizes and
+checks gameplay, input, audio and lifecycle behavior. Reports and screenshots
+are saved in `build/publish-checks/`. See [AWS publishing](../deploy/WEB.md)
+for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 
 ## Controls and behaviour
 
-- Arrows: D-pad. Z: Y, X/Enter: B, C: A, V: X, A/S: L/R.
-- Space: Start. Escape/Select: browser pause; Select stays available as a game
-  input in Hardware Test. The page also offers Pause, Restart and Full screen.
-- Standard-mapped browser gamepads and touch controls are supported. Click the
-  screen or press a keyboard key once to enable browser audio.
-- Rendering is 320×240 with the normal 288×216 playable area and black border.
-  Simulation runs at 60 ticks/second; catch-up is bounded after slow frames.
-  Losing focus or hiding the tab pauses play; Resume continues it.
-- The browser launcher includes every game in generated `catalog.json`.
-  Pi-specific display calibration, controller setup, power management and
-  diagnostics stay in the native host. Browser controls do not change the Pi's
-  mappings.
+- Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
+- **Input settings** remaps all eight inputs. Duplicate keys are rejected;
+  Cancel preserves the live mapping; Save persists this browser's settings.
+  Reset defaults restores keyboard and touch preferences. Pi mappings remain
+  independent. Games display Chirky input names; the page shows bound keys.
+- Menu pauses/resumes. Hardware Test uses Menu to return to the launcher.
+  The page also offers Pause, Restart, Launcher, Mute, and Full screen.
+- Standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
+  and Start/Select for Start/Menu. Pi's SNES adapter has its own native defaults.
+- Touch controls support simultaneous movement/actions and Auto/Show/Hide.
+  Pointer cancellation or loss of focus clears held inputs.
+- Full screen toggles the whole player, including touch controls and navigation.
+  Canvas scaling uses integer multiples of 320x240 whenever space permits.
+  Unsupported fullscreen browsers display an explanatory message.
+- Losing focus or hiding the tab pauses play. Resume continues the run.
+- Games still render into the normal CRT-safe logical viewport. Simulation
+  runs at 60 ticks/second with bounded catch-up after slow frames.
 - No progress/save-state persistence is added; restarting starts a fresh game.
 
-Built and checked with Emscripten 3.1.5 and Chromium. Physical gamepads, touch
-devices and other browser engines require device testing.
+Automated checks use Chromium with simulated touch. Physical controllers,
+touch devices, and other browser engines still require device testing.
