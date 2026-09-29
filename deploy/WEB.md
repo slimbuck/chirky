@@ -56,6 +56,11 @@ versions expire after 30 days. The initial distribution disables edge caching
 to avoid mixing modules from different builds at the same URL; optimize with
 versioned release paths before enabling long-lived caches.
 
+The GitHub role trust uses this repository's immutable OIDC subject:
+`repo:slimbuck@11276292/chirky@1352099473:ref:refs/heads/main`. Preserve the
+owner and repository IDs when updating the policy; the old name-only subject
+does not match this repository's tokens. See [GitHub's OIDC reference](https://docs.github.com/en/actions/reference/security/oidc).
+
 ## Build, check, publish
 
 ```sh
