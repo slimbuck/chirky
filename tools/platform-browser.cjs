@@ -354,8 +354,21 @@ async function main() {
         }
       }
       async function key(code,key,value,hold=100) {
-        await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(hold);
-        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(120);
+        await page.eval(`globalThis.__testKeyEvents=[];for(const type of ['keydown','keyup']){addEventListener(type,function delivered(event){if(event.code===${JSON.stringify(code)}){__testKeyEvents.push(type);removeEventListener(type,delivered,true);}},{capture:true});}`);
+        async function delivered(type){
+          let seen=false;
+          for(let i=0;i<40;i++){
+            seen=await page.eval(`__testKeyEvents.includes(${JSON.stringify(type)})`);
+            if(seen)break;
+            await delay(50);
+          }
+          assert(seen,`Chrome must deliver ${code} ${type}`);
+        }
+        // A CDP acknowledgement may precede DOM delivery while WASM loads.
+        // Do not send release before the corresponding press has arrived.
+        await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delivered('keydown');await delay(hold);
+        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delivered('keyup');await delay(120);
+        assert(!(await state()).heldKeys.includes(code),`${code} must release after keyup`);
       }
       async function capture(name) {
         const pixels=await page.eval(`(() => {__platformProbe.runtime._web_render();const c=document.querySelector('#screen'),g=c.getContext('webgl'),p=new Uint8Array(c.width*c.height*4);g.readPixels(0,0,c.width,c.height,g.RGBA,g.UNSIGNED_BYTE,p);let hash=2166136261,lit=0;const colors=new Set();for(let i=0;i<p.length;i+=4){hash=Math.imul(hash^p[i],16777619);hash=Math.imul(hash^p[i+1],16777619);hash=Math.imul(hash^p[i+2],16777619);if(p[i]||p[i+1]||p[i+2])lit++;colors.add((p[i]<<16)|(p[i+1]<<8)|p[i+2]);}const r=c.getBoundingClientRect();return {hash:hash>>>0,lit,colors:colors.size,glError:g.getError(),rect:{x:r.x,y:r.y,width:r.width,height:r.height},overflow:document.documentElement.scrollWidth>innerWidth,touchVisible:getComputedStyle(document.querySelector('.touch')).display!=='none'};})()`);
