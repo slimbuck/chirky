@@ -80,7 +80,7 @@ const attachProbe = `(() => {
   probe.runtime=runtime;probe.shell=shell;
   probe.state=()=>({ready,paused,muted,leaving,loading,id,status:status.textContent,screen:shell._web_console_state(),capture:shell._web_capture_keyboard(),assetSounds:assetSounds.size,
     callbacks:['onSound','onAssetReady','onAssetSound'].map(key=>[key,typeof runtime[key]]),
-    audioState:audio?.state,activeSounds:sources.size,ticks:probe.ticks,masks:probe.masks,inputs:mask(),assetPlays:probe.assetPlays,
+    audioState:audio?.state,activeSounds:sources.size,ticks:probe.ticks,masks:probe.masks,inputs:mask(),heldKeys:[...keys],heldTouches:[...touch.values()],assetPlays:probe.assetPlays,
     audit:{...__platformAudit,contexts:__platformAudit.contexts.map(context=>context.state)}});
   if(probe.seen.has(runtime))return;probe.seen.add(runtime);
   let tick=runtime._web_tick;const tickProbe=function(mask){probe.ticks++;if(mask && probe.masks.at(-1)!==mask)probe.masks.push(mask);return tick(mask);};
@@ -156,6 +156,8 @@ async function main() {
         }
         const game=await checkLoading(catalog.games[diagnostic].name);
         report.screen=game;
+        await page.eval('document.fonts.ready');
+        if(!touch)assert(await page.eval(`document.fonts.check('600 20px "Chirky Keys"')`),'Bundled keycap lettering must load');
         assert.deepEqual(game,launcher,'Launcher and game must use the same screen size');
         assert.deepEqual(game.buffer,[320,240]);assert(!game.overflow);
         const physicalScale=game.width*density/320;
@@ -423,6 +425,7 @@ async function main() {
         for(const [code,k,v] of [['ArrowRight','ArrowRight',39],['ArrowUp','ArrowUp',38],['ArrowDown','ArrowDown',40],['KeyQ','q',81],['KeyZ','z',90],['Enter','Enter',13],['Escape','Escape',27]])await key(code,k,v);
         assert.equal((await state()).capture,-1);
         assert.deepEqual(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys'),['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyZ','Enter','Escape']);
+        assert.equal(await page.eval('document.querySelector("#key-help-4").textContent'),'Q','Keyboard guide must reflect a remapped Primary key');
         const settingsShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}-settings.png`),Buffer.from(settingsShot.data,'base64'));
         // Raw USB gamepad: map button AND axis events through the actual C wizard.
@@ -473,7 +476,8 @@ async function main() {
           const action=await page.eval(`(()=>{const r=document.querySelector('[data-button="4"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,id:2};})()`);
           const thumb=(x,y)=>({x:pad.x+x,y:pad.y+y,id:1});
           await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(-70,0)]});
-          assert.equal((await state()).inputs,1,'The area just outside the visible cross accepts a thumb');
+          const thumbState=await state();
+          assert.equal(thumbState.inputs,1,`The area just outside the visible cross accepts a thumb (keys=${thumbState.heldKeys}; touch=${thumbState.heldTouches})`);
           await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(-70,0),action]});
           await page.eval(`document.querySelector('.dpad').addEventListener('pointermove',event=>{globalThis.__lastDpadMove={x:event.clientX,y:event.clientY};})`);
           async function moveThumb(x,y){
@@ -555,6 +559,7 @@ async function main() {
         }
         await page.call('Page.reload');await delay(200);await ready();
         assert.equal(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys[4]'),'KeyQ');
+        assert.equal(await page.eval('document.querySelector("#key-help-4").textContent'),'Q','Keyboard guide must restore the saved mapping');
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v1"))).length'),1);
         await capture('restarted');
         report.lifecycle=await page.eval('JSON.parse(sessionStorage.getItem("platform-browser-lifecycle")||"[]")');

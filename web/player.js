@@ -92,10 +92,23 @@ const keyCodes=[...new Set([...defaultKeys,...Array.from({length:26},(_,i)=>"Key
 let padSettings={};
 try{const saved=JSON.parse(localStorage.getItem("chirky.controllers.v1"));if(saved && typeof saved==="object" && !Array.isArray(saved))padSettings=saved;}catch{}
 function keyName(code){return code.replace(/^Key|^Digit/,"").replace(/^Arrow/,"").replace("Escape","Esc");}
+function keycapName(code){
+  const names={ArrowLeft:"←",ArrowRight:"→",ArrowUp:"↑",ArrowDown:"↓",Enter:"Enter ↵",Escape:"Esc",
+    ShiftLeft:"Shift L",ShiftRight:"Shift R",ControlLeft:"Ctrl L",ControlRight:"Ctrl R",AltLeft:"Alt L",AltRight:"Alt R",
+    Backspace:"Backspace",Comma:",",Period:".",Slash:"/",Semicolon:";",Quote:"'",BracketLeft:"[",BracketRight:"]",Backslash:"\\",Minus:"−",Equal:"=",Backquote:"`"};
+  return names[code] || keyName(code).replace(/^Numpad/,"Num ");
+}
+function refreshKeyFeedback(){
+  inputSettings.keys.forEach((code,index)=>$("#key-help-"+index).dataset.pressed=String(keys.has(code)));
+}
 function refreshInputSettings(){
   bindings=Object.fromEntries(inputSettings.keys.map((code,index)=>[code,index]));
   $("#player").setAttribute("data-touch",inputSettings.touch);
-  $("#control-help").textContent=inputNames.map((name,index)=>`${name}: ${keyName(inputSettings.keys[index])}`).join(" · ")+" · F1: recovery / cancel mapping · Double-click / double-tap display: fullscreen";
+  inputSettings.keys.forEach((code,index)=>{
+    const key=$("#key-help-"+index);key.textContent=keycapName(code);
+    key.setAttribute("aria-label",`${inputNames[index]}: ${keyName(code)}`);
+  });
+  refreshKeyFeedback();
 }
 function validPadMap(values){
   return Array.isArray(values) && values.length===8 && new Set(values.map(v=>JSON.stringify(v))).size===8 &&
@@ -160,6 +173,7 @@ async function playSound(path){
 }
 function setPaused(value){
   paused=value;keys.clear();touch.clear();dpadPointer=null;dpadBounds=null;dpadPending=0;fullscreenQueued=false;refreshTouchFeedback();pending=0;last=0;accumulator=0;
+  refreshKeyFeedback();
   if(value){shell?._web_console_pause();stopSounds();}
 }
 function toggleMute(){muted=!muted;if(muted)stopSounds();}
@@ -215,12 +229,12 @@ window.addEventListener("keydown",event=>{
   }
   if(capturing || event.code in bindings){
     event.preventDefault();if(event.repeat)return;
-    keys.add(event.code);unlock();
+    keys.add(event.code);refreshKeyFeedback();unlock();
     if(capturing){const code=keyCodes.indexOf(event.code);if(code>=0)shell._web_capture(1,code,0);}
     else {pending|=1<<bindings[event.code];consoleGesture();}
   }
 });
-window.addEventListener("keyup",event=>keys.delete(event.code));
+window.addEventListener("keyup",event=>{keys.delete(event.code);refreshKeyFeedback();});
 canvas.addEventListener("pointerdown",event=>{
   unlock();canvas.focus();
   if(event.pointerType!=="mouse"){

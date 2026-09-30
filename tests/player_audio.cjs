@@ -9,7 +9,7 @@ function player() {
   const document = {
     querySelector(selector) {
       if (!elements.has(selector)) elements.set(selector, {
-        addEventListener() {}, focus() {}, setAttribute() {},
+        addEventListener() {}, focus() {}, setAttribute() {}, dataset: {},
       });
       return elements.get(selector);
     },

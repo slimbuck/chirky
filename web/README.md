@@ -96,6 +96,13 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 ## Controls and behaviour
 
 - Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
+- The desktop keyboard guide uses chunky keycaps: an inverted-T movement cluster,
+  coral Primary, turquoise Secondary, and cream Start/Menu keys. Labels follow
+  saved keyboard mappings and depress while the corresponding key is held.
+  Recovery and the display's double-click fullscreen shortcut sit below the keys.
+  The guide wraps in narrow windows and stays hidden in touch layouts and fullscreen.
+  Its Fredoka 500–600 character subset and SIL Open Font License are embedded in
+  `style.css`, so the guide needs no external font request.
 - **Settings → Input Settings** runs the same portable console code as the Pi: Map Controller,
   Map Keyboard and Test Buttons. The wizard captures all eight inputs and saves
   after the last release. Duplicate inputs are rejected. F1 cancels a draft;

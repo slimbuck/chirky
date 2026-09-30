@@ -194,3 +194,18 @@ test('page-scale gestures are cancelled without consuming single-touch movement 
   assert.equal(p.run('mask()'),16);
   p.touch[4].onpointerup({pointerId:1});assert.equal(p.run('mask()'),0);
 });
+
+test('keyboard keycaps follow saved mappings and release their pressed state',()=>{
+  const p=player(JSON.stringify({version:1,keys:['KeyA','KeyD','KeyW','KeyS','Space','ControlRight','Enter','Escape'],touch:'auto'}));
+  assert.equal(p.element('#key-help-2').textContent,'W');
+  assert.equal(p.element('#key-help-4').textContent,'Space');
+  assert.equal(p.element('#key-help-5').textContent,'Ctrl R');
+  p.events.keydown({code:'Space',preventDefault(){}});
+  assert.equal(p.element('#key-help-4').dataset.pressed,'true');
+  p.events.keyup({code:'Space'});
+  assert.equal(p.element('#key-help-4').dataset.pressed,'false');
+  p.events.keydown({code:'Space',preventDefault(){}});p.run('setPaused(true)');
+  assert.equal(p.element('#key-help-4').dataset.pressed,'false');
+  p.run('inputSettings.keys[4]="KeyQ";refreshInputSettings()');
+  assert.equal(p.element('#key-help-4').textContent,'Q');
+});

@@ -25,7 +25,19 @@
         <button class="primary" data-button="4" aria-label="A — Primary"><svg viewBox="0 0 62 62" aria-hidden="true" focusable="false"><path d="M41.035 37.5431Q41.485 38.4431 41.515 39.0731Q41.545 39.7031 41.125 40.1831Q40.705 40.6631 39.775 41.1431Q38.335 41.8331 37.555 41.5781Q36.775 41.3231 36.085 39.8531L30.985 29.4131L25.945 39.8831Q25.225 41.2931 24.445 41.5481Q23.665 41.8031 22.255 41.1131Q21.325 40.6631 20.89 40.1831Q20.455 39.7031 20.485 39.0731Q20.515 38.4431 20.965 37.5431L28.495 21.9431Q28.855 21.2231 29.56 20.7881Q30.265 20.3531 31.015 20.3531Q31.555 20.3531 32.02 20.5481Q32.485 20.7431 32.875 21.1031Q33.265 21.4631 33.505 21.9731ZM26.245 37.0031 28.525 32.3231H33.475L35.755 37.0031Z"/></svg></button>
       </div>
     </div>
-    <p class="help" id="control-help"></p>
+    <div class="help" id="control-help" aria-label="Keyboard controls">
+      <div class="key-groups">
+        <div class="key-group"><div class="key-arrows">
+          <kbd id="key-help-2" class="keycap key-up"></kbd><kbd id="key-help-0" class="keycap key-left"></kbd>
+          <kbd id="key-help-3" class="keycap key-down"></kbd><kbd id="key-help-1" class="keycap key-right"></kbd>
+        </div><span>Move</span></div>
+        <div class="key-group"><kbd id="key-help-4" class="keycap key-primary"></kbd><span>Primary</span></div>
+        <div class="key-group"><kbd id="key-help-5" class="keycap key-secondary"></kbd><span>Secondary</span></div>
+        <div class="key-group"><kbd id="key-help-6" class="keycap key-wide"></kbd><span>Start</span></div>
+        <div class="key-group"><kbd id="key-help-7" class="keycap key-wide"></kbd><span>Menu</span></div>
+      </div>
+      <div class="key-extras"><span><kbd>F1</kbd> Recovery / cancel mapping</span><span><svg viewBox="0 0 20 24" aria-hidden="true"><rect x="4" y="2" width="12" height="20" rx="6"/><path d="M10 3v6"/></svg> Double-click display · Full screen</span></div>
+    </div>
     <div class="shell-speaker" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
     <p id="fullscreen-message" role="status" hidden></p>
   </section>
