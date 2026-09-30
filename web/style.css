@@ -19,10 +19,10 @@ button{font:inherit;color:var(--ink);background:#ffedaa;border:2px solid var(--i
 .dpad-centre{grid-area:2/2;background:radial-gradient(circle,#625c70 0 28%,var(--key-face) 31%);pointer-events:none}
 .actions{width:132px;height:132px;position:relative}
 .actions button{position:absolute;width:68px;height:68px;border:3px solid var(--ink);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--ink);box-shadow:inset 0 4px 0 #ffffff60,0 5px 0 var(--key-shadow)}
-.actions button span:first-child{font:900 28px/1 'Trebuchet MS',sans-serif}.actions button span:last-child{font-size:10px;font-weight:800;letter-spacing:.01em}
+.actions button{font:900 30px/1 'Trebuchet MS',sans-serif}
 .actions .primary{right:0;top:8px;background:var(--primary)}
 .actions .secondary{left:0;bottom:8px;background:var(--secondary)}
-.touch .system-button{min-width:88px;padding:0 12px;border:2px solid var(--ink);border-radius:22px;background:#ffedaa;color:var(--ink);box-shadow:0 3px 0 var(--shell-rim);font-size:11px;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.system-button span{font-size:18px;vertical-align:middle;margin-right:4px}
+.touch .system-button{min-width:88px;padding:0 12px;border:2px solid var(--ink);border-radius:22px;background:#ffedaa;color:var(--ink);box-shadow:0 3px 0 var(--shell-rim);display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;line-height:1;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.system-button svg{display:block;width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .touch .system-button[data-pressed=true]{box-shadow:inset 0 2px 3px #dfa43580,0 1px 0 var(--shell-rim)}
 #player[data-touch=auto] .touch,#player[data-touch=hide] .touch{display:none}
 @media(any-pointer:coarse){#player[data-touch=auto] .touch{display:flex}}
