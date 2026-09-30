@@ -107,6 +107,10 @@ runtime atlases or introduce a second undocumented generator.
 - The browser has one persistent main module, renderer and asset store. Game
   WASM side modules contain only game code; generated JavaScript descriptors
   identify their files. Game changes must not recreate the host or renderer.
+- Build all browser modules with the official SDK version in `.emscripten-version`.
+  `make web` verifies the compiler and finds the documented WSL/Linux SDK install
+  automatically. See `web/README.md`; do not mix toolchain versions or bypass
+  the version check when publishing.
 - Both hosts use `src/runtime.c` for game lifecycle and `src/viewport.h` for
   framebuffer defaults. Do not duplicate init/shutdown sequencing or literal
   320x240/288x216 viewport geometry in a platform host.

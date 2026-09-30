@@ -11,7 +11,25 @@ and all game modules use ABI 12 and must be rebuilt together.
 
 ## Build and run
 
-Install Emscripten (`emcc`), Make and Node.js 22 or newer. From the repository root:
+Install Make, Python 3 and Node.js 22 or newer. Use the official Emscripten SDK
+version in `.emscripten-version`, matching CI. Distro packages can combine older
+Emscripten sources with different LLVM/system libraries; the Ubuntu package
+failed during main-module startup despite compiling successfully.
+
+On Linux or inside WSL, from the repository root:
+
+```sh
+version=$(cat .emscripten-version)
+sdk="$HOME/.cache/chirky/emsdk-$version"
+git clone --depth 1 --branch "$version" https://github.com/emscripten-core/emsdk.git "$sdk"
+"$sdk/emsdk" install "$version"
+"$sdk/emsdk" activate "$version"
+```
+
+`make web` automatically finds this SDK and verifies its version before building.
+For another installation, set `EMCC=/path/to/emsdk/upstream/emscripten/emcc`.
+See the [official SDK guide](https://emscripten.org/docs/tools_reference/emsdk.html).
+Then build and preview:
 
 ```sh
 make web

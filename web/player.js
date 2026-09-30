@@ -9,7 +9,7 @@ let navigation={push:true,level:null};
 let returnNavigation=null;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
 const assetSounds=new Map();
-const compiledModules=new Map();
+let moduleLoadQueue=Promise.resolve(),loadCompletion=null;
 let director=null;
 function directorSession(){return crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 async function syncDirector(){
@@ -281,7 +281,7 @@ async function createModule(gameId){
     onDirectorConnect,onDirectorDisconnect,onDirectorEvent,onDirectorState,
     onLauncherCount:()=>ids.length,onLauncherName:index=>titles[ids[index]],onLauncherId:index=>ids[index],
     onDiagnostic:index=>catalog[index].role==="diagnostic",
-    onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,
+    onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)toggleFullscreen();else if(option===-7)toggleMute();},
     onSaveMapping,onRawNames,printErr:message=>console.warn(message)});
 }
@@ -326,13 +326,8 @@ async function loadGame(nextId){
       const text=runtime.FS.readFile(config,{encoding:"utf8"}),setting=game.levelSetting;
       runtime.FS.writeFile(config,text.replace(new RegExp(`^${setting}=.*$`,"m"),"")+`\n${setting}=${Number(options.level)}\n`);
     }
-    // Coalesce compilation, including a cancelled load followed immediately by
-    // the same game. Emscripten's cache alone can expose a still-loading module.
-    if(!compiledModules.has(descriptor.module))compiledModules.set(descriptor.module,
-      runtime.loadDynamicLibrary("/"+descriptor.module,{loadAsync:true,global:false,nodelete:true,fs:runtime.FS}));
-    await compiledModules.get(descriptor.module);
+    const ok=await initializeModule(descriptor.module,config,sequence);
     if(sequence!==loadSequence)return;
-    const ok=runtime.ccall("web_load","number",["string","string"],["/"+descriptor.module,config]);
     if(!ok)throw new Error("Could not initialise the game");
     id=nextId;
     if(options.push){const url=new URL(location.href);url.search=`?game=${nextId}`;history.pushState(null,"",url);}
@@ -345,6 +340,21 @@ async function loadGame(nextId){
   }
 }
 async function gameDescriptor(gameId){return (await import(`./${gameId}.js`)).default;}
+function onModuleLoaded(ok){const complete=loadCompletion;loadCompletion=null;complete?.(ok);}
+function initializeModule(module,config,sequence){
+  // Serialize the loader even if a previous download was cancelled. Its C
+  // callback discards stale generations before game init; this queue prevents
+  // another request from observing a half-compiled copy of the same module.
+  const work=moduleLoadQueue.then(()=>{
+    if(sequence!==loadSequence)return false;
+    return new Promise((resolve,reject)=>{
+      loadCompletion=resolve;
+      try{runtime.ccall("web_load",null,["string","string"],[module,config]);}
+      catch(error){loadCompletion=null;reject(error);}
+    });
+  });
+  moduleLoadQueue=work.catch(()=>{});return work;
+}
 window.addEventListener("popstate",()=>{const query=new URLSearchParams(location.search);switchGame(query.get("game") || "launcher",false,query.get("level"));});
 window.addEventListener("pagehide",()=>{leaving=true;++loadSequence;stopSounds();if(ready)shell._web_destroy();audio?.close();});
 window.addEventListener("pageshow",event=>{if(event.persisted)location.reload();});

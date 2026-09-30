@@ -24,6 +24,7 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void);
 static struct splash_art art;
 static struct chirky_runtime runtime;
 static void *game_library;
+static unsigned load_generation;
 EMSCRIPTEN_KEEPALIVE void web_unload(void);
 EM_JS(void, sound, (const char *path), { Module.onSound(UTF8ToString(path)); });
 EM_JS(void, prepare_sound, (unsigned handle,const void *data,unsigned size,unsigned rate,unsigned channels), {
@@ -134,6 +135,7 @@ EMSCRIPTEN_KEEPALIVE void web_render(void)
 }
 EMSCRIPTEN_KEEPALIVE void web_unload(void)
 {
+    ++load_generation;
     chirky_runtime_stop(&runtime);
     disconnect_director();
     if(game_library){dlclose(game_library);game_library=NULL;}
@@ -141,19 +143,31 @@ EMSCRIPTEN_KEEPALIVE void web_unload(void)
     splash_free(&art);image_cache_clear(&images,&renderer);
     if(assets){asset_store_clear(assets);splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");}
 }
-/* JavaScript asynchronously compiles the side module into Emscripten's loader
-   cache first. dlopen then obtains its local handle without blocking on I/O. */
-EMSCRIPTEN_KEEPALIVE int web_load(const char *module,const char *config)
+struct module_load {unsigned generation;char config[1024];};
+EM_JS(void,module_loaded,(int success),{Module.onLoaded(!!success);});
+static void module_failed(void *data)
+{ free(data);module_loaded(0); }
+static void module_ready(void *data,void *handle)
+{
+    struct module_load *load=data;
+    if(load->generation!=load_generation){dlclose(handle);free(load);module_loaded(0);return;}
+    game_library=handle;
+    chirky_game_entry_fn entry=(chirky_game_entry_fn)dlsym(handle,"chirky_game_entry");
+    bool ok=entry && chirky_runtime_start(&runtime,entry(),&api,load->config);
+    if(ok)chirky_console_loaded(&console,true);
+    free(load);module_loaded(ok);
+}
+/* The public asynchronous loader reads the downloaded bytes from the host's
+   filesystem, without fetching them again or blocking the browser on compile. */
+EMSCRIPTEN_KEEPALIVE void web_load(const char *module,const char *config)
 {
     char directory[1024];snprintf(directory,sizeof(directory),"%s",config);
-    char *slash=strrchr(directory,'/');if(!slash)return 0;*slash=0;
-    if(!asset_store_prefetch(assets,directory) || asset_store_prefetch_state(assets)!=CHIRKY_ASSET_READY)return 0;
-    game_library=dlopen(module,RTLD_NOW|RTLD_LOCAL);
-    if(!game_library)return 0;
-    chirky_game_entry_fn entry=(chirky_game_entry_fn)dlsym(game_library,"chirky_game_entry");
-    bool ok=entry && chirky_runtime_start(&runtime,entry(),&api,config);
-    if(ok)chirky_console_loaded(&console,true);
-    return ok;
+    char *slash=strrchr(directory,'/');if(!slash){module_loaded(0);return;}*slash=0;
+    if(!asset_store_prefetch(assets,directory) || asset_store_prefetch_state(assets)!=CHIRKY_ASSET_READY){module_loaded(0);return;}
+    struct module_load *load=calloc(1,sizeof(*load));
+    if(!load){module_loaded(0);return;}
+    load->generation=load_generation;snprintf(load->config,sizeof(load->config),"%s",config);
+    emscripten_dlopen(module,RTLD_NOW|RTLD_LOCAL|RTLD_NODELETE,load,module_ready,module_failed);
 }
 EMSCRIPTEN_KEEPALIVE void web_load_failed(void){chirky_console_loaded(&console,false);}
 EMSCRIPTEN_KEEPALIVE void web_destroy(void)

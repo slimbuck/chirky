@@ -55,9 +55,11 @@ services.
 one persistent Emscripten main module containing the console, game runtime,
 renderer, asset store, image cache and virtual filesystem. Games compile as
 side modules containing only their own C sources. Their generated `<id>.js`
-files are descriptors, not separate hosts. JavaScript downloads the assets and
-asynchronously compiles the selected WASM into Emscripten's loader cache; the C
-adapter obtains a local `dlopen` handle and starts it through `src/runtime.c`.
+files are descriptors, not separate hosts. JavaScript downloads module bytes and
+assets into the host filesystem. The C adapter uses `emscripten_dlopen` to
+compile and load them asynchronously, then starts the game through `src/runtime.c`.
+Loading requests are serialized, and cancelled generations cannot initialize a
+game. Both local builds and CI use the official SDK pinned in `.emscripten-version`.
 Game symbols have hidden visibility and do not share game state with each other.
 
 Game exit calls shutdown, disconnects audio/director services, releases images

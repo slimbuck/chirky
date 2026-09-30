@@ -24,22 +24,25 @@ test('cancelled browser loads cannot activate after a newer request, and errors 
   p.run(`
     catalog=[{id:'sample',name:'Sample'}];files=[];configs={};
     navigation={push:false,level:null};
-    globalThis.calls=[];globalThis.compiled=[];
+    globalThis.calls=[];
     gameDescriptor=async()=>({module:'sample.wasm',config:'games/sample/game.conf'});
     checked=async()=>({arrayBuffer:async()=>new ArrayBuffer(8)});
-    runtime=shell={FS:{writeFile(){}},loadDynamicLibrary:()=>new Promise(resolve=>compiled.push(resolve)),
-      ccall:(...args)=>{calls.push(args);return 1;},_web_load_failed:()=>{calls.push('failed');gameStopped();}};
+    runtime=shell={FS:{writeFile(){}},
+      ccall:(...args)=>{calls.push(args);},_web_load_failed:()=>{calls.push('failed');gameStopped();}};
     console={warn(){},error(){}};
   `);
   const first=p.run('loadGame("sample")');
-  for(let i=0;i<10 && !p.run('compiled.length');i++)await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(p.run('compiled.length'),1);
+  for(let i=0;i<10 && !p.run('calls.length');i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.run('calls.length'),1);
   p.run('gameStopped();navigation={push:false,level:null}');
   const second=p.run('loadGame("sample")');
   await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(p.run('compiled.length'),1,'Concurrent requests compile a module only once');
-  p.run('compiled[0]()');await first;await second;
-  assert.equal(p.run('calls.length'),1);assert.equal(p.run('id'), 'sample');assert.equal(p.run('loading'),false);
+  assert.equal(p.run('calls.length'),1,'A second request waits for the cancelled loader callback');
+  p.run('onModuleLoaded(false)');await first;
+  for(let i=0;i<10 && p.run('calls.length')<2;i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.run('id'),'launcher');
+  p.run('onModuleLoaded(true)');await second;
+  assert.equal(p.run('calls.length'),2);assert.equal(p.run('id'), 'sample');assert.equal(p.run('loading'),false);
   p.run('gameStopped();gameDescriptor=async()=>{throw Error("Download failed");}');
   await p.run('loadGame("sample")');
   assert.equal(p.run('calls.at(-1)'),'failed');assert.equal(p.run('id'),'launcher');

@@ -16,8 +16,9 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 
 .PHONY: all clean test benchmark performance-benchmark web
 
-EMCC ?= emcc
-WEB_FLAGS = -D_GNU_SOURCE -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sGL_PREINITIALIZED_CONTEXT=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall,loadDynamicLibrary --no-entry
+EMSDK ?= $(HOME)/.cache/chirky/emsdk-$(shell cat .emscripten-version)
+EMCC ?= $(if $(wildcard $(EMSDK)/upstream/emscripten/emcc),$(EMSDK)/upstream/emscripten/emcc,emcc)
+WEB_FLAGS = -D_GNU_SOURCE -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sGL_PREINITIALIZED_CONTEXT=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall --no-entry
 WEB_COMMON = src/platform/web/host.c src/platform/web/asset_platform.c src/rect_renderer.c $(CORE_SOURCES)
 WEB_HEADERS = $(wildcard include/*.h src/*.h src/platform/web/*.h)
 WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.wasm,$(wildcard games/*/game.c))
@@ -26,11 +27,17 @@ WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.wasm,$(wildcard games/*/game
 web: build/web/launcher.js $(WEB_TARGETS)
 	$(NODE) tools/web-assets.js
 
-build/web/launcher.js: $(WEB_COMMON) $(WEB_HEADERS)
+.PHONY: check-web-toolchain
+check-web-toolchain:
+	python3 tools/check-web-toolchain.py "$(EMCC)"
+
+build/web/launcher.js $(WEB_TARGETS): | check-web-toolchain
+
+build/web/launcher.js: $(WEB_COMMON) $(WEB_HEADERS) .emscripten-version
 	mkdir -p $(@D)
 	$(EMCC) $(WEB_FLAGS) -sMAIN_MODULE=1 $(WEB_COMMON) -o $@
 
-build/web/%.wasm: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) $(WEB_HEADERS)
+build/web/%.wasm: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) $(WEB_HEADERS) .emscripten-version
 	mkdir -p $(@D)
 	$(EMCC) -D_GNU_SOURCE -Iinclude -std=c11 -O2 -Wall -Wextra -fvisibility=hidden -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS=_chirky_game_entry $(wildcard games/$*/*.c) -o $@
 

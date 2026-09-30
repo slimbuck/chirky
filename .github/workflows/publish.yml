@@ -20,7 +20,15 @@ jobs:
         with:
           node-version: '22'
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y emscripten libdrm2 libgbm1 libegl1 libgles2
+        run: sudo apt-get update && sudo apt-get install -y libdrm2 libgbm1 libegl1 libgles2
+      - name: Install pinned Emscripten SDK
+        run: |
+          version=$(cat .emscripten-version)
+          sdk="$RUNNER_TEMP/chirky-emsdk"
+          git clone --depth 1 --branch "$version" https://github.com/emscripten-core/emsdk.git "$sdk"
+          "$sdk/emsdk" install "$version"
+          "$sdk/emsdk" activate "$version"
+          echo "EMCC=$sdk/upstream/emscripten/emcc" >> "$GITHUB_ENV"
       - name: Test and build
         run: make test && make web
       - uses: aws-actions/configure-aws-credentials@v6
