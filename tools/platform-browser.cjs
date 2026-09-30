@@ -159,6 +159,12 @@ async function main() {
           assert.equal(controls.length,8);
           assert(controls.every(r=>r.width>=44 && r.height>=44 && r.x>=0 && r.y>=0 && r.right<=width && r.bottom<=height),'All eight touch targets must fit and be at least 44 CSS pixels');
           if(width>height){
+            // Preserve the original middle-space allocation: two 148px control
+            // columns, two 12px gaps, 12px outer padding, and the 1px screen border.
+            // Decorative shell borders must not consume this space and knock a
+            // narrow phone down an entire physical-pixel scaling step.
+            const maximumScale=Math.floor(Math.min((width-346)/320,(height-26)/240)*density+1e-6);
+            assert(Math.abs(game.width*density-320*maximumScale)<.03,'Landscape display must fill the original middle space at the largest integer physical scale');
             assert(controls.filter(r=>['0','1','2','3','7'].includes(r.button)).every(r=>r.right<=game.x),'D-pad and Menu must sit left of the display');
             assert(controls.filter(r=>['4','5','6'].includes(r.button)).every(r=>r.x>=game.x+game.width),'Actions and Start must sit right of the display');
             assert(Math.abs(game.y+game.height/2-height/2)<=1,'Display must be vertically centred');

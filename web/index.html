@@ -5,6 +5,7 @@
 <body><main>
   <header><h1>Chirky Box</h1><span id="status" role="status">Loading…</span></header>
   <section id="player" aria-label="Chirky player">
+    <div class="shell-brand" aria-hidden="true">chirky<span>Play your way</span></div>
     <div id="screen-slot"><div id="display"><canvas id="screen" width="320" height="240" tabindex="0" aria-label="Chirky Box game screen"></canvas></div></div>
     <div class="touch controller-left" role="group" aria-label="Directional controls">
       <div class="dpad">
@@ -24,6 +25,7 @@
       <button class="system-button" data-button="6"><span aria-hidden="true">▷</span> Start</button>
     </div>
     <p class="help" id="control-help"></p>
+    <div class="shell-speaker" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
     <p id="fullscreen-message" role="status" hidden></p>
   </section>
 </main><script type="module" src="player.js"></script></body></html>

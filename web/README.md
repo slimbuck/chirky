@@ -111,7 +111,11 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   raw buttons and axes in Map Controller; use the keyboard to get there first.
   Each controller identity keeps its own mapping. Pi's SNES defaults remain native.
 - Touch devices get a controller-shaped D-pad, distinct Primary/Secondary face
-  buttons, and smaller Menu/Start buttons. All targets are at least 44 CSS pixels;
+  buttons, and smaller Menu/Start buttons. The toy handheld shell uses warm yellow,
+  a graphite D-pad, coral Primary and turquoise Secondary, with inset grips and
+  visible pressed feedback. Decorative branding and speaker slots stay outside
+  the game display. Its bezel is painted outside the measured framebuffer border,
+  preserving integer canvas scaling. All targets are at least 44 CSS pixels;
   the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
   the thumb around the fixed centre, with eight sectors (including diagonals)
   and a small neutral centre. Dragging beyond the pad keeps the direction held
