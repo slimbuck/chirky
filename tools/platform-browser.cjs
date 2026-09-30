@@ -131,6 +131,12 @@ async function main() {
       const measure=`(()=>{const c=document.querySelector('#screen'),r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,density:devicePixelRatio,buffer:[c.width,c.height],overflow:document.documentElement.scrollWidth>innerWidth};})()`;
       async function checkLoading(name){
         for(let i=0;i<150&&!held;i++)await delay(100);assert(held,'WASM request must be held to test loading');
+        if(name!=='Launcher'){
+          // Hold the download long enough to inspect the shared loading badge.
+          await delay(100);
+          const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+          fs.writeFileSync(path.join(out,`${label}-loading.png`),Buffer.from(screenshot.data,'base64'));
+        }
         const loading=await page.eval(measure);await page.call('Fetch.continueRequest',{requestId:held});held=null;
         await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(name)}`);
         const loaded=await page.eval(measure);assert.deepEqual(loaded,loading,'Loading must not resize or move the screen');return loaded;

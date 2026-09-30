@@ -204,5 +204,5 @@ void chirky_console_render(struct chirky_console *c,const struct chirky_host_api
     case SCREEN_SETTINGS:console_draw_settings_menu(api,&c->launcher,c->settings_option);break;
     default:console_draw_launcher(api,art,&c->launcher,c->selected_game);break;
     }
-    if(c->loading)console_menu_text(api,12,api->screen_height/2,"LOADING",2,250,248,236);
+    if(c->loading)console_draw_loading(api);
 }

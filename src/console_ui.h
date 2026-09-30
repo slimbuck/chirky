@@ -49,6 +49,16 @@ static inline void console_menu_footer(const struct chirky_host_api *api, bool c
     console_menu_text(api,10,14,line,1,112,160,170);
 }
 
+static inline void console_draw_loading(const struct chirky_host_api *api)
+{
+    /* Keep the status in the safe viewport's top-right corner, above menus. */
+    const int text_width=7*6-1,padding=3,margin=4;
+    int x=api->screen_width-margin-padding-text_width;
+    int y=api->screen_height-margin-padding-1;
+    api->fill_rect(api->context,x-padding,y-6-padding,text_width+padding*2,7+padding*2,5,17,23);
+    console_glyphs(api,x,y,"LOADING",1,250,248,236);
+}
+
 static inline void console_draw_launcher(const struct chirky_host_api *api, const struct splash_art *art, const struct launcher_config *launcher, int selected_game)
 {
     splash_draw(art,api);

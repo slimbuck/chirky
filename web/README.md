@@ -152,6 +152,8 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   launcher and games share one persistent canvas, WebGL context, renderer and
   asset store. Switching
   games does not reload the page or leave fullscreen. No game sprite sizes change.
+  While a game loads, the shared console draws a small single-scale `LOADING`
+  badge in the safe viewport's top-right corner, clear of the launcher rows.
   Standard and WebKit-prefixed fullscreen APIs are supported. Unsupported or
   blocked requests show a message over the player, including in landscape;
   they never replace the launcher/game title. Mobile browser checks use real
