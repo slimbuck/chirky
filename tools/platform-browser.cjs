@@ -331,7 +331,10 @@ async function main() {
       });
       await page.call('Page.enable');await page.call('Runtime.enable');await page.call('Network.enable');await page.call('Debugger.enable');
       await page.call('Network.setCacheDisabled', {cacheDisabled:true});
-      await page.call('Debugger.setBreakpointByUrl', {url:new URL('player.js',base).href,lineNumber:readyLine});
+      // Attach once per document: every game shares this persistent runtime.
+      // Pausing again on a launcher key press can swallow its CDP key release.
+      // A reload clears the probe and enables the checkpoint again.
+      await page.call('Debugger.setBreakpointByUrl', {url:new URL('player.js',base).href,lineNumber:readyLine,condition:'!globalThis.__platformProbe'});
       await page.call('Page.addScriptToEvaluateOnNewDocument', {source:instrumentation});
       await page.call('Emulation.setDeviceMetricsOverride', {width:mobile?390:1280,height:mobile?844:1000,deviceScaleFactor:1,mobile});
       await page.call('Emulation.setTouchEmulationEnabled', {enabled:mobile,maxTouchPoints:5});
