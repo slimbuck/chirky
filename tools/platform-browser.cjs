@@ -271,7 +271,10 @@ async function main() {
         for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,base).href),200);
         await press('Enter','Enter',13);await delay(250);
         const size=await page.eval('(() => {const r=document.querySelector("#screen").getBoundingClientRect();return {width:r.width,height:r.height};})()');
-        assert.equal(size.width%320,0);assert.equal(size.height,size.width*240/320);
+        // DOMRects use floating-point bounds after the subpixel sampling bias.
+        // Exact raster pixels are checked from screenshots in the layout suite.
+        assert(Math.abs(size.width-Math.round(size.width/320)*320)<.001);
+        assert(Math.abs(size.height-size.width*240/320)<.001);
         const shot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(shot.data,'base64'));
         report.checks.push('selected through catalog launcher, JS/WASM HTTP 200, integer canvas scale');report.passed=true;
@@ -445,10 +448,10 @@ async function main() {
         assert.equal((await state()).id,game);
         assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
-        const full=await capture('fullscreen');assert.equal(full.rect.width%320,0);
+        const full=await capture('fullscreen');assert(Math.abs(full.rect.width-Math.round(full.rect.width/320)*320)<.001);
         if(mobile){
           await page.call('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});await delay(200);
-          const landscape=await capture('fullscreen-landscape');assert.equal(landscape.rect.width%320,0);
+          const landscape=await capture('fullscreen-landscape');assert(Math.abs(landscape.rect.width-Math.round(landscape.rect.width/320)*320)<.001);
           assert(await page.eval('Array.from(document.querySelectorAll(".touch button")).every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})'),'Fullscreen touch controls must stay onscreen');
           const pad=await page.eval(`(()=>{const r=document.querySelector('.dpad').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
           const action=await page.eval(`(()=>{const r=document.querySelector('[data-button="4"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,id:2};})()`);
