@@ -94,16 +94,19 @@ async function main() {
   const chrome = process.env.CHROME || (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : 'chromium');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'platform-browser-'));
   const child = spawn(chrome, ['--headless', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
-    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--remote-debugging-port=0',
+    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--remote-debugging-port=0', '--disable-dev-shm-usage',
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding', `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true });
   let browserErrors = ''; child.stderr.on('data', data => { browserErrors += data; });
+  child.stdout.on('data', data => { browserErrors += data; });
   child.on('error', error => { browserErrors += error.message; });
   let browser;
   const reports = [];
   try {
     const portFile = path.join(profile, 'DevToolsActivePort');
-    for (let i=0; i<100 && !fs.existsSync(portFile); i++) await delay(100);
-    assert(fs.existsSync(portFile), browserErrors);
+    // Cold CI runners can spend more than ten seconds starting Chrome. Wait for
+    // its actual debugging endpoint, while still failing immediately on exit.
+    for (let i=0; i<450 && !fs.existsSync(portFile) && child.exitCode===null && child.signalCode===null; i++) await delay(100);
+    assert(fs.existsSync(portFile), `Chrome did not expose DevTools within 45 seconds (exit=${child.exitCode}, signal=${child.signalCode}). ${browserErrors}`);
     const port = fs.readFileSync(portFile, 'utf8').split('\n')[0];
     const endpoint = `http://127.0.0.1:${port}`;
     const info = await (await fetch(`${endpoint}/json/version`)).json();
