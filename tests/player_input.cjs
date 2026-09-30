@@ -14,11 +14,37 @@ function player(saved){
   const window={addEventListener:(name,fn)=>{events[name]=fn;}};
   const localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)};
   const context=vm.createContext({document,window,localStorage,location:{search:''},URLSearchParams,console,
-    navigator:{getGamepads:()=>[]},fetch:()=>new Promise(()=>{}),AudioContext:class{resume(){return Promise.resolve();}}});
+    navigator:{getGamepads:()=>[]},fetch:()=>new Promise(()=>{}),URL,TextEncoder,AudioContext:class{resume(){return Promise.resolve();}}});
   const run=code=>vm.runInContext(code,context);
   run(fs.readFileSync(require.resolve('../web/player.js'),'utf8'));
   return {run,element,touch,events,storage,document,localStorage};
 }
+test('cancelled browser loads cannot activate after a newer request, and errors return to the console',async()=>{
+  const p=player();
+  p.run(`
+    catalog=[{id:'sample',name:'Sample'}];files=[];configs={};
+    navigation={push:false,level:null};
+    globalThis.calls=[];globalThis.compiled=[];
+    gameDescriptor=async()=>({module:'sample.wasm',config:'games/sample/game.conf'});
+    checked=async()=>({arrayBuffer:async()=>new ArrayBuffer(8)});
+    runtime=shell={FS:{writeFile(){}},loadDynamicLibrary:()=>new Promise(resolve=>compiled.push(resolve)),
+      ccall:(...args)=>{calls.push(args);return 1;},_web_load_failed:()=>{calls.push('failed');gameStopped();}};
+    console={warn(){},error(){}};
+  `);
+  const first=p.run('loadGame("sample")');
+  for(let i=0;i<10 && !p.run('compiled.length');i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.run('compiled.length'),1);
+  p.run('gameStopped();navigation={push:false,level:null}');
+  const second=p.run('loadGame("sample")');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.run('compiled.length'),1,'Concurrent requests compile a module only once');
+  p.run('compiled[0]()');await first;await second;
+  assert.equal(p.run('calls.length'),1);assert.equal(p.run('id'), 'sample');assert.equal(p.run('loading'),false);
+  p.run('gameStopped();gameDescriptor=async()=>{throw Error("Download failed");}');
+  await p.run('loadGame("sample")');
+  assert.equal(p.run('calls.at(-1)'),'failed');assert.equal(p.run('id'),'launcher');
+  assert.equal(p.run('loading'),false);assert.equal(p.element('#status').textContent,'Download failed');
+});
 test('logical keys, standard gamepads, raw USB axes and buttons',()=>{
   const p=player('{bad json');assert.equal(p.run('Object.keys(bindings).length'),8);
   assert.equal(p.run('bindings.KeyX'),4);assert.equal(p.run('bindings.KeyZ'),5);
@@ -48,6 +74,11 @@ test('touch, release and focus loss do not leave stuck buttons',()=>{
   p.touch[0].onpointercancel({pointerId:1});assert.equal(p.run('mask()'),16);
   p.touch[4].onlostpointercapture({pointerId:2});assert.equal(p.run('mask()'),0);
   p.run('runtime={};keys.add("KeyX");pending=16');p.events.blur();assert.equal(p.run('mask()|pending'),0);assert.equal(p.run('paused'),true);
+});
+test('game transitions preserve held raw inputs for the shared release gate',()=>{
+  const p=player();
+  p.run('keys.add("KeyX");touch.set(1,0);pending=16;gameStopped()');
+  assert.equal(p.run('mask()'),17);assert.equal(p.run('pending'),0);
 });
 test('fullscreen targets the persistent console container',async()=>{
   const p=player();let entered=0,exited=0;

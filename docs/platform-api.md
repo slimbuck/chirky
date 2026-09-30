@@ -3,15 +3,18 @@
 `include/chirky.h` defines the shared native/browser contract. Both host and
 game report `CHIRKY_ABI_VERSION == 12`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
-entry point into a game-specific Emscripten module.
+entry point into a WASM side module loaded by the persistent Emscripten host.
+`src/runtime.c` owns the same lifecycle on both platforms; `src/console.c` owns
+menus, pause and input setup outside the game ABI.
 
 ## Game callbacks
 
 The game returns a `struct chirky_game_api` with `init(host, config_path)`,
 `shutdown()`, `update(input)`, and `render()`. The host calls these on its main
 thread. `init` returns success or failure; `shutdown` releases game allocations
-and asset references, including partial initialization. The two main games make
-shutdown safe to repeat. Shutdown must not enqueue new sound playback.
+and asset references, including partial initialization. Games must make
+shutdown safe to repeat. Browser side modules can remain compiled in memory, so
+`init` must explicitly reset game state on every launch. Shutdown must not enqueue new sound playback.
 
 `struct chirky_host_api` supplies an opaque `context`, viewport dimensions,
 rectangle/text drawing, button labels, an optional profiling callback, and the

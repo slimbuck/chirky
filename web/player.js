@@ -5,8 +5,11 @@ const canvas=$("#screen"),status=$("#status");
 let catalog=[],ids=[],titles={launcher:"Launcher"};
 let runtime,shell,displayContext,audio,muted=false,paused=false,leaving=false,last=0,accumulator=0,pending=0,ready=false,loading=false;
 let files,configs,loadSequence=0,cancelPressed=false,mappingPad=null;
+let navigation={push:true,level:null};
+let returnNavigation=null;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
 const assetSounds=new Map();
+const compiledModules=new Map();
 let director=null;
 function directorSession(){return crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 async function syncDirector(){
@@ -219,7 +222,6 @@ document.querySelectorAll("[data-button]").forEach(button=>{
 });
 function frame(now){
   if(leaving)return;
-  if(loading && cancelPressed){cancelPressed=false;switchGame("launcher");}
   const current=mask(),connected=pads();
   const capturing=shell._web_capture_keyboard();
   if(capturing!==0)mappingPad=null;
@@ -233,17 +235,20 @@ function frame(now){
   }
   if(last)accumulator+=Math.min(now-last,100);
   while(accumulator>=1000/60){
-    if(!loading){
+    {
       const gameTick=shell._web_console_tick(current|pending,keyboardMask(),controllerMask(),keys.size,
         connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
-      if(gameTick && runtime!==shell)runtime._web_tick(current|pending);
+      if(gameTick)runtime._web_tick(current|pending);
     }
     pending=0;cancelPressed=false;accumulator-=1000/60;
   }
   const state=shell._web_console_state(),nextPaused=state!==4;
+  if(returnNavigation!==null && !loading){
+    if(returnNavigation && location.search){const url=new URL(location.href);url.search="";history.pushState(null,"",url);}
+    returnNavigation=null;
+  }
   if(nextPaused && !paused)stopSounds();paused=nextPaused;
-  if(!loading && runtime!==shell && (state===4 || state===5))runtime._web_render();
-  if(loading || state!==4)shell._web_render();
+  runtime._web_render();
   last=now;requestAnimationFrame(frame);
 }
 async function checked(url){const response=await fetch(url,{cache:"no-store"});if(!response.ok)throw new Error(`Unable to load ${url} (${response.status})`);return response;}
@@ -274,13 +279,13 @@ async function createModule(gameId){
   return create({canvas,preinitializedWebGLContext:displayContext,
     onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,
     onDirectorConnect,onDirectorDisconnect,onDirectorEvent,onDirectorState,
-    onLauncherCount:()=>ids.length,onLauncherName:index=>titles[ids[index]],
+    onLauncherCount:()=>ids.length,onLauncherName:index=>titles[ids[index]],onLauncherId:index=>ids[index],
     onDiagnostic:index=>catalog[index].role==="diagnostic",
-    onLaunch:index=>switchGame(ids[index]),onReturn:()=>switchGame("launcher"),
-    onOption:option=>{if(option===-4)toggleFullscreen();else if(option===-5)toggleMute();},
+    onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,
+    onOption:option=>{if(option===-6)toggleFullscreen();else if(option===-7)toggleMute();},
     onSaveMapping,onRawNames,printErr:message=>console.warn(message)});
 }
-async function loadFiles(module,gameId){
+async function loadFiles(module,gameId,isCurrent=()=>true){
   const loadedSounds=new Map();
   await Promise.all(files.filter(file=>gameId==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${gameId}/`)).map(async file=>{
     let bytes;
@@ -288,48 +293,60 @@ async function loadFiles(module,gameId){
       if(typeof configs[file]!=="string")throw new Error(`Missing game configuration: ${file}`);
       bytes=new TextEncoder().encode(configs[file]);
     }else bytes=new Uint8Array(await (await checked("runtime/"+file)).arrayBuffer());
+    if(!isCurrent())return;
     module.FS.mkdirTree("/"+file.slice(0,file.lastIndexOf("/")));module.FS.writeFile("/"+file,bytes);
     if(file.endsWith(".wav"))loadedSounds.set(file,bytes);
   }));
   return loadedSounds;
 }
-async function switchGame(nextId,push=true,level=null){
-  const game=catalog.find(game=>game.id===nextId);
-  if(nextId!=="launcher" && !game){status.textContent="Unknown game";return;}
-  const sequence=++loadSequence;loading=true;stopSounds();onDirectorDisconnect();
-  if(runtime && runtime!==shell)runtime._web_destroy();
-  runtime=shell;assetSounds.clear();sounds.clear();keys.clear();touch.clear();pending=0;
-  shell._web_console_game(0,0,0);status.textContent=nextId==="launcher"?"Launcher":`Loading ${game.name}…`;
-  let module;
+function gameStopped(){
+  ++loadSequence;loading=false;stopSounds();onDirectorDisconnect();
+  assetSounds.clear();sounds.clear();pending=0;
+  id="launcher";status.textContent="Launcher";
+  // The console owns the destination screen, including returning to Settings.
+  returnNavigation=navigation.push;
+}
+function switchGame(nextId,push=true,level=null){
+  const index=ids.indexOf(nextId);
+  if(nextId!=="launcher" && index<0){status.textContent="Unknown game";return;}
+  navigation={push,level};shell._web_console_launch(index);
+}
+async function loadGame(nextId){
+  const sequence=++loadSequence,game=catalog.find(game=>game.id===nextId),options=navigation;
+  navigation={push:true,level:null};returnNavigation=null;loading=true;status.textContent=`Loading ${game.name}…`;
   try{
-    if(nextId!=="launcher"){
-      module=await createModule(nextId);const loadedSounds=await loadFiles(module,nextId);
-      // An abandoned download has no GL resources or running game to destroy.
-      // Calling its teardown would disconnect the new game's director session.
-      if(sequence!==loadSequence)return;
-      runtime=module;
-      for(const [path,bytes] of loadedSounds)sounds.set(path,bytes);
-      const config=`games/${nextId}/game.conf`;
-      if(game.levelSetting && level && /^\d+$/.test(level)){
-        const text=runtime.FS.readFile(config,{encoding:"utf8"}),setting=game.levelSetting;
-        runtime.FS.writeFile(config,text.replace(new RegExp(`^${setting}=.*$`,"m"),"")+`\n${setting}=${Number(level)}\n`);
-      }
-      if(!runtime.ccall("web_init","number",["string"],[config]))throw new Error("Could not initialise the game");
-      shell._web_console_game(1,game.role==="diagnostic"?1:0,catalog.indexOf(game));
+    const descriptor=await gameDescriptor(nextId);
+    const [bytes,loadedSounds]=await Promise.all([
+      checked(descriptor.module).then(response=>response.arrayBuffer()),loadFiles(runtime,nextId,()=>sequence===loadSequence)]);
+    if(sequence!==loadSequence)return;
+    runtime.FS.writeFile("/"+descriptor.module,new Uint8Array(bytes));
+    for(const [path,data] of loadedSounds)sounds.set(path,data);
+    const config=descriptor.config;
+    if(game.levelSetting && options.level && /^\d+$/.test(options.level)){
+      const text=runtime.FS.readFile(config,{encoding:"utf8"}),setting=game.levelSetting;
+      runtime.FS.writeFile(config,text.replace(new RegExp(`^${setting}=.*$`,"m"),"")+`\n${setting}=${Number(options.level)}\n`);
     }
+    // Coalesce compilation, including a cancelled load followed immediately by
+    // the same game. Emscripten's cache alone can expose a still-loading module.
+    if(!compiledModules.has(descriptor.module))compiledModules.set(descriptor.module,
+      runtime.loadDynamicLibrary("/"+descriptor.module,{loadAsync:true,global:false,nodelete:true,fs:runtime.FS}));
+    await compiledModules.get(descriptor.module);
+    if(sequence!==loadSequence)return;
+    const ok=runtime.ccall("web_load","number",["string","string"],["/"+descriptor.module,config]);
+    if(!ok)throw new Error("Could not initialise the game");
     id=nextId;
-    if(push){const url=new URL(location.href);url.search=nextId==="launcher"?"":`?game=${nextId}`;history.pushState(null,"",url);}
+    if(options.push){const url=new URL(location.href);url.search=`?game=${nextId}`;history.pushState(null,"",url);}
     status.textContent=titles[id];
   }catch(error){
     if(sequence!==loadSequence)return;
-    if(module)module._web_destroy();runtime=shell;shell._web_console_game(0,0,0);
-    status.textContent=error.message;console.error(error);
+    shell._web_load_failed();status.textContent=error.message;console.error(error);
   }finally{
     if(sequence===loadSequence){loading=false;last=0;accumulator=0;canvas.focus({preventScroll:true});}
   }
 }
+async function gameDescriptor(gameId){return (await import(`./${gameId}.js`)).default;}
 window.addEventListener("popstate",()=>{const query=new URLSearchParams(location.search);switchGame(query.get("game") || "launcher",false,query.get("level"));});
-window.addEventListener("pagehide",()=>{leaving=true;++loadSequence;stopSounds();if(ready){if(runtime!==shell)runtime._web_destroy();shell._web_destroy();}audio?.close();});
+window.addEventListener("pagehide",()=>{leaving=true;++loadSequence;stopSounds();if(ready)shell._web_destroy();audio?.close();});
 window.addEventListener("pageshow",event=>{if(event.persisted)location.reload();});
 canvas.addEventListener("webglcontextlost",event=>{event.preventDefault();leaving=true;stopSounds();status.textContent="Display connection lost. Reload to continue.";});
 start().catch(error=>{status.textContent=error.message;console.error(error);});

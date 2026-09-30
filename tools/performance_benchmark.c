@@ -115,8 +115,8 @@ static bool setup(void)
     discover_games(&h);load_launcher(&h);load_host_config(&h);
     for(int i=0;i<h.game_count;i++)if(!strcmp(h.games[i].id,benchmark_game))benchmark_game_index=i;
     if(benchmark_game_index<0) {fprintf(stderr,"Benchmark game not found: %s\n",benchmark_game);return false;}
-    for(int i=0;i<launcher_count(&h.launcher,false);i++)
-        if(launcher_at(&h.launcher,false,i)->action==benchmark_game_index)h.selected_game=i;
+    for(int i=0;i<launcher_count(&h.console.launcher,false);i++)
+        if(launcher_at(&h.console.launcher,false,i)->action==benchmark_game_index)h.console.selected_game=i;
     h.drm_fd=open("/dev/dri/card0",O_RDWR|O_CLOEXEC);assert(h.drm_fd>=0);
     assert(!drmSetMaster(h.drm_fd) && choose_display(&h) && init_graphics(&h));
     h.api=(struct chirky_host_api){.abi_version=CHIRKY_ABI_VERSION,.screen_width=h.mode.hdisplay,.screen_height=h.mode.vdisplay,

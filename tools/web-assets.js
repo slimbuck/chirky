@@ -24,6 +24,10 @@ module.exports={assets,catalog,configs,games,ROOT};
 if(require.main===module) {
   const destination=path.join(ROOT,"build/web");fs.mkdirSync(destination,{recursive:true});
   for(const name of ["index.html","player.js","style.css"])fs.copyFileSync(path.join(ROOT,"web",name),path.join(destination,name));
+  // Game JavaScript is only a generated descriptor. The persistent host owns
+  // the one renderer, filesystem, asset store and runtime for every game.
+  for(const id of games)fs.writeFileSync(path.join(destination,id+".js"),
+    `export default ${JSON.stringify({module:id+".wasm",config:`games/${id}/game.conf`})};\n`);
   const files=assets();
   for(const name of files) {
     const target=path.join(destination,"runtime",name);fs.mkdirSync(path.dirname(target),{recursive:true});

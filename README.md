@@ -230,7 +230,7 @@ from the game list and activates it with Primary.
 ## Included games
 
 The shared native/browser interface is documented in
-[Platform API 11](docs/platform-api.md): retained assets, sprites, rectangles,
+[Platform API 12](docs/platform-api.md): retained assets, sprites, rectangles,
 text, input, sound, timing scopes, and asynchronous world direction. See the
 [Pi platform measurements](docs/performance-platform-pi3.md) for before/after
 results and the asynchronous audio-startup follow-up.
@@ -268,6 +268,9 @@ missed display refreshes; it includes a controlled pipeline experiment.
 `make test` checks the asset/editor, game and host input/layout behavior without
 accessing DRM, input devices, or the live Pi. In WSL with Windows Node installed,
 use `make test NODE=node.exe`. The host test writes software-rendered PPM previews
-under `build/`. Portable lifecycle and viewport definitions live directly under
-`src/`; DRM, evdev, ALSA, native networking, launcher screens, persistence, and
-input setup live under `src/platform/linux/`.
+under `build/`. Portable console behaviour, menu rendering, input setup, game
+lifecycle and viewport definitions live directly under `src/`. DRM, evdev,
+ALSA, native networking, module loading and file persistence belong in
+`src/platform/linux/`; Emscripten adapters belong in `src/platform/web/`, and
+browser device APIs, storage and page presentation in `web/`. Both platforms
+run the same console core. See [architecture](docs/architecture.md).

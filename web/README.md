@@ -3,8 +3,11 @@
 The existing C games compile to WebAssembly using Emscripten. `src/platform/web/host.c`
 implements the host API with WebGL, reusing `src/rect_renderer.c`, the pixel
 font, splash loader and launcher wordmark. Games retain their normal C source
-and file paths. Each game has its own module, avoiding native `dlopen` and
-colliding game symbols. Both hosts and all modules use ABI 12 and must be rebuilt together.
+and file paths. One persistent main module owns the console, renderer, assets
+and game runtime. Each game is a loadable WASM side module with isolated game
+symbols, using the same `chirky_game_entry()` contract as the Pi. The generated
+`<game>.js` file only identifies its WASM and configuration paths. Both hosts
+and all game modules use ABI 12 and must be rebuilt together.
 
 ## Build and run
 
@@ -75,7 +78,7 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 ## Controls and behaviour
 
 - Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
-- **Settings → Input Settings** uses the Pi's shared console UI: Map Controller,
+- **Settings → Input Settings** runs the same portable console code as the Pi: Map Controller,
   Map Keyboard and Test Buttons. The wizard captures all eight inputs and saves
   after the last release. Duplicate inputs are rejected. F1 cancels a draft;
   holding two controller buttons also cancels controller setup. In Test Buttons,
@@ -98,13 +101,16 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   inside Settings. There are no external navigation/settings buttons.
   The 320x240 framebuffer uses whole physical screen pixels at browser/OS zoom
   levels whenever space permits. Its size is set before WASM loading, and the
-  launcher and games share one persistent canvas and WebGL context. Switching
+  launcher and games share one persistent canvas, WebGL context, renderer and
+  asset store. Switching
   games does not reload the page or leave fullscreen. No game sprite sizes change.
   Unsupported fullscreen browsers display an explanatory message.
 - Losing focus or hiding the tab pauses play. Resume continues the run.
 - Games still render into the normal CRT-safe logical viewport. Simulation
   runs at 60 ticks/second with bounded catch-up after slow frames.
 - No progress/save-state persistence is added; restarting starts a fresh game.
+
+See [architecture](../docs/architecture.md) for code ownership and module lifetime.
 
 Automated checks use Chromium with simulated touch. Physical controllers,
 touch devices, and other browser engines still require device testing.

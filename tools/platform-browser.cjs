@@ -60,9 +60,9 @@ class CDP extends EventEmitter {
 const instrumentation = `(() => {
   globalThis.__platformLifecycle = event => {const key='platform-browser-lifecycle',items=JSON.parse(sessionStorage.getItem(key)||'[]');items.push({event,url:location.href,...(event==='destroy-end'?{texturesCreated:__platformAudit.texturesCreated,texturesDeleted:__platformAudit.texturesDeleted}:{})});sessionStorage.setItem(key,JSON.stringify(items));};
   addEventListener('pagehide',()=>__platformLifecycle('pagehide'));
-  const audit = globalThis.__platformAudit = { texturesCreated:0, texturesDeleted:0, draws:0, uploads:[], buffers:[], starts:0, stops:0, decodes:0, contexts:[] };
+  const audit = globalThis.__platformAudit = { programsCreated:0, programsDeleted:0, texturesCreated:0, texturesDeleted:0, draws:0, uploads:[], buffers:[], starts:0, stops:0, decodes:0, contexts:[] };
   const gl = WebGLRenderingContext.prototype;
-  for (const [name,counter] of [['createTexture','texturesCreated'],['deleteTexture','texturesDeleted'],['drawArrays','draws']]) {
+  for (const [name,counter] of [['createProgram','programsCreated'],['deleteProgram','programsDeleted'],['createTexture','texturesCreated'],['deleteTexture','texturesDeleted'],['drawArrays','draws']]) {
     const original=gl[name];gl[name]=function(...args){const result=original.apply(this,args);audit[counter]++;return result;};
   }
   const upload=gl.texImage2D;gl.texImage2D=function(...args){audit.uploads.push({width:args[3],height:args[4]});return upload.apply(this,args);};
@@ -84,7 +84,7 @@ const attachProbe = `(() => {
   let tick=runtime._web_tick;const tickProbe=function(mask){probe.ticks++;if(mask && probe.masks.at(-1)!==mask)probe.masks.push(mask);return tick(mask);};
   Object.defineProperty(runtime,'_web_tick',{configurable:true,get:()=>tickProbe,set:value=>{tick=value;}});
   const play=runtime.onAssetSound;runtime.onAssetSound=function(...args){probe.assetPlays++;return play(...args);};
-  const destroy=runtime._web_destroy;runtime._web_destroy=function(...args){__platformLifecycle('destroy-begin');const result=destroy(...args);__platformLifecycle('destroy-end');return result;};
+  const stopped=runtime.onStopped;runtime.onStopped=function(...args){__platformLifecycle('destroy-end');return stopped(...args);};
 })();`;
 
 async function main() {
@@ -397,6 +397,49 @@ async function main() {
         report.checks.push('shared keyboard/USB mapping wizard, duplicate rejection, cancel, controller navigation, fullscreen setting, mute');
         // A fresh module in the same page has its title/audio/assets restored.
         assert.equal((await state()).assetSounds,report.initial.assetSounds);
+        assert.equal(report.initial.audit.programsCreated,2,'The renderer has rectangle and sprite programs');
+        assert.equal((await state()).audit.programsCreated,report.initial.audit.programsCreated,'The renderer must be initialized only once');
+        assert.equal((await state()).audit.programsDeleted,0,'Game switches must preserve the renderer');
+        if(game==='phosphor-run' && !mobile) {
+          const pendingGame=catalog.games.find(entry=>entry.role==='game' && entry.id!==game);
+          let heldRequest;
+          const hold=p=>{heldRequest=p.requestId;};page.on('Fetch.requestPaused',hold);
+          await page.call('Fetch.enable',{patterns:[{urlPattern:`*${pendingGame.id}.wasm`,requestStage:'Request'}]});
+          await page.eval(`__platformProbe.runtime._web_console_launch(${catalog.games.indexOf(pendingGame)})`);
+          for(let i=0;i<100 && !heldRequest;i++)await delay(50);
+          assert(heldRequest,'Game WASM download should be pending');
+          await key('F1','F1',112);assert.equal((await state()).id,'launcher');
+          await page.call('Fetch.continueRequest',{requestId:heldRequest});
+          await page.call('Fetch.disable');page.off('Fetch.requestPaused',hold);await delay(300);
+          assert.equal((await state()).id,'launcher');assert.equal((await state()).loading,false);
+          report.checks.push('cancelled WASM download cannot activate a game later');
+          // This test exercises module lifetime without a LAN world director.
+          // The director transport has its own integration suite.
+          await page.eval('globalThis.__connectDirector=__platformProbe.runtime.onDirectorConnect;__platformProbe.runtime.onDirectorConnect=()=>false');
+          // Different C modules export overlapping globals. Exercise all of them
+          // twice in one host to catch symbol collisions and stale game resources.
+          for(let cycle=0;cycle<2;cycle++)for(const entry of catalog.games) {
+            await key('F1','F1',112);
+            await page.eval(`__platformProbe.runtime._web_console_launch(${catalog.games.indexOf(entry)})`);
+            for(let i=0;i<150 && ((await state()).loading || (await state()).id!==entry.id);i++)await delay(100);
+            assert.equal((await state()).id,entry.id);
+            assert.equal((await state()).audit.programsCreated,report.initial.audit.programsCreated);
+            assert.equal((await state()).audit.programsDeleted,0);
+            assert(await page.eval('__platformProbe.runtime===__platformProbe.shell && document.querySelector("#screen")===__originalCanvas'));
+            await capture(`switch-${cycle}-${entry.id}`);
+            await key('KeyQ','q',81);await delay(100);
+            await key('F1','F1',112);
+            const destination=entry.role==='diagnostic'?1:0;
+            assert.equal((await state()).screen,destination);
+            assert.equal((await state()).audit.texturesCreated-(await state()).audit.texturesDeleted,destination===0?1:0,
+              'Only the launcher needs a texture; Settings uses rectangles');
+          }
+          await page.eval('__platformProbe.runtime.onDirectorConnect=__connectDirector');
+          await page.eval(`__platformProbe.runtime._web_console_launch(${catalog.games.findIndex(entry=>entry.id===game)})`);
+          for(let i=0;i<150 && (await state()).id!==game;i++)await delay(100);
+          assert.equal((await state()).id,game);
+          report.checks.push('all games twice in one host, isolated module symbols, one renderer and balanced textures');
+        }
         await page.call('Page.reload');await delay(200);await ready();
         assert.equal(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys[4]'),'KeyQ');
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v1"))).length'),1);

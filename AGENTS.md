@@ -99,6 +99,14 @@ runtime atlases or introduce a second undocumented generator.
 - Linux-only implementation belongs in `src/platform/linux/`; the Emscripten C
   bridge belongs in `src/platform/web/`; browser JavaScript and presentation
   belong in `web/`.
+- Both hosts use `src/console.c` for console state, navigation, pause, mapping
+  workflow, recovery, loading transitions and capability-based settings. Keep
+  platform adapters limited to raw input and service callbacks; do not add a
+  second menu state machine in C or JavaScript. Console drawing lives in
+  `src/console_ui.h`, with shared font drawing in `src/drawing.h`.
+- The browser has one persistent main module, renderer and asset store. Game
+  WASM side modules contain only game code; generated JavaScript descriptors
+  identify their files. Game changes must not recreate the host or renderer.
 - Both hosts use `src/runtime.c` for game lifecycle and `src/viewport.h` for
   framebuffer defaults. Do not duplicate init/shutdown sequencing or literal
   320x240/288x216 viewport geometry in a platform host.

@@ -17,10 +17,14 @@ games -> include/chirky.h -> src runtime/render/assets
   transport.
 - `src/runtime.c` owns game ABI validation and the init, update, render, and
   shutdown lifecycle used by both hosts.
-- `src/console_ui.h` owns launcher, settings, pause and input-screen rendering,
-  plus menu selection/navigation rules. `src/input_setup.h` owns the eight-step
-  mapping draft, release gating and duplicate rejection. Both hosts use these
-  directly; browser menus are drawn inside the framebuffer, like the Pi.
+- `src/console.c` owns console state and transitions: catalog menu construction,
+  navigation, pause/resume, release gates, mapping commit/cancel, recovery holds,
+  loading state, and display calibration. Both hosts feed `console_input` and
+  implement `console_services`; platform adapters must not implement another
+  menu state machine. Capabilities determine which platform actions appear.
+- `src/console_ui.h` draws console screens; `src/input_setup.h` manages mapping
+  drafts and duplicate rejection. `src/drawing.h` implements shared font drawing
+  and rectangle clipping.
 - `src/rect_renderer.c`, `src/asset_store.c`, and the remaining files directly
   under `src/` implement reusable rendering, assets, timing, and host helpers.
 - `src/viewport.h` is the canonical 320x240 framebuffer and 288x216 default
@@ -40,18 +44,29 @@ game ABI.
 
 ## Web platform
 
-`src/platform/web/host.c` owns the Emscripten/WebGL bridge. Its `console.h`
-adapter supplies catalog entries, platform actions and raw input to the shared
-menus and wizard. Pi display calibration and power-down remain Linux-only;
-fullscreen and sound muting are browser capabilities.
+`src/platform/web/host.c` owns the Emscripten/WebGL bridge.
+`console_bridge.h` transports manifest metadata, raw input, localStorage mapping
+results and browser actions to the portable console. Display calibration is
+portable console code exposed by the Linux capability; fullscreen and muting
+are browser capabilities. Power-down and timing instrumentation are Linux
+services.
 
-`web/player.js` creates the canvas WebGL context once. The launcher module stays
-loaded while individual game modules load and unload on that same context via
-Emscripten's preinitialized-context support. Each module owns its renderer and
-GL resources; switching modules releases the outgoing game's resources, not the
-display. Every render makes that module's context registration current and
-binds its own GL state. URL/history changes do not reload the document. This
-keeps fullscreen, screen geometry and console navigation intact.
+`web/player.js` creates the canvas WebGL context once. `launcher.js/.wasm` is
+one persistent Emscripten main module containing the console, game runtime,
+renderer, asset store, image cache and virtual filesystem. Games compile as
+side modules containing only their own C sources. Their generated `<id>.js`
+files are descriptors, not separate hosts. JavaScript downloads the assets and
+asynchronously compiles the selected WASM into Emscripten's loader cache; the C
+adapter obtains a local `dlopen` handle and starts it through `src/runtime.c`.
+Game symbols have hidden visibility and do not share game state with each other.
+
+Game exit calls shutdown, disconnects audio/director services, releases images
+and clears the asset store. The host, renderer and framebuffer remain alive.
+Compiled side modules and downloaded files are cached per game for the page's
+lifetime; `init` must reset all game state on every launch, just as after a Pi
+module load. Cancellation invalidates pending download work before it can
+activate a game. URL/history changes do not reload the document, preserving
+fullscreen and integer canvas scaling.
 
 Browser services own DOM keyboard codes, Gamepad API buttons/axes, localStorage,
 WebAudio, fetch and animation frames. Raw device codes are platform-specific;
@@ -88,8 +103,9 @@ export. Do not add another hand-maintained game-id list.
 
 ## Validation
 
-`make test` covers the portable runtime, real game modules, Linux host behavior,
+`make test` runs the same console event trace with Linux and browser capabilities,
+then covers the portable runtime, real game modules, Linux host behavior,
 catalog generation, dashboard serving, and package validation. `make web`
-compiles every `games/*/game.c` against the web platform and generates the
+builds one web host and a side module for each `games/*/game.c`, then generates the
 catalog and asset package. Browser checks and a real Pi deployment remain
 required for platform rendering, DRM, input-device, and audio behavior.

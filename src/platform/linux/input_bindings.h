@@ -8,5 +8,4 @@
 void default_bindings(struct controller_binding *bindings);
 void default_keyboard_bindings(struct controller_binding *bindings);
 bool parse_binding(const char *text, struct controller_binding *binding);
-void setup_offer(struct binding_setup *setup, struct controller_binding binding);
 #endif

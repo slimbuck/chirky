@@ -33,9 +33,3 @@ bool parse_binding(const char *text, struct controller_binding *binding)
     }
     return false;
 }
-
-void setup_offer(struct binding_setup *setup, struct controller_binding binding)
-{
-    if (setup->keyboard && (binding.kind!=BINDING_KEY || binding.code>=BTN_MISC || binding.code==KEY_F1 || binding.code==KEY_F12)) return;
-    chirky_setup_offer(setup,binding);
-}

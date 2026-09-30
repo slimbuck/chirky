@@ -1,5 +1,5 @@
 #include "chirky.h"
-#include "pixel_font.h"
+#include "drawing.h"
 #include "splash_art.h"
 #include "launcher_wordmark.h"
 #include "rect_renderer.h"
@@ -10,6 +10,8 @@
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <GLES2/gl2.h>
+#include <dlfcn.h>
+#include <stdlib.h>
 
 static struct rect_renderer renderer;
 static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context;
@@ -19,12 +21,10 @@ static unsigned previous;
 static struct asset_store *assets;
 static struct image_cache images;
 EMSCRIPTEN_KEEPALIVE void web_destroy(void);
-#ifdef CHIRKY_WEB_LAUNCHER
 static struct splash_art art;
-#else
-extern const struct chirky_game_api *chirky_game_entry(void);
 static struct chirky_runtime runtime;
-#endif
+static void *game_library;
+EMSCRIPTEN_KEEPALIVE void web_unload(void);
 EM_JS(void, sound, (const char *path), { Module.onSound(UTF8ToString(path)); });
 EM_JS(void, prepare_sound, (unsigned handle,const void *data,unsigned size,unsigned rate,unsigned channels), {
     Module.onAssetReady(handle,data,size,rate,channels);
@@ -84,18 +84,11 @@ static size_t director_state_api(void *unused,uint32_t after_revision,char *text
 static void fill(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)unused;
-    if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
-    if(x+w>api.screen_width)w=api.screen_width-x;
-    if(y+h>api.screen_height)h=api.screen_height-y;
-    if(w>0 && h>0)rect_renderer_rect(&renderer,x+CHIRKY_SAFE_X,y+CHIRKY_SAFE_Y,w,h,r,g,b);
+    if(chirky_clip_rect(&api,&x,&y,&w,&h))rect_renderer_rect(&renderer,x+CHIRKY_SAFE_X,y+CHIRKY_SAFE_Y,w,h,r,g,b);
 }
 static void text(void *unused,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
-    for(;*value;value++,x+=6*scale) {
-        const uint8_t *rows=glyph(*value);
-        for(int row=0;row<7;row++)for(int col=0;col<5;col++)
-            if(rows[row]&(1<<(4-col)))fill(unused,x+col*scale,y-row*scale,scale,scale,r,g,b);
-    }
+    (void)unused;chirky_draw_text(&api,x,y,value,scale,r,g,b);
 }
 static void play(void *unused,const char *device,const char *path)
 { (void)unused;(void)device;sound(path); }
@@ -105,9 +98,7 @@ static void label(void *unused,enum chirky_button button,char *out,size_t size)
     const char *names[]={"LEFT","RIGHT","UP","DOWN","PRIMARY","SECONDARY","START","MENU"};
     snprintf(out,size,"%s",button>=0 && button<CHIRKY_BUTTON_COUNT?names[button]:"?");
 }
-#ifdef CHIRKY_WEB_LAUNCHER
-#include "console.h"
-#endif
+#include "console_bridge.h"
 EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
 {
     EmscriptenWebGLContextAttributes attrs;emscripten_webgl_init_context_attributes(&attrs);
@@ -123,57 +114,51 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .draw_sprite=sprite,.sound_play=sound_play,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api};
-#ifdef CHIRKY_WEB_LAUNCHER
     (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");console_init();return 1;
-#else
-    char directory[1024];snprintf(directory,sizeof(directory),"%s",config);
-    char *slash=strrchr(directory,'/');if(!slash)goto failed;*slash=0;
-    if(!asset_store_prefetch(assets,directory) || asset_store_prefetch_state(assets)!=CHIRKY_ASSET_READY)goto failed;
-    if(chirky_runtime_start(&runtime,chirky_game_entry(),&api,config))return 1;
-#endif
 failed:
     web_destroy();return 0;
 }
 EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
 {
-    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        input.buttons[i]=(mask&(1u<<i))!=0;
-        input.button_pressed[i]=input.buttons[i] && !(previous&(1u<<i));
-    }
-    previous=mask;
-#ifdef CHIRKY_WEB_LAUNCHER
-    (void)mask;
-#else
-    chirky_runtime_update(&runtime,&input);
-#endif
+    (void)mask;chirky_runtime_update(&runtime,&input);
 }
 EMSCRIPTEN_KEEPALIVE void web_render(void)
 {
     emscripten_webgl_make_context_current(context);
     glViewport(0,0,CHIRKY_FRAMEBUFFER_WIDTH,CHIRKY_FRAMEBUFFER_HEIGHT);
-    glDisable(GL_SCISSOR_TEST);
-#ifdef CHIRKY_WEB_LAUNCHER
-    if(screen!=CONSOLE_PAUSE)
-#endif
-    {glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);}
+    glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
     rect_renderer_begin(&renderer);
-#ifdef CHIRKY_WEB_LAUNCHER
-    console_render();
-#else
     chirky_runtime_render(&runtime);
-#endif
+    console_render();
     rect_renderer_flush(&renderer);
 }
+EMSCRIPTEN_KEEPALIVE void web_unload(void)
+{
+    chirky_runtime_stop(&runtime);
+    disconnect_director();
+    if(game_library){dlclose(game_library);game_library=NULL;}
+    emscripten_webgl_make_context_current(context);
+    splash_free(&art);image_cache_clear(&images,&renderer);
+    if(assets){asset_store_clear(assets);splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");}
+}
+/* JavaScript asynchronously compiles the side module into Emscripten's loader
+   cache first. dlopen then obtains its local handle without blocking on I/O. */
+EMSCRIPTEN_KEEPALIVE int web_load(const char *module,const char *config)
+{
+    char directory[1024];snprintf(directory,sizeof(directory),"%s",config);
+    char *slash=strrchr(directory,'/');if(!slash)return 0;*slash=0;
+    if(!asset_store_prefetch(assets,directory) || asset_store_prefetch_state(assets)!=CHIRKY_ASSET_READY)return 0;
+    game_library=dlopen(module,RTLD_NOW|RTLD_LOCAL);
+    if(!game_library)return 0;
+    chirky_game_entry_fn entry=(chirky_game_entry_fn)dlsym(game_library,"chirky_game_entry");
+    bool ok=entry && chirky_runtime_start(&runtime,entry(),&api,config);
+    if(ok)chirky_console_loaded(&console,true);
+    return ok;
+}
+EMSCRIPTEN_KEEPALIVE void web_load_failed(void){chirky_console_loaded(&console,false);}
 EMSCRIPTEN_KEEPALIVE void web_destroy(void)
 {
-#ifdef CHIRKY_WEB_LAUNCHER
-    splash_free(&art);
-#else
-    chirky_runtime_stop(&runtime);
-#endif
-    emscripten_webgl_make_context_current(context);
-    disconnect_director();
-    image_cache_clear(&images,&renderer);
+    web_unload();splash_free(&art);
     asset_store_destroy(assets);assets=NULL;
     if(context>0){rect_renderer_destroy(&renderer);emscripten_webgl_destroy_context(context);}
     context=0;previous=0;memset(&input,0,sizeof(input));

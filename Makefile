@@ -7,7 +7,7 @@ CFLAGS += -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDLIBS += -pthread -ldl -Wl,--no-as-needed -l:libdrm.so.2 -l:libgbm.so.1 -l:libEGL.so.1 -l:libGLESv2.so.2
 
 TARGET := build/chirky-host
-CORE_SOURCES := src/asset_store.c src/runtime.c
+CORE_SOURCES := src/asset_store.c src/runtime.c src/console.c
 PLATFORM_SOURCES := src/platform/linux/asset_platform.c src/platform/linux/audio_mixer.c src/platform/linux/director_client.c
 LINUX_HEADERS := $(wildcard src/platform/linux/*.h)
 SOURCES := src/platform/linux/host.c src/platform/linux/input_bindings.c src/rect_renderer.c $(CORE_SOURCES) $(PLATFORM_SOURCES)
@@ -17,10 +17,10 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 .PHONY: all clean test benchmark performance-benchmark web
 
 EMCC ?= emcc
-WEB_FLAGS = -D_GNU_SOURCE -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sGL_PREINITIALIZED_CONTEXT=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall --no-entry
+WEB_FLAGS = -D_GNU_SOURCE -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sGL_PREINITIALIZED_CONTEXT=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall,loadDynamicLibrary --no-entry
 WEB_COMMON = src/platform/web/host.c src/platform/web/asset_platform.c src/rect_renderer.c $(CORE_SOURCES)
 WEB_HEADERS = $(wildcard include/*.h src/*.h src/platform/web/*.h)
-WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.js,$(wildcard games/*/game.c))
+WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.wasm,$(wildcard games/*/game.c))
 .SECONDEXPANSION:
 
 web: build/web/launcher.js $(WEB_TARGETS)
@@ -28,11 +28,11 @@ web: build/web/launcher.js $(WEB_TARGETS)
 
 build/web/launcher.js: $(WEB_COMMON) $(WEB_HEADERS)
 	mkdir -p $(@D)
-	$(EMCC) $(WEB_FLAGS) -DCHIRKY_WEB_LAUNCHER $(WEB_COMMON) -o $@
+	$(EMCC) $(WEB_FLAGS) -sMAIN_MODULE=1 $(WEB_COMMON) -o $@
 
-build/web/%.js: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) $(WEB_COMMON) $(WEB_HEADERS)
+build/web/%.wasm: games/%/game.c $$(wildcard games/$$*/*.c games/$$*/*.h) $(WEB_HEADERS)
 	mkdir -p $(@D)
-	$(EMCC) $(WEB_FLAGS) $(WEB_COMMON) $(wildcard games/$*/*.c) -o $@
+	$(EMCC) -D_GNU_SOURCE -Iinclude -std=c11 -O2 -Wall -Wextra -fvisibility=hidden -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS=_chirky_game_entry $(wildcard games/$*/*.c) -o $@
 
 all: $(TARGET) $(GAME_TARGETS)
 
@@ -64,6 +64,8 @@ build/performance-benchmark: tools/performance_benchmark.c $(SOURCES) $(wildcard
 
 test: $(GAME_TARGETS)
 	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/console.c src/console.c -o /tmp/console-test
+	/tmp/console-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/runtime.c src/runtime.c -o /tmp/runtime-test
 	/tmp/runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/asset_store.c src/asset_store.c src/platform/linux/asset_platform.c -pthread -o /tmp/asset-store-test

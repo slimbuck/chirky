@@ -4,6 +4,46 @@
 #undef main
 #include <assert.h>
 
+/* Fixture-only views and deterministic clock adapter. Production renders through the console core. */
+static int launcher_game_count(const struct host *host)
+{
+    int count=0;
+    while(count<host->game_count && !host->games[count].diagnostic)count++;
+    return count;
+}
+
+static void draw_launcher(struct host *host)
+{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_launcher(&ui,&host->launcher_art,&host->console.launcher,host->console.selected_game); }
+
+static void draw_settings_menu(struct host *host)
+{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_settings_menu(&ui,&host->console.launcher,host->console.settings_option); }
+
+static void draw_live_inputs(struct host *host)
+{ struct chirky_host_api ui=console_api(host);
+    unsigned pad=0,key=0;char pad_line[96],key_line[96];
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
+        if(binding_down(&host->inputs,&host->bindings[i],false))pad|=1u<<i;
+        if(binding_down(&host->inputs,&host->keyboard_bindings[i],true))key|=1u<<i;
+    }
+    held_input_names(host,false,pad_line,sizeof(pad_line));held_input_names(host,true,key_line,sizeof(key_line));
+    console_draw_live_inputs(&ui,pad,key,pad_line,key_line);
+}
+
+static void draw_controller_settings(struct host *host)
+{ struct chirky_host_api ui=console_api(host);
+    clear_screen();console_draw_controller_settings(&ui,&host->console.setup,host->console.input_test,host->console.selected_option,host->console.settings_message);
+    draw_live_inputs(host);
+}
+
+static void draw_display_settings(struct host *host)
+{ struct chirky_host_api ui=console_api(host);clear_screen();chirky_console_draw_display(&host->console,&ui); }
+
+static void update_timing_toggle(struct host *host,uint64_t now_us)
+{
+    ensure_launcher(host);
+    chirky_console_timing(&host->console,host->inputs.state.buttons[CHIRKY_BUTTON_START],now_us);
+}
+
 static unsigned char framebuffer[240][320][3], clear_colour[3];
 static void check_capture_gpu(void)
 {
@@ -60,9 +100,9 @@ static void tap(struct host *host,int device,int code)
 {
     /* Ordinary test taps are distinct gestures. Boundary/bounce tests below
        drive raw events explicitly, without this neutral settling period. */
-    if(host->ui_wait_release)for(int i=0;i<3;i++)update_host(host);
+    if(host->console.ui_wait_release)for(int i=0;i<3;i++)update_host(host);
     event(host,device,EV_KEY,code,1);event(host,device,EV_KEY,code,0);update_host(host);
-    if(host->ui_wait_release)for(int i=0;i<3;i++)update_host(host);
+    if(host->console.ui_wait_release)for(int i=0;i<3;i++)update_host(host);
 }
 static void write_preview(const char *path)
 {
@@ -85,7 +125,7 @@ static void check_timing_toggle(void)
     update_timing_toggle(&h,9000000);assert(h.frame_timing_enabled);
     event(&h,0,EV_KEY,BTN_TR2,0);update_controller_buttons(&h);update_timing_toggle(&h,9000001);
     /* Keyboard Start works inside setup and while transition input is blocked. */
-    h.controller_settings=true;h.setup.active=true;block_transition_input(&h);
+    h.console.controller_settings=true;h.console.setup.active=true;block_transition_input(&h);
     event(&h,1,EV_KEY,KEY_ENTER,1);update_controller_buttons(&h);
     update_timing_toggle(&h,10000000);update_timing_toggle(&h,11999999);assert(h.frame_timing_enabled);
     update_timing_toggle(&h,12000000);assert(!h.frame_timing_enabled);
@@ -116,12 +156,12 @@ static void check_pause_menu(const char *output_dir)
     strcpy(h.games[0].id,"phosphor-run");strcpy(h.games[0].name,"Phosphor Run");h.game_count=1;
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown,.render=fake_pause_render};
     pause_render_host=&h;pause_renders=0;
-    h.active_game=&h.games[0];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
+    h.console.game_active=true;h.active_game=&h.games[0];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
     unsigned int saved_updates=game_updates;
     event(&h,1,EV_KEY,KEY_ESC,1);update_host(&h);
-    assert(h.paused && h.active_game && current_screen(&h)==SCREEN_PAUSE);
+    assert(h.console.paused && h.active_game && current_screen(&h)==SCREEN_PAUSE);
     for(int i=0;i<600;i++)update_host(&h);
-    assert(h.paused && game_updates==saved_updates);
+    assert(h.console.paused && game_updates==saved_updates);
     event(&h,1,EV_KEY,KEY_ESC,0);for(int i=0;i<3;i++)update_host(&h);
     draw_host(&h);
     assert(pause_renders==1 && game_updates==saved_updates);
@@ -134,15 +174,15 @@ static void check_pause_menu(const char *output_dir)
     assert(framebuffer[panel_y][panel_x][1]==175);
     draw_host(&h);assert(pause_renders==2 && game_updates==saved_updates);
     char path[512];snprintf(path,sizeof(path),"%s/pause-menu.ppm",output_dir);write_preview(path);
-    event(&h,1,EV_KEY,KEY_X,1);update_host(&h);assert(!h.paused && h.active_game);
+    event(&h,1,EV_KEY,KEY_X,1);update_host(&h);assert(!h.console.paused && h.active_game);
     for(int i=0;i<30;i++)update_host(&h);
     assert(game_updates==saved_updates);
     event(&h,1,EV_KEY,KEY_X,0);for(int i=0;i<3;i++)update_host(&h);
     assert(game_updates==saved_updates+1);
-    tap(&h,1,KEY_ESC);assert(h.paused);
-    tap(&h,1,KEY_Z);assert(!h.paused && h.active_game);
-    tap(&h,1,KEY_ESC);tap(&h,1,KEY_DOWN);assert(h.paused && h.pause_option==1);
-    tap(&h,1,KEY_X);assert(!h.active_game && !h.paused && current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_ESC);assert(h.console.paused);
+    tap(&h,1,KEY_Z);assert(!h.console.paused && h.active_game);
+    tap(&h,1,KEY_ESC);tap(&h,1,KEY_DOWN);assert(h.console.paused && h.console.pause_option==1);
+    tap(&h,1,KEY_X);assert(!h.active_game && !h.console.paused && current_screen(&h)==SCREEN_LAUNCHER);
     game_updates=saved_updates;
 }
 
@@ -150,14 +190,14 @@ static void check_settings_shortcuts(void)
 {
     struct host h={0};h.mode.hdisplay=320;h.mode.vdisplay=240;h.safe_x=16;h.safe_y=12;
     open_settings_screen(&h,1);
-    assert(current_screen(&h)==SCREEN_DISPLAY && h.settings_menu && h.ui_wait_release);
+    assert(current_screen(&h)==SCREEN_DISPLAY && h.console.settings_menu && h.console.ui_wait_release);
     h.safe_x=20;h.safe_offset_x=2;
     open_settings_screen(&h,0);
     assert(current_screen(&h)==SCREEN_INPUT && h.safe_x==16 && h.safe_offset_x==0);
-    assert(h.selected_option==0 && !h.setup.active);
-    h.setup.active=true;
+    assert(h.console.selected_option==0 && !h.console.setup.active);
+    h.console.setup.active=true;
     open_settings_screen(&h,1);
-    assert(!h.setup.active && current_screen(&h)==SCREEN_DISPLAY && h.saved_safe_x==16);
+    assert(!h.console.setup.active && current_screen(&h)==SCREEN_DISPLAY && h.console.saved_display.x==16);
 }
 
 static void check_launcher_menu(void)
@@ -171,23 +211,23 @@ static void check_launcher_menu(void)
     qsort(h.games,h.game_count,sizeof(h.games[0]),compare_games);
     assert(launcher_game_count(&h)==2);
     assert(!strcmp(h.games[0].id,"phosphor-run") && !strcmp(h.games[1].id,"rosey-chop"));
-    tap(&h,1,KEY_DOWN);assert(h.selected_game==1);
-    tap(&h,1,KEY_DOWN);assert(h.selected_game==2);
+    tap(&h,1,KEY_DOWN);assert(h.console.selected_game==1);
+    tap(&h,1,KEY_DOWN);assert(h.console.selected_game==2);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
-    tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.settings_option==2);
+    tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.console.settings_option==2);
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
-    h.active_game=&h.games[2];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
-    tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS && h.settings_option==2);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER && h.selected_game==2);
+    h.console.game_active=true;h.console.diagnostic=true;h.active_game=&h.games[2];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
+    tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS && h.console.settings_option==2);
+    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER && h.console.selected_game==2);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
-    tap(&h,1,KEY_UP);assert(h.settings_option==3);
+    tap(&h,1,KEY_UP);assert(h.console.settings_option==3);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_LAUNCHER);
     tap(&h,1,KEY_X);tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_INPUT);
     tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER);
-    tap(&h,1,KEY_DOWN);assert(h.selected_game==3);
-    tap(&h,1,KEY_DOWN);assert(h.selected_game==0);
+    tap(&h,1,KEY_DOWN);assert(h.console.selected_game==3);
+    tap(&h,1,KEY_DOWN);assert(h.console.selected_game==0);
 }
 
 static void check_transition_gates(void)
@@ -196,31 +236,31 @@ static void check_transition_gates(void)
     h.inputs.count=2;h.inputs.devices[0].controller=true;
     h.inputs.devices[0].abs_minimums[ABS_HAT0X]=-1;h.inputs.devices[0].abs_maximums[ABS_HAT0X]=1;
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);
-    assert(h.settings_menu && !h.controller_settings && h.ui_wait_release);
+    assert(h.console.settings_menu && !h.console.controller_settings && h.console.ui_wait_release);
     for(int i=0;i<30;i++){event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);}
-    assert(!h.setup.active);
+    assert(!h.console.setup.active);
     /* A brief release followed by bounce, or a second input source, must
        not activate the first item on the new screen. */
     event(&h,0,EV_KEY,BTN_EAST,0);update_host(&h);
     event(&h,0,EV_KEY,BTN_EAST,1);event(&h,1,EV_KEY,KEY_X,1);update_host(&h);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<4;i++)update_host(&h);
-    assert(h.ui_wait_release && !h.setup.active);
-    event(&h,1,EV_KEY,KEY_X,0);update_host(&h);assert(h.ui_wait_release);
-    update_host(&h);assert(!h.ui_wait_release && !h.setup.active);
-    event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);assert(!h.setup.active);
-    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.controller_settings && !h.setup.active);
+    assert(h.console.ui_wait_release && !h.console.setup.active);
+    event(&h,1,EV_KEY,KEY_X,0);update_host(&h);assert(h.console.ui_wait_release);
+    update_host(&h);assert(!h.console.ui_wait_release && !h.console.setup.active);
+    event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);assert(!h.console.setup.active);
+    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_settings && !h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
-    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.setup.active && h.setup.step==0);
+    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.setup.active && h.console.setup.step==0);
     for(int i=0;i<5;i++)update_host(&h);
-    assert(!h.setup.ready);
+    assert(!h.console.setup.ready);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
-    event(&h,0,EV_ABS,ABS_HAT0X,-1);update_host(&h);assert(h.setup.ready && h.setup.step==0);
-    event(&h,0,EV_ABS,ABS_HAT0X,0);update_host(&h);assert(h.setup.step==1);
-    event(&h,1,EV_KEY,KEY_F1,1);update_host(&h);assert(!h.setup.active && h.controller_settings);
+    event(&h,0,EV_ABS,ABS_HAT0X,-1);update_host(&h);assert(h.console.setup.ready && h.console.setup.step==0);
+    event(&h,0,EV_ABS,ABS_HAT0X,0);update_host(&h);assert(h.console.setup.step==1);
+    event(&h,1,EV_KEY,KEY_F1,1);update_host(&h);assert(!h.console.setup.active && h.console.controller_settings);
     event(&h,1,EV_KEY,KEY_F1,0);for(int i=0;i<3;i++)update_host(&h);
-    event(&h,0,EV_KEY,BTN_SOUTH,1);update_host(&h);assert(!h.controller_settings);
+    event(&h,0,EV_KEY,BTN_SOUTH,1);update_host(&h);assert(!h.console.controller_settings);
     for(int i=0;i<4;i++)update_host(&h);
-    assert(!h.controller_settings);
+    assert(!h.console.controller_settings);
     /* The shared game filter suppresses both held and edge-triggered buttons. */
     struct chirky_input_gate gate={0};struct chirky_input in={0},out;
     chirky_gate_begin(&gate);in.buttons[CHIRKY_BUTTON_PRIMARY]=true;
@@ -323,8 +363,8 @@ static void check_migration(void)
 static void check_live_inputs(struct host *host,const char *output_dir)
 {
     assert(CHIRKY_BUTTON_COUNT==8);
-    host->controller_settings=true;host->selected_option=2;
-    tap(host,1,KEY_X);assert(host->input_test);
+    host->console.controller_settings=true;host->console.selected_option=2;
+    tap(host,1,KEY_X);assert(host->console.input_test);
     /* Every keyboard key addresses one Chirky button, independent of UI behavior. */
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         unsigned int key=host->keyboard_bindings[i].code;
@@ -339,7 +379,7 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     event(host,0,EV_KEY,BTN_SOUTH,1);event(host,1,EV_KEY,KEY_R,1);
     event(host,0,EV_KEY,BTN_MODE,1);event(host,1,EV_KEY,KEY_T,1);
     event(host,0,EV_ABS,ABS_HAT0X,-1);update_host(host);
-    assert(host->input_test && host->inputs.state.buttons[CHIRKY_BUTTON_SECONDARY]);
+    assert(host->console.input_test && host->inputs.state.buttons[CHIRKY_BUTTON_SECONDARY]);
     held_input_names(host,false,name,sizeof(name));assert(strstr(name,"304") && strstr(name,"316") && strstr(name,"AX16NEG"));
     held_input_names(host,true,name,sizeof(name));assert(strstr(name," R") && strstr(name," T"));
     draw_controller_settings(host);
@@ -355,9 +395,9 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     event(host,0,EV_ABS,ABS_HAT0X,0);update_host(host);
     held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"PAD NONE"));
     held_input_names(host,true,name,sizeof(name));assert(!strcmp(name,"KEY NONE"));
-    tap(host,0,BTN_TR2);tap(host,0,BTN_TL2);assert(host->input_test);
-    event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<59;i++) update_host(host);assert(host->input_test);
-    update_host(host);assert(!host->input_test && host->controller_settings);
+    tap(host,0,BTN_TR2);tap(host,0,BTN_TL2);assert(host->console.input_test);
+    event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<59;i++) update_host(host);assert(host->console.input_test);
+    update_host(host);assert(!host->console.input_test && host->console.controller_settings);
     event(host,1,EV_KEY,KEY_R,0);update_host(host);
 }
 
@@ -393,36 +433,36 @@ int main(int argc,char **argv)
     clear_screen();fill_rect(&host,-10,-10,400,400,255,255,255);
     assert(scissor_x==16 && scissor_y==12 && scissor_w==288 && scissor_h==216);
     /* Every launcher item uses exactly the same confirmation policy. */
-    tap(&host,0,BTN_TR2);assert(!host.controller_settings);
-    tap(&host,0,BTN_SOUTH);assert(!host.controller_settings);
-    tap(&host,0,BTN_EAST);assert(host.settings_menu && !host.controller_settings);
-    tap(&host,0,BTN_EAST);assert(host.controller_settings);
-    tap(&host,0,BTN_EAST);assert(host.setup.active && !host.setup.keyboard);
-    update_host(&host);assert(!host.setup.wait_release);
+    tap(&host,0,BTN_TR2);assert(!host.console.controller_settings);
+    tap(&host,0,BTN_SOUTH);assert(!host.console.controller_settings);
+    tap(&host,0,BTN_EAST);assert(host.console.settings_menu && !host.console.controller_settings);
+    tap(&host,0,BTN_EAST);assert(host.console.controller_settings);
+    tap(&host,0,BTN_EAST);assert(host.console.setup.active && !host.console.setup.keyboard);
+    update_host(&host);assert(!host.console.setup.wait_release);
     /* D-pad must return to neutral, and another event cannot overwrite capture. */
     event(&host,0,EV_ABS,ABS_HAT0X,-1);event(&host,0,EV_KEY,BTN_SOUTH,1);update_host(&host);
-    assert(host.setup.step==0 && host.setup.candidate.code==ABS_HAT0X);
-    event(&host,0,EV_KEY,BTN_SOUTH,0);update_host(&host);assert(host.setup.step==0);
-    event(&host,0,EV_ABS,ABS_HAT0X,0);update_host(&host);assert(host.setup.step==1);
+    assert(host.console.setup.step==0 && host.console.setup.candidate.code==ABS_HAT0X);
+    event(&host,0,EV_KEY,BTN_SOUTH,0);update_host(&host);assert(host.console.setup.step==0);
+    event(&host,0,EV_ABS,ABS_HAT0X,0);update_host(&host);assert(host.console.setup.step==1);
     event(&host,0,EV_ABS,ABS_HAT0X,1);update_host(&host);
     event(&host,0,EV_ABS,ABS_HAT0X,0);update_host(&host);
     event(&host,0,EV_ABS,ABS_HAT0Y,-1);event(&host,0,EV_ABS,ABS_HAT0Y,0);update_host(&host);
     event(&host,0,EV_ABS,ABS_HAT0Y,1);event(&host,0,EV_ABS,ABS_HAT0Y,0);update_host(&host);
-    assert(host.setup.step==4);
-    tap(&host,0,BTN_TR2);assert(host.setup.step==5);
-    tap(&host,0,BTN_TR2);assert(host.setup.step==5 && *host.setup.message);
-    tap(&host,0,BTN_SOUTH);assert(host.setup.step==6);
+    assert(host.console.setup.step==4);
+    tap(&host,0,BTN_TR2);assert(host.console.setup.step==5);
+    tap(&host,0,BTN_TR2);assert(host.console.setup.step==5 && *host.console.setup.message);
+    tap(&host,0,BTN_SOUTH);assert(host.console.setup.step==6);
     tap(&host,0,BTN_EAST);
-    assert(host.setup.step==7 && host.setup.active);
-    tap(&host,0,BTN_TL2);assert(!host.setup.active && host.controller_settings);
+    assert(host.console.setup.step==7 && host.console.setup.active);
+    tap(&host,0,BTN_TL2);assert(!host.console.setup.active && host.console.controller_settings);
     assert(host.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     update_host(&host);
     /* Keyboard setup captures Escape as a mapping; only F1 cancels. */
-    host.selected_option=1;tap(&host,1,KEY_X);update_host(&host);
-    assert(host.setup.active && host.setup.keyboard);
+    host.console.selected_option=1;tap(&host,1,KEY_X);update_host(&host);
+    assert(host.console.setup.active && host.console.setup.keyboard);
     const int keyboard[]={KEY_A,KEY_D,KEY_W,KEY_S,KEY_X,KEY_R,KEY_ENTER,KEY_ESC};
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) tap(&host,1,keyboard[i]);
-    assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
+    assert(!host.console.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
     update_host(&host);
     /* Keyboard and controller states are independent; quick taps survive polling. */
     event(&host,1,EV_KEY,KEY_R,1);event(&host,1,EV_KEY,KEY_R,0);update_controller_buttons(&host);
@@ -430,7 +470,7 @@ int main(int argc,char **argv)
     event(&host,0,EV_KEY,KEY_ESC,1);assert(!host.inputs.pressed[KEY_ESC]);event(&host,0,EV_KEY,KEY_ESC,0);
     update_host(&host);
     tap(&host,1,KEY_X);update_host(&host);tap(&host,1,KEY_Q);tap(&host,1,KEY_F1);
-    assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_LEFT].code==KEY_A);
+    assert(!host.console.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_LEFT].code==KEY_A);
     update_host(&host);
     struct host reloaded={0};load_host_config(&reloaded);
     assert(reloaded.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
@@ -438,22 +478,22 @@ int main(int argc,char **argv)
     check_migration();
     check_live_inputs(&host,argv[1]);
     /* A controller-only user can cancel without consuming Start/Select as back. */
-    setup_begin(&host.setup,false);update_host(&host);
+    setup_begin(&host.console.setup,false);update_host(&host);
     event(&host,0,EV_KEY,BTN_EAST,1);event(&host,0,EV_KEY,BTN_SOUTH,1);
     for(int i=0;i<60;i++) update_host(&host);
-    assert(!host.setup.active && host.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
+    assert(!host.console.setup.active && host.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     event(&host,0,EV_KEY,BTN_EAST,0);event(&host,0,EV_KEY,BTN_SOUTH,0);update_host(&host);
     /* Failed persistence must not change the live mappings. */
     for(int i=0;i<3;i++)update_host(&host);
     assert(rename(HOST_CONFIG_PATH,"config/saved.conf")==0);assert(mkdir(HOST_CONFIG_PATH,0700)==0);
-    setup_begin(&host.setup,true);host.setup.complete=true;
-    default_keyboard_bindings(host.setup.pending);update_host(&host);
-    assert(!host.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
+    setup_begin(&host.console.setup,true);host.console.setup.complete=true;
+    default_keyboard_bindings(host.console.setup.pending);update_host(&host);
+    assert(!host.console.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
     assert(rmdir(HOST_CONFIG_PATH)==0);assert(rename("config/saved.conf",HOST_CONFIG_PATH)==0);update_host(&host);
-    host.controller_settings=false;host.settings_menu=true;host.settings_option=1;
-    tap(&host,0,BTN_TR2);assert(host.display_settings);
+    host.console.controller_settings=false;host.console.settings_menu=true;host.console.settings_option=1;
+    tap(&host,0,BTN_TR2);assert(host.console.display_settings);
     tap(&host,1,KEY_D);assert(host.safe_x==17);
-    tap(&host,1,KEY_R);assert(!host.display_settings && host.safe_x==16);
+    tap(&host,1,KEY_R);assert(!host.console.display_settings && host.safe_x==16);
     tap(&host,0,BTN_TR2);tap(&host,1,KEY_D);tap(&host,1,KEY_S);tap(&host,1,KEY_D);
     assert(host.safe_x==17 && host.safe_y==13);
     tap(&host,1,KEY_S);tap(&host,1,KEY_D); /* horizontal +1 */
@@ -462,11 +502,11 @@ int main(int argc,char **argv)
     assert(host.api.screen_width==286 && host.api.screen_height==214);
     fill_rect(&host,0,0,8,8,255,255,255);
     assert(scissor_x==18 && scissor_y==14 && scissor_w==8 && scissor_h==8);
-    tap(&host,1,KEY_S);tap(&host,0,BTN_TR2);assert(!host.display_settings);
+    tap(&host,1,KEY_S);tap(&host,0,BTN_TR2);assert(!host.console.display_settings);
     load_host_config(&reloaded);assert(reloaded.safe_x==17 && reloaded.safe_y==13);
     assert(reloaded.safe_offset_x==1 && reloaded.safe_offset_y==1);
-    tap(&host,0,BTN_TR2);host.display_option=2;tap(&host,1,KEY_A);
-    host.display_option=3;tap(&host,1,KEY_A);
+    tap(&host,0,BTN_TR2);host.console.display_option=2;tap(&host,1,KEY_A);
+    host.console.display_option=3;tap(&host,1,KEY_A);
     assert(host.safe_offset_x==0 && host.safe_offset_y==0);
     tap(&host,1,KEY_R);assert(host.safe_offset_x==1 && host.safe_offset_y==1);
     /* Offsets cannot push the logical viewport outside the physical framebuffer. */
@@ -484,7 +524,7 @@ int main(int argc,char **argv)
     assert(!moved.safe_offset_x && !moved.safe_offset_y);
     /* Gameplay chord is Start+Select, not ordinary jump+dash. */
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
-    host.active_game=&host.games[0];host.runtime=(struct chirky_runtime){.game=&fake,.active=true};
+    host.console.game_active=true;host.active_game=&host.games[0];host.runtime=(struct chirky_runtime){.game=&fake,.active=true};
     event(&host,0,EV_KEY,BTN_SOUTH,1);event(&host,0,EV_KEY,BTN_EAST,1);
     for(int i=0;i<65;i++) update_host(&host);
     assert(host.active_game && game_updates==65);
@@ -492,27 +532,27 @@ int main(int argc,char **argv)
     host.active_game=NULL;host.runtime=(struct chirky_runtime){0};
     /* Default calibration with the actual shipped menu labels and artwork. */
     host.safe_x=16;host.safe_y=12;host.safe_offset_x=host.safe_offset_y=0;
-    update_safe_area(&host);host.game_count=2;host.selected_game=0;
+    update_safe_area(&host);host.game_count=2;host.console.selected_game=0;
     snprintf(host.games[0].id,sizeof(host.games[0].id),"phosphor-run");
     snprintf(host.games[0].name,sizeof(host.games[0].name),"Phosphor Run");
     snprintf(host.games[1].id,sizeof(host.games[1].id),"rosey-chop");
     snprintf(host.games[1].name,sizeof(host.games[1].name),"Rosey Chop");
-    host.launcher.count=0;
+    host.console.launcher.count=0;
     draw_launcher(&host);
     char artwork_preview[1024];snprintf(artwork_preview,sizeof(artwork_preview),"%s/launcher-art.ppm",argv[1]);write_preview(artwork_preview);
     /* Render fixtures at the maximum margins as well as the default. */
     host.safe_offset_x=host.safe_offset_y=0;
-    host.safe_x=32;host.safe_y=24;update_safe_area(&host);host.game_count=6;host.selected_game=7;
+    host.safe_x=32;host.safe_y=24;update_safe_area(&host);host.game_count=6;host.console.selected_game=7;
     for(int i=0;i<6;i++) snprintf(host.games[i].name,sizeof(host.games[i].name),"GAME %d",i+1);
     draw_launcher(&host);char output[512];snprintf(output,sizeof(output),"%s/launcher.ppm",argv[1]);write_preview(output);
-    host.settings_message="";host.selected_option=2;
+    host.console.settings_message="";host.console.selected_option=2;
     draw_controller_settings(&host);snprintf(output,sizeof(output),"%s/input-settings.ppm",argv[1]);write_preview(output);
-    setup_begin(&host.setup,false);host.setup.step=6;host.setup.wait_release=false;
-    memcpy(host.setup.pending,host.bindings,sizeof(host.bindings));
+    setup_begin(&host.console.setup,false);host.console.setup.step=6;host.console.setup.wait_release=false;
+    memcpy(host.console.setup.pending,host.bindings,sizeof(host.bindings));
     draw_controller_settings(&host);snprintf(output,sizeof(output),"%s/button-setup.ppm",argv[1]);write_preview(output);
-    host.settings_message="";
+    host.console.settings_message="";
     draw_display_settings(&host);snprintf(output,sizeof(output),"%s/display-area.ppm",argv[1]);write_preview(output);
-    host.setup.active=false;host.controller_settings=false;
+    host.console.setup.active=false;host.console.controller_settings=false;
     draw_settings_menu(&host);snprintf(output,sizeof(output),"%s/settings.ppm",argv[1]);write_preview(output);
     check_frame_timing(&host,argv[1]);
     splash_free(&host.launcher_art);

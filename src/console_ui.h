@@ -5,7 +5,7 @@
 #include "launcher_config.h"
 #include "launcher_wordmark.h"
 #include "splash_art.h"
-#include "pixel_font.h"
+#include "drawing.h"
 
 static const char *const console_button_names[]={"LEFT","RIGHT","UP","DOWN","PRIMARY","SECONDARY","START","MENU"};
 /* Every menu uses Primary to confirm and Secondary to go back. A movement
@@ -20,11 +20,7 @@ static inline int console_menu_update(int *selected,int count,const struct chirk
 }
 static inline void console_glyphs(const struct chirky_host_api *api,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
-    for(;*value;value++,x+=6*scale) {
-        const uint8_t *rows=glyph(*value);
-        for(int row=0;row<7;row++)for(int col=0;col<5;col++)
-            if(rows[row]&(1<<(4-col)))api->fill_rect(api->context,x+col*scale,y-row*scale,scale,scale,r,g,b);
-    }
+    chirky_draw_text(api,x,y,value,scale,r,g,b);
 }
 static inline void console_menu_text(const struct chirky_host_api *api, int x, int y, const char *value, int scale,
                       unsigned char r, unsigned char g, unsigned char b)

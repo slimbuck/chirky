@@ -11,7 +11,7 @@ function source(relative) {
 }
 
 test("portable ABI and games do not depend on platform headers", () => {
-  const files = ["include/chirky.h"];
+  const files = ["include/chirky.h",...fs.readdirSync(path.join(ROOT,"src")).filter(name=>/\.[ch]$/.test(name)).map(name=>"src/"+name)];
   for (const entry of fs.readdirSync(path.join(ROOT, "games"), { withFileTypes:true })) {
     if (!entry.isDirectory()) continue;
     for (const file of fs.readdirSync(path.join(ROOT, "games", entry.name)))
@@ -33,17 +33,18 @@ test("both platform hosts use the shared lifecycle and viewport", () => {
   }
 });
 
-test("console rendering, menu navigation and mapping remain portable and shared",()=>{
-  for(const file of ['src/console_ui.h','src/input_setup.h'])
-    assert.doesNotMatch(source(file),/<linux\/|<emscripten|<sys\/|document\.|window\./);
-  for(const file of ['src/platform/linux/host.c','src/platform/web/console.h']) {
+test("console decisions have one portable owner and both adapters consume it",()=>{
+  for(const file of ['src/platform/linux/host.c','src/platform/web/console_bridge.h']) {
     const text=source(file);
-    for(const name of ['console_menu_update','console_draw_launcher','console_draw_settings_menu',
-      'console_draw_controller_settings','console_draw_live_inputs','console_draw_pause_menu','setup_begin','setup_release'])
+    for(const name of ['chirky_console_update','chirky_console_render','chirky_console_launch','chirky_console_home','chirky_console_capture'])
       assert(text.includes(name),`${file} must consume ${name}`);
+    assert.doesNotMatch(text,/\b(console_menu_update|setup_begin|setup_release)\s*\(/,'platform adapters must not duplicate console transitions');
   }
   assert.doesNotMatch(source('web/index.html'),/<nav|<dialog/,'console menus belong inside the framebuffer');
+  assert.match(source('Makefile'),/-sMAIN_MODULE=1/);
+  assert.match(source('Makefile'),/-sSIDE_MODULE=2/);
   assert.match(source('web/player.js'),/preinitializedWebGLContext:displayContext/);
+  assert.doesNotMatch(source('web/player.js'),/createModule\(nextId\)|runtime!==shell/,'games use the persistent host');
 });
 
 test("production browser plumbing contains no hand-maintained game ids", () => {
