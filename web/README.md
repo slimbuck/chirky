@@ -111,10 +111,15 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   raw buttons and axes in Map Controller; use the keyboard to get there first.
   Each controller identity keeps its own mapping. Pi's SNES defaults remain native.
 - Touch devices get a controller-shaped D-pad, A (Primary) and B (Secondary) face
-  buttons, and smaller Menu/Start buttons above the two control groups. The toy handheld shell uses warm yellow,
+  buttons, and smaller Menu/Start buttons above the two control groups. The A/B labels
+  use [Fredoka Bold](https://fonts.google.com/specimen/Fredoka) (weight 700), by the Fredoka
+  Project Authors, available under the [SIL Open Font License](https://github.com/google/fonts/blob/main/ofl/fredoka/OFL.txt).
+  Their inline SVG outlines in `index.html` preserve the approved 30px lettering:
+  each visible glyph bounding box is centred at (31,31) in a 62px button face.
+  They need no font download or platform fallback. The toy handheld shell uses warm yellow,
   a graphite D-pad, coral Primary and turquoise Secondary, with inset grips and
-  visible pressed feedback. Decorative branding and speaker slots stay outside
-  the game display. Its bezel is painted outside the measured framebuffer border,
+  visible pressed feedback. Decorative speaker slots stay outside the game display;
+  branding appears within the display only. Its bezel is painted outside the measured framebuffer border,
   preserving integer canvas scaling. All targets are at least 44 CSS pixels;
   the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
   the thumb around the fixed centre, with eight sectors (including diagonals)

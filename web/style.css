@@ -1,7 +1,6 @@
 :root{color-scheme:light;font:16px system-ui;background:#f3f1eb;color:#34314c;scrollbar-gutter:stable;--shell:#ffdb57;--shell-rim:#dfa435;--shell-shine:#fff3a4;--ink:#34314c;--key-face:#39354d;--key-shadow:#242138;--primary:#fa726e;--secondary:#55d4c2}
 *{box-sizing:border-box}body{margin:0}main{max-width:1000px;margin:auto;padding:24px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-family:'Arial Rounded MT Bold','Trebuchet MS',sans-serif;font-size:25px;letter-spacing:-1px}#status{color:#605a6f;font-size:14px}
 #player{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;padding:16px 12px 22px;border:3px solid var(--ink);border-radius:32px;background:var(--shell);box-shadow:inset 0 3px 0 var(--shell-shine),inset 0 -7px 0 var(--shell-rim)}
-.shell-brand{position:absolute;top:13px;left:22px;font:900 25px/1 'Arial Rounded MT Bold','Trebuchet MS',sans-serif;letter-spacing:-1.5px;transform:rotate(-5deg);pointer-events:none}.shell-brand span{display:inline-block;margin-left:10px;font:800 8px system-ui;letter-spacing:1px;text-transform:uppercase;vertical-align:middle}
 .shell-speaker{display:none;position:absolute;bottom:17px;right:76px;gap:5px;transform:rotate(-12deg);pointer-events:none}.shell-speaker i{width:4px;height:15px;border-radius:3px;background:var(--ink);opacity:.25;box-shadow:0 1px 0 var(--shell-shine)}
 #screen-slot{grid-column:1/-1;grid-row:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:32px 0 16px}
 /* The outer bezel is paint only: the framebuffer's one-pixel border and
@@ -19,7 +18,8 @@ button{font:inherit;color:var(--ink);background:#ffedaa;border:2px solid var(--i
 .dpad-centre{grid-area:2/2;background:radial-gradient(circle,#625c70 0 28%,var(--key-face) 31%);pointer-events:none}
 .actions{width:132px;height:132px;position:relative}
 .actions button{position:absolute;width:68px;height:68px;border:3px solid var(--ink);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--ink);box-shadow:inset 0 4px 0 #ffffff60,0 5px 0 var(--key-shadow)}
-.actions button{font:900 30px/1 'Trebuchet MS',sans-serif}
+/* Fredoka Bold outlines are centred by their visible bounds, not font metrics. */
+.actions button svg{display:block;width:100%;height:100%;fill:currentColor;pointer-events:none}
 .actions .primary{right:0;top:8px;background:var(--primary)}
 .actions .secondary{left:0;bottom:8px;background:var(--secondary)}
 .touch .system-button{min-width:88px;padding:0 12px;border:2px solid var(--ink);border-radius:22px;background:#ffedaa;color:var(--ink);box-shadow:0 3px 0 var(--shell-rim);display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;line-height:1;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.system-button svg{display:block;width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -33,7 +33,6 @@ button{font:inherit;color:var(--ink);background:#ffedaa;border:2px solid var(--i
 #player.side-controls .controller-left{grid-column:1;grid-row:1}
 #player.side-controls .controller-right{grid-column:3;grid-row:1}
 #player.side-controls .help{display:none}
-#player.side-controls .shell-brand{left:max(22px,env(safe-area-inset-left));font-size:24px}.side-controls .shell-brand span{display:block;margin:5px 0 0 2px;font-size:7px}
 #player.side-controls .shell-speaker{display:flex;right:max(76px,env(safe-area-inset-right))}
 /* Portrait is a viewport-sized console too. The screen gets the full width;
    a flexible upper row leaves both grips anchored above the bottom safe area. */
@@ -43,9 +42,8 @@ button{font:inherit;color:var(--ink);background:#ffedaa;border:2px solid var(--i
 #player.bottom-controls .controller-left{grid-column:1;justify-self:start}
 #player.bottom-controls .controller-right{grid-column:2;justify-self:end}
 #player.bottom-controls .help{display:none}
-#player.bottom-controls .shell-brand{top:calc(13px + env(safe-area-inset-top));left:max(22px,env(safe-area-inset-left))}
 body:is(.controller-wide,.controller-portrait) main{max-width:none;padding:0}body:is(.controller-wide,.controller-portrait) header{display:none}
 @media(max-width:600px){main{padding:12px}header{align-items:start;flex-direction:column;gap:0}#status{margin-bottom:12px}.help{font-size:12px}}
-@media(max-height:400px){#player.side-controls .shell-brand{top:10px;font-size:22px}#player.side-controls .shell-brand span{display:none}#player.side-controls .shell-speaker{bottom:12px}}
+@media(max-height:400px){#player.side-controls .shell-speaker{bottom:12px}}
 @media(prefers-reduced-motion:reduce){.touch button{transition:none}}
 #fullscreen-message{position:fixed;z-index:10;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);max-width:calc(100% - 24px);width:max-content;margin:0;padding:10px 16px;border:2px solid var(--shell);border-radius:12px;background:var(--ink);color:#fff4c2;font-size:14px;text-align:center;pointer-events:none}
