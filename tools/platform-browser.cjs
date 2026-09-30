@@ -459,11 +459,26 @@ async function main() {
           await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(-70,0)]});
           assert.equal((await state()).inputs,1,'The area just outside the visible cross accepts a thumb');
           await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(-70,0),action]});
+          await page.eval(`document.querySelector('.dpad').addEventListener('pointermove',event=>{globalThis.__lastDpadMove={x:event.clientX,y:event.clientY};})`);
+          async function moveThumb(x,y){
+            const point=thumb(x,y);
+            await page.eval('globalThis.__lastDpadMove=null');
+            await page.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point,action]});
+            // CDP can acknowledge before Chrome delivers its coalesced move.
+            // Wait for the DOM event, then independently assert the input mask.
+            let delivered=false;
+            for(let i=0;i<40;i++){
+              delivered=await page.eval(`!!globalThis.__lastDpadMove && Math.abs(__lastDpadMove.x-${point.x})<.5 && Math.abs(__lastDpadMove.y-${point.y})<.5`);
+              if(delivered)break;
+              await delay(50);
+            }
+            assert(delivered,'Chrome must deliver the requested D-pad pointer move');
+          }
           for(const [x,y,bits] of [[-44,-44,5],[0,-44,4],[44,-44,6],[44,0,2],[44,44,10],[0,44,8],[-44,44,9],[-44,0,1],[0,0,0],[100,0,2]]){
-            await page.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[thumb(x,y),action]});await delay(35);
+            await moveThumb(x,y);
             assert.equal((await state()).inputs,bits|16,'A captured thumb steers while the other holds Primary');
           }
-          await page.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[thumb(-44,-44),action]});
+          await moveThumb(-44,-44);
           await capture('diagonal-touch');
           // For a partial touchEnd, CDP takes the contact being released.
           await page.call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[thumb(-44,-44)]});
