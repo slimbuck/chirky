@@ -10,6 +10,7 @@ let returnNavigation=null;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
 const assetSounds=new Map();
 let moduleLoadQueue=Promise.resolve(),loadCompletion=null;
+let fullscreenQueued=false,fullscreenBusy=false,lastScreenTap=null,screenContact=null,lastTouchFullscreen=-Infinity;
 let director=null;
 function directorSession(){return crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 async function syncDirector(){
@@ -93,7 +94,7 @@ function keyName(code){return code.replace(/^Key|^Digit/,"").replace(/^Arrow/,""
 function refreshInputSettings(){
   bindings=Object.fromEntries(inputSettings.keys.map((code,index)=>[code,index]));
   $("#player").setAttribute("data-touch",inputSettings.touch);
-  $("#control-help").textContent=inputNames.map((name,index)=>`${name}: ${keyName(inputSettings.keys[index])}`).join(" · ")+" · F1: recovery / cancel mapping · Double-click screen: fullscreen";
+  $("#control-help").textContent=inputNames.map((name,index)=>`${name}: ${keyName(inputSettings.keys[index])}`).join(" · ")+" · F1: recovery / cancel mapping · Double-click / double-tap display: fullscreen";
 }
 function validPadMap(values){
   return Array.isArray(values) && values.length===8 && new Set(values.map(v=>JSON.stringify(v))).size===8 &&
@@ -157,13 +158,42 @@ async function playSound(path){
   }catch(error){console.warn("Sound unavailable",path,error);}
 }
 function setPaused(value){
-  paused=value;keys.clear();touch.clear();refreshTouchFeedback();pending=0;last=0;accumulator=0;
+  paused=value;keys.clear();touch.clear();fullscreenQueued=false;refreshTouchFeedback();pending=0;last=0;accumulator=0;
   if(value){shell?._web_console_pause();stopSounds();}
 }
 function toggleMute(){muted=!muted;if(muted)stopSounds();}
 async function toggleFullscreen(){
-  unlock();try{if(document.fullscreenElement)await document.exitFullscreen();else if($("#player").requestFullscreen)await $("#player").requestFullscreen();else throw new Error("Fullscreen is unavailable in this browser.");}
-  catch{status.textContent="Press a keyboard key to select Full Screen, or double-click the screen.";}canvas.focus();
+  if(fullscreenBusy)return;
+  fullscreenQueued=false;fullscreenBusy=true;
+  const player=$("#player"),notice=$("#fullscreen-message");notice.hidden=true;
+  try{
+    if(document.fullscreenElement || document.webkitFullscreenElement){
+      await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }else{
+      const request=player.requestFullscreen || player.webkitRequestFullscreen;
+      if(!request){notice.textContent="This browser does not support fullscreen for games.";notice.hidden=false;return;}
+      // Invoke the protected API before any await, within the trusted gesture.
+      await request.call(player);
+    }
+  }catch{notice.textContent="Fullscreen was blocked. Double-tap the display to try again.";notice.hidden=false;}
+  finally{fullscreenBusy=false;canvas.focus();}
+}
+function requestConsoleFullscreen(){
+  // Touch activation is granted on release, not on pointer-down. The console
+  // can select this action while a finger is still held between animation frames.
+  if(touch.size){fullscreenQueued=true;return;}
+  void toggleFullscreen();
+}
+function consoleGesture(){
+  // Deliver short menu taps synchronously too, so their platform actions retain
+  // the browser's user gesture. Gameplay stays on the fixed simulation clock.
+  if(shell && !loading && shell._web_console_state()!==4){
+    const connected=pads();
+    shell._web_console_tick(mask()|pending,keyboardMask(),controllerMask(),keys.size,
+      connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
+    pending=0;cancelPressed=false;
+  }
+  if(fullscreenQueued)void toggleFullscreen();
 }
 window.addEventListener("keydown",event=>{
   const capturing=shell?._web_capture_keyboard()===1;
@@ -174,17 +204,34 @@ window.addEventListener("keydown",event=>{
     event.preventDefault();if(event.repeat)return;
     keys.add(event.code);unlock();
     if(capturing){const code=keyCodes.indexOf(event.code);if(code>=0)shell._web_capture(1,code,0);}
-    else pending|=1<<bindings[event.code];
+    else {pending|=1<<bindings[event.code];consoleGesture();}
   }
 });
 window.addEventListener("keyup",event=>keys.delete(event.code));
-canvas.addEventListener("pointerdown",()=>{unlock();canvas.focus();});
-canvas.addEventListener("dblclick",toggleFullscreen);
+canvas.addEventListener("pointerdown",event=>{
+  unlock();canvas.focus();
+  if(event.pointerType!=="mouse"){
+    if(event.isPrimary===false){screenContact=lastScreenTap=null;return;}
+    screenContact={id:event.pointerId,x:event.clientX,y:event.clientY,time:event.timeStamp};
+  }
+});
+canvas.addEventListener("pointerup",event=>{
+  const contact=screenContact;screenContact=null;
+  if(!contact || contact.id!==event.pointerId || event.timeStamp-contact.time>350 ||
+    Math.hypot(event.clientX-contact.x,event.clientY-contact.y)>24){lastScreenTap=null;return;}
+  if(lastScreenTap && event.timeStamp-lastScreenTap.time<350 &&
+    Math.hypot(event.clientX-lastScreenTap.x,event.clientY-lastScreenTap.y)<24){
+    lastScreenTap=null;lastTouchFullscreen=event.timeStamp;event.preventDefault();void toggleFullscreen();
+  }else lastScreenTap={x:event.clientX,y:event.clientY,time:event.timeStamp};
+});
+canvas.addEventListener("pointercancel",()=>{screenContact=lastScreenTap=null;});
+canvas.addEventListener("dblclick",event=>{if(event.timeStamp-lastTouchFullscreen>700)void toggleFullscreen();});
 window.addEventListener("blur",()=>{if(runtime)setPaused(true);});
 document.addEventListener("visibilitychange",()=>{if(document.hidden && runtime)setPaused(true);});
 function resizePlayer(){
   if(typeof innerWidth!=="number")return;
-  const fullscreen=!!document.fullscreenElement,player=$("#player"),display=$("#display"),slot=$("#screen-slot");
+  const fullscreen=!!(document.fullscreenElement || document.webkitFullscreenElement),player=$("#player"),display=$("#display"),slot=$("#screen-slot");
+  player.classList.toggle("is-fullscreen",fullscreen);
   const touchVisible=getComputedStyle($(".touch")).display!=="none";
   const sideControls=touchVisible && innerWidth>innerHeight;
   player.classList.toggle("side-controls",sideControls);
@@ -215,6 +262,7 @@ function resizePlayer(){
   canvas.style.transform=`translate(${Math.round(aligned.left*density)/density-aligned.left}px,${Math.round(aligned.top*density)/density-aligned.top}px) scale(${scale})`;
 }
 document.addEventListener("fullscreenchange",resizePlayer);
+document.addEventListener("webkitfullscreenchange",resizePlayer);
 window.addEventListener("resize",resizePlayer);
 window.visualViewport?.addEventListener("resize",resizePlayer);
 if(typeof matchMedia==="function")matchMedia("(any-pointer: coarse)").addEventListener("change",resizePlayer);
@@ -231,7 +279,8 @@ function refreshTouchFeedback(){
 }
 document.querySelectorAll("[data-button]").forEach(button=>{
   button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
-  button.onpointerup=button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);refreshTouchFeedback();};
+  button.onpointerup=event=>{if(touch.has(event.pointerId))consoleGesture();touch.delete(event.pointerId);refreshTouchFeedback();};
+  button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);fullscreenQueued=false;refreshTouchFeedback();};
   button.oncontextmenu=event=>event.preventDefault();
 });
 function frame(now){
@@ -296,7 +345,7 @@ async function createModule(gameId){
     onLauncherCount:()=>ids.length,onLauncherName:index=>titles[ids[index]],onLauncherId:index=>ids[index],
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
-    onOption:option=>{if(option===-6)toggleFullscreen();else if(option===-7)toggleMute();},
+    onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
     onSaveMapping,onRawNames,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true){

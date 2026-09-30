@@ -119,9 +119,12 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   the two controller grips. Safe-area padding keeps landscape controls clear of
   device cutouts. Layout and touch event handling belong in `web/`; they send the
   same logical Chirky inputs to the shared console and games.
-- **Settings → Full Screen** toggles the whole player. Double-clicking the screen
-  also toggles it. Browser permission requires a recent keyboard or pointer
-  gesture; a gamepad alone may not authorize entry. Escape may exit browser
+- **Settings → Full Screen** toggles the whole player. Double-clicking or
+  double-tapping the display also toggles it. Touch selections request fullscreen
+  on finger-up, when the browser grants permission; short menu taps are delivered
+  to the shared console inside that gesture, without advancing game simulation.
+  Keyboard selections likewise retain their gesture. A gamepad alone may not
+  authorize entry. Escape may exit browser
   fullscreen, so map Menu to another key if desired. **Mute / Unmute** is also
   inside Settings. There are no external navigation/settings buttons.
   The 320x240 framebuffer uses whole physical screen pixels at browser/OS zoom
@@ -129,7 +132,10 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   launcher and games share one persistent canvas, WebGL context, renderer and
   asset store. Switching
   games does not reload the page or leave fullscreen. No game sprite sizes change.
-  Unsupported fullscreen browsers display an explanatory message.
+  Standard and WebKit-prefixed fullscreen APIs are supported. Unsupported or
+  blocked requests show a message over the player, including in landscape;
+  they never replace the launcher/game title. Mobile browser checks use real
+  touch events for double-taps and menu selection after earlier activation expires.
 - Losing focus or hiding the tab pauses play. Resume continues the run.
 - Games still render into the normal CRT-safe logical viewport. Simulation
   runs at 60 ticks/second with bounded catch-up after slow frames.

@@ -341,8 +341,13 @@ async function main() {
         // Fullscreen is requested inside the shared Settings menu below. Enter
         // it here with the screen gesture to verify pause/return preserve it.
         const point=await page.eval(`(()=>{const r=document.querySelector('#screen').getBoundingClientRect();return {x:r.x+20,y:r.y+20};})()`);
-        await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:2});
-        await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:2});await delay(200);
+        if(mobile){
+          await click('#screen');await delay(60);await click('#screen');
+        }else{
+          await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:2});
+          await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:2});
+        }
+        await delay(200);
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
         const original=await page.eval('globalThis.__originalCanvas=document.querySelector("#screen");globalThis.__originalGL=__originalCanvas.getContext("webgl");true');assert(original);
         if((await state()).screen===5)await key('KeyZ','z',90);
@@ -389,8 +394,17 @@ async function main() {
         await key('Escape','Escape',27);
         const diagnostics=catalog.games.filter(g=>g.role==='diagnostic').length;
         for(let i=0;i<1+diagnostics;i++)await key('ArrowDown','ArrowDown',40);
-        await key('KeyQ','q',81);await delay(200);assert(!await page.eval('!!document.fullscreenElement'));
-        await key('KeyQ','q',81);await delay(200);assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
+        if(mobile){
+          await click('[data-button="4"]');await delay(200);assert(!await page.eval('!!document.fullscreenElement'));
+          // Prior gestures must not lend activation to the next touch-down.
+          for(let i=0;i<70 && await page.eval('navigator.userActivation.isActive');i++)await delay(100);
+          assert(!await page.eval('navigator.userActivation.isActive'));
+          await click('[data-button="4"]',180);await delay(200);
+          assert.equal(await page.eval('document.fullscreenElement?.id'),'player','Touch menu fullscreen must work after activation expires');
+        }else{
+          await key('KeyQ','q',81);await delay(200);assert(!await page.eval('!!document.fullscreenElement'));
+          await key('KeyQ','q',81);await delay(200);assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
+        }
         await key('ArrowDown','ArrowDown',40);await key('KeyQ','q',81);assert((await state()).muted);
         assert.equal((await state()).activeSounds,0);await key('KeyQ','q',81);assert(!(await state()).muted);
         await key('KeyZ','z',90);

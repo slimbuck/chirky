@@ -94,3 +94,45 @@ test('fullscreen targets the persistent console container',async()=>{
   p.document.exitFullscreen=async()=>{exited++;p.document.fullscreenElement=null;};
   await p.run('toggleFullscreen()');await p.run('toggleFullscreen()');assert.equal(entered,1);assert.equal(exited,1);
 });
+
+test('touch fullscreen waits for release, handles quick taps and cancels interrupted gestures',async()=>{
+  const p=player();let calls=0;
+  p.element('#player').requestFullscreen=async()=>{calls++;};
+  const down=id=>({pointerId:id,preventDefault(){}});
+  p.touch[4].onpointerdown(down(1));p.run('requestConsoleFullscreen()');assert.equal(calls,0);
+  p.touch[4].onpointerup({pointerId:1});assert.equal(calls,1,'Held menu action runs during release');
+  await new Promise(resolve=>setImmediate(resolve));
+  p.touch[4].onpointerdown(down(2));p.run('requestConsoleFullscreen()');
+  p.touch[4].onpointercancel({pointerId:2});p.run('consoleGesture()');assert.equal(calls,1);
+  p.run('loading=false;shell={_web_console_state:()=>1,_web_console_tick:()=>requestConsoleFullscreen()}');
+  p.touch[4].onpointerdown(down(3));p.touch[4].onpointerup({pointerId:3});
+  assert.equal(calls,2,'A tap between animation frames runs the shared menu inside the gesture');
+  await new Promise(resolve=>setImmediate(resolve));
+  p.run('shell={_web_console_state:()=>4,_web_console_tick:()=>{throw Error("Unexpected game tick")}}');
+  p.touch[4].onpointerdown(down(4));p.touch[4].onpointerup({pointerId:4});assert.equal(calls,2);
+});
+
+test('screen double-tap toggles once and ignores the compatibility double-click',async()=>{
+  const p=player(),screen=p.element('#screen');let calls=0;
+  p.element('#player').requestFullscreen=async()=>{calls++;};
+  const event=timeStamp=>({pointerId:1,pointerType:'touch',isPrimary:true,clientX:20,clientY:20,timeStamp,preventDefault(){}});
+  screen.listeners.pointerdown(event(100));screen.listeners.pointerup(event(150));assert.equal(calls,0);
+  screen.listeners.pointerdown(event(250));screen.listeners.pointerup(event(300));assert.equal(calls,1);
+  await new Promise(resolve=>setImmediate(resolve));screen.listeners.dblclick(event(310));assert.equal(calls,1);
+  screen.listeners.pointerdown(event(1200));screen.listeners.pointercancel();screen.listeners.pointerup(event(1250));
+  screen.listeners.pointerdown(event(1350));screen.listeners.pointerup(event(1400));assert.equal(calls,1);
+});
+
+test('prefixed fullscreen and rejection messages preserve the game title',async()=>{
+  const p=player();let entered=0,exited=0;
+  p.element('#status').textContent='Launcher';
+  p.element('#player').webkitRequestFullscreen=()=>{entered++;p.document.webkitFullscreenElement=p.element('#player');};
+  p.document.webkitExitFullscreen=()=>{exited++;p.document.webkitFullscreenElement=null;};
+  await p.run('toggleFullscreen()');await p.run('toggleFullscreen()');assert.equal(entered,1);assert.equal(exited,1);
+  p.element('#player').webkitRequestFullscreen=undefined;
+  await p.run('toggleFullscreen()');assert.equal(p.element('#fullscreen-message').hidden,false);
+  assert.match(p.element('#fullscreen-message').textContent,/does not support/);
+  p.element('#player').requestFullscreen=async()=>{throw Error('denied');};
+  await p.run('toggleFullscreen()');assert.match(p.element('#fullscreen-message').textContent,/Double-tap/);
+  assert.equal(p.element('#status').textContent,'Launcher');
+});
