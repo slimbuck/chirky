@@ -157,6 +157,19 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   they never replace the launcher/game title. Mobile browser checks use real
   touch events for double-taps and menu selection after earlier activation expires.
 - Losing focus or hiding the tab pauses play. Resume continues the run.
+- iPhone/iPad browsers that reject or lack element fullscreen show Safari's
+  **Share → Add to Home Screen** instructions instead of suggesting repeated
+  fullscreen retries. Enable **Open as Web App** when that option is shown, then
+  launch Chirky from the new icon for a view without Safari's toolbar. Apple web
+  app metadata also enables this mode on older iOS versions. A Home Screen app
+  recognises that launch mode; its Full Screen action reports that it is already
+  running as an app. Native fullscreen remains available where supported.
+  This does not add offline caching; loading the games still requires a network.
+- Page pinch/double-tap zoom is disabled across the console, including its display
+  and empty shell. Viewport limits and `touch-action: none` are backed by
+  non-passive Safari gesture handlers and multi-touch move cancellation.
+  Pointer input remains active for diagonal D-pad movement and simultaneous
+  action buttons; the display's deliberate double-tap fullscreen shortcut remains.
 - Games still render into the normal CRT-safe logical viewport. Simulation
   runs at 60 ticks/second with bounded catch-up after slow frames.
 - No progress/save-state persistence is added; restarting starts a fresh game.

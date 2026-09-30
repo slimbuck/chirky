@@ -1,4 +1,6 @@
 :root{color-scheme:light;font:16px system-ui;background:#f3f1eb;color:#34314c;scrollbar-gutter:stable;--shell:#ffdb57;--shell-rim:#dfa435;--shell-shine:#fff3a4;--ink:#34314c;--key-face:#39354d;--key-shadow:#242138;--primary:#fa726e;--secondary:#55d4c2}
+/* The whole page is a game surface, including the space between controls. */
+html,body,#player{touch-action:none;overscroll-behavior:none}
 *{box-sizing:border-box}body{margin:0}main{max-width:1000px;margin:auto;padding:24px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-family:'Arial Rounded MT Bold','Trebuchet MS',sans-serif;font-size:25px;letter-spacing:-1px}#status{color:#605a6f;font-size:14px}
 #player{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;padding:16px 12px 22px;border:3px solid var(--ink);border-radius:32px;background:var(--shell);box-shadow:inset 0 3px 0 var(--shell-shine),inset 0 -7px 0 var(--shell-rim)}
 .shell-speaker{display:none;position:absolute;bottom:17px;right:76px;gap:5px;transform:rotate(-12deg);pointer-events:none}.shell-speaker i{width:4px;height:15px;border-radius:3px;background:var(--ink);opacity:.25;box-shadow:0 1px 0 var(--shell-shine)}

@@ -163,6 +163,16 @@ function setPaused(value){
   if(value){shell?._web_console_pause();stopSounds();}
 }
 function toggleMute(){muted=!muted;if(muted)stopSounds();}
+function fullscreenUnavailable(blocked=false){
+  const appleMobile=/iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+    (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  const notice=$("#fullscreen-message");
+  notice.textContent=appleMobile?
+    "For a view without Safari’s toolbar, use Share → Add to Home Screen (Open as Web App), then open Chirky from its icon.":
+    blocked?"Fullscreen was blocked. Double-tap the display to try again.":
+    "This browser does not support fullscreen for games.";
+  notice.hidden=false;
+}
 async function toggleFullscreen(){
   if(fullscreenBusy)return;
   fullscreenQueued=false;fullscreenBusy=true;
@@ -170,13 +180,15 @@ async function toggleFullscreen(){
   try{
     if(document.fullscreenElement || document.webkitFullscreenElement){
       await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }else if(navigator.standalone || (typeof matchMedia==="function" && matchMedia("(display-mode: standalone)").matches)){
+      notice.textContent="Chirky is already running as a Home Screen app.";notice.hidden=false;
     }else{
       const request=player.requestFullscreen || player.webkitRequestFullscreen;
-      if(!request){notice.textContent="This browser does not support fullscreen for games.";notice.hidden=false;return;}
+      if(!request){fullscreenUnavailable();return;}
       // Invoke the protected API before any await, within the trusted gesture.
       await request.call(player);
     }
-  }catch{notice.textContent="Fullscreen was blocked. Double-tap the display to try again.";notice.hidden=false;}
+  }catch{fullscreenUnavailable(true);}
   finally{fullscreenBusy=false;canvas.focus();}
 }
 function requestConsoleFullscreen(){
@@ -227,6 +239,14 @@ canvas.addEventListener("pointerup",event=>{
 });
 canvas.addEventListener("pointercancel",()=>{screenContact=lastScreenTap=null;});
 canvas.addEventListener("dblclick",event=>{if(event.timeStamp-lastTouchFullscreen>700)void toggleFullscreen();});
+// Safari can ignore viewport zoom limits. Cancel its page-scale gestures too,
+// without stopping pointer events used by the D-pad and simultaneous buttons.
+function preventPageZoom(event){if(event.cancelable)event.preventDefault();}
+for(const name of ["gesturestart","gesturechange"])
+  document.addEventListener(name,preventPageZoom,{passive:false});
+document.addEventListener("touchmove",event=>{
+  if(event.touches.length>1)preventPageZoom(event);
+},{passive:false});
 window.addEventListener("blur",()=>{if(runtime)setPaused(true);});
 document.addEventListener("visibilitychange",()=>{if(document.hidden && runtime)setPaused(true);});
 function resizePlayer(){

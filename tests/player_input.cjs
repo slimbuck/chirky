@@ -165,3 +165,32 @@ test('prefixed fullscreen and rejection messages preserve the game title',async(
   await p.run('toggleFullscreen()');assert.match(p.element('#fullscreen-message').textContent,/Double-tap/);
   assert.equal(p.element('#status').textContent,'Launcher');
 });
+
+test('iOS fullscreen failures offer Home Screen launch and standalone avoids a failing request',async()=>{
+  const p=player();
+  p.run('navigator.userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)"');
+  await p.run('toggleFullscreen()');
+  assert.match(p.element('#fullscreen-message').textContent,/Add to Home Screen/);
+  let calls=0;
+  p.element('#player').requestFullscreen=async()=>{calls++;throw Error('unsupported');};
+  await p.run('toggleFullscreen()');assert.equal(calls,1);
+  assert.match(p.element('#fullscreen-message').textContent,/Add to Home Screen/);
+  p.run('navigator.standalone=true');
+  await p.run('toggleFullscreen()');assert.equal(calls,1);
+  assert.match(p.element('#fullscreen-message').textContent,/already running/);
+  p.run('navigator.standalone=false;navigator.userAgent="Macintosh";navigator.platform="MacIntel";navigator.maxTouchPoints=5');
+  await p.run('toggleFullscreen()');
+  assert.match(p.element('#fullscreen-message').textContent,/Add to Home Screen/,'iPad desktop user agents get the same guidance');
+});
+
+test('page-scale gestures are cancelled without consuming single-touch movement or held inputs',()=>{
+  const p=player();let prevented=0;
+  const event={cancelable:true,preventDefault(){prevented++;}};
+  p.touch[4].onpointerdown({pointerId:1,preventDefault(){}});
+  p.events.gesturestart(event);p.events.gesturechange(event);
+  p.events.touchmove({...event,touches:[{},{}]});assert.equal(prevented,3);
+  p.events.touchmove({...event,touches:[{}]});assert.equal(prevented,3);
+  p.events.gesturechange({...event,cancelable:false});assert.equal(prevented,3);
+  assert.equal(p.run('mask()'),16);
+  p.touch[4].onpointerup({pointerId:1});assert.equal(p.run('mask()'),0);
+});

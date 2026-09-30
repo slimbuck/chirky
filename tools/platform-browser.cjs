@@ -185,6 +185,16 @@ async function main() {
             report.checks.push('portrait fills visible viewport, maximizes display and anchors both grips at bottom');
           }
           report.checks.push('touch targets fit, controller wings flank the centred landscape display');
+          if(width===390 && density===3){
+            const before=await page.eval('visualViewport.scale');
+            for(const [x,y] of [[game.x+game.width/2,game.y+game.height/2],[width/2,70]]){
+              await page.call('Input.synthesizePinchGesture',{x,y,scaleFactor:1.8,relativeSpeed:800,gestureSourceType:'touch'});
+              assert.equal(await page.eval('visualViewport.scale'),before,'Pinching the display or shell must not zoom the page');
+            }
+            assert(await page.eval(`['gesturestart','gesturechange'].every(name=>{const e=new Event(name,{bubbles:true,cancelable:true});document.querySelector('#screen').dispatchEvent(e);return e.defaultPrevented;})`),'Safari page-scale events must be cancelled');
+            assert.deepEqual(await page.eval(measure),game,'Pinch attempts must preserve the framebuffer layout');
+            report.checks.push('display and shell pinch gestures preserve page scale; Safari gesture defaults cancelled');
+          }
         }
         const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(screenshot.data,'base64'));
