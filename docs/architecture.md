@@ -42,6 +42,11 @@ ALSA playback, POSIX HTTP transport, signals, control commands, and `dlopen`
 game loading. Raw keyboard state is host control state and is never part of the
 game ABI.
 
+Raw analogue axes participate in mapping and release detection only after a
+neutral value has been observed. Some digital USB controllers advertise unused
+sticks fixed at their minimum; those must not block console navigation. Explicit
+axis bindings still use the current device value for logical input.
+
 ## Web platform
 
 `src/platform/web/host.c` owns the Emscripten/WebGL bridge.

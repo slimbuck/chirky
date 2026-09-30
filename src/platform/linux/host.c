@@ -218,6 +218,7 @@ struct input_device {
     int abs_minimums[ABS_MAX + 1];
     int abs_maximums[ABS_MAX + 1];
     int abs_flats[ABS_MAX + 1];
+    bool abs_centred[ABS_MAX + 1];
 };
 
 struct framebuffer { int drm_fd; uint32_t fb_id; };
@@ -1027,7 +1028,7 @@ static void held_input_names(const struct host *host, bool keyboard, char *line,
             bool held=false;
             for (int i=0;i<host->inputs.count;i++) {
                 const struct input_device *d=&host->inputs.devices[i];
-                if (d->controller && axis_direction(d,code,d->abs_values[code])==direction) held=true;
+                if (d->controller && d->abs_centred[code] && axis_direction(d,code,d->abs_values[code])==direction) held=true;
             }
             if (held) {
                 char name[24]; snprintf(name,sizeof(name),"AX%u%s",code,direction<0?"NEG":"POS");
@@ -1242,6 +1243,7 @@ static void open_inputs(struct input_set *inputs)
                 device->abs_minimums[code] = info.minimum;
                 device->abs_maximums[code] = info.maximum;
                 device->abs_flats[code] = info.flat;
+                device->abs_centred[code] = axis_direction(device,code,info.value)==0;
             }
             if (code >= ABS_HAT0X && code <= ABS_HAT3Y)
                 device->controller = true;
@@ -1271,7 +1273,8 @@ static bool buttons_released(const struct input_set *inputs, bool keyboard)
         if (device->controller==keyboard) continue;
         for (unsigned int code=0;code<=KEY_MAX;code++) if (device->keys[code]) return false;
         if (!keyboard) for (unsigned int code=0;code<=ABS_MAX;code++)
-            if (capture_axis(code) && axis_direction(device,code,device->abs_values[code])) return false;
+            if (capture_axis(code) && device->abs_centred[code] &&
+                axis_direction(device,code,device->abs_values[code])) return false;
     }
     return true;
 }
@@ -1348,6 +1351,10 @@ static void process_input_event(struct host *host, struct input_device *device, 
         int old=axis_direction(device,event->code,device->abs_values[event->code]);
         device->abs_values[event->code]=event->value;
         int direction=axis_direction(device,event->code,event->value);
+        /* Some digital pads advertise unused sticks fixed at their minimum.
+           Require a neutral observation before raw axes affect setup/release
+           gates. Explicit gameplay bindings still honour their current value. */
+        if(old==0 || direction==0)device->abs_centred[event->code]=true;
         if (device->controller && old==0 && direction!=0) {
             host->last_keyboard=false;
             if (event->code==ABS_Y || event->code==ABS_HAT0Y) {

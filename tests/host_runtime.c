@@ -272,6 +272,31 @@ static void check_transition_gates(void)
     in.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;chirky_gate_filter(&gate,&in,&out);assert(out.button_pressed[CHIRKY_BUTTON_PRIMARY]);
 }
 
+static void check_uninitialized_controller_axes(void)
+{
+    struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
+    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    struct input_device *pad=&h.inputs.devices[0];
+    /* Digital USB controllers can advertise unused 0..255 sticks which stay
+       at zero. They must not hold every menu's release gate forever. */
+    pad->abs_maximums[ABS_X]=pad->abs_maximums[ABS_Y]=255;
+    tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_SETTINGS);
+    assert(!h.console.ui_wait_release);
+    tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_INPUT);
+    char held[128];held_input_names(&h,false,held,sizeof(held));assert(!strcmp(held,"PAD NONE"));
+    tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_SETUP && !h.console.setup.wait_release);
+    event(&h,0,EV_ABS,ABS_X,0);update_host(&h);assert(h.console.setup.step==0);
+    /* Once a real stick has centred, capture and release tracking work. */
+    event(&h,0,EV_ABS,ABS_X,127);update_host(&h);
+    event(&h,0,EV_ABS,ABS_X,0);update_host(&h);
+    assert(h.console.setup.candidate.kind==BINDING_ABS && h.console.setup.candidate.code==ABS_X);
+    assert(!buttons_released(&h.inputs,false));
+    event(&h,0,EV_ABS,ABS_X,127);update_host(&h);assert(h.console.setup.step==1);
+    /* An explicitly mapped, initially deflected stick still drives gameplay. */
+    h.bindings[CHIRKY_BUTTON_LEFT]=(struct controller_binding){BINDING_ABS,ABS_Y,-1};
+    assert(button_down(&h,CHIRKY_BUTTON_LEFT));
+}
+
 static void check_frame_timing(struct host *host,const char *output_dir)
 {
     struct frame_timing t={0};t.pending_work_us=2100;
@@ -413,6 +438,7 @@ int main(int argc,char **argv)
     check_settings_shortcuts();
     check_launcher_menu();
     check_transition_gates();
+    check_uninitialized_controller_axes();
     check_timing_toggle();check_capture_gpu();
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
     fputs("boot_game=launcher\n# Keep this comment\nbind_confirm=key:313\nframe_timing=1\n",config);fclose(config);
