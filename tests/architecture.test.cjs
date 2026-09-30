@@ -33,6 +33,19 @@ test("both platform hosts use the shared lifecycle and viewport", () => {
   }
 });
 
+test("console rendering, menu navigation and mapping remain portable and shared",()=>{
+  for(const file of ['src/console_ui.h','src/input_setup.h'])
+    assert.doesNotMatch(source(file),/<linux\/|<emscripten|<sys\/|document\.|window\./);
+  for(const file of ['src/platform/linux/host.c','src/platform/web/console.h']) {
+    const text=source(file);
+    for(const name of ['console_menu_update','console_draw_launcher','console_draw_settings_menu',
+      'console_draw_controller_settings','console_draw_live_inputs','console_draw_pause_menu','setup_begin','setup_release'])
+      assert(text.includes(name),`${file} must consume ${name}`);
+  }
+  assert.doesNotMatch(source('web/index.html'),/<nav|<dialog/,'console menus belong inside the framebuffer');
+  assert.match(source('web/player.js'),/preinitializedWebGLContext:displayContext/);
+});
+
 test("production browser plumbing contains no hand-maintained game ids", () => {
   const plumbing = ["web/player.js", "tools/web-assets.js", "tools/web-package.cjs",
     "dashboard/server.js"];

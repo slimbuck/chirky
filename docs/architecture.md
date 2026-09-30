@@ -17,6 +17,10 @@ games -> include/chirky.h -> src runtime/render/assets
   transport.
 - `src/runtime.c` owns game ABI validation and the init, update, render, and
   shutdown lifecycle used by both hosts.
+- `src/console_ui.h` owns launcher, settings, pause and input-screen rendering,
+  plus menu selection/navigation rules. `src/input_setup.h` owns the eight-step
+  mapping draft, release gating and duplicate rejection. Both hosts use these
+  directly; browser menus are drawn inside the framebuffer, like the Pi.
 - `src/rect_renderer.c`, `src/asset_store.c`, and the remaining files directly
   under `src/` implement reusable rendering, assets, timing, and host helpers.
 - `src/viewport.h` is the canonical 320x240 framebuffer and 288x216 default
@@ -36,11 +40,24 @@ game ABI.
 
 ## Web platform
 
-`src/platform/web/host.c` owns the Emscripten/WebGL bridge. Files under `web/`
-own browser UI and browser services such as DOM input, animation frames,
-WebAudio, `fetch`, fullscreen, and navigation. Both platforms call the shared
-runtime for game lifecycle and use the same renderer, asset handles, viewport
-constants, and game ABI.
+`src/platform/web/host.c` owns the Emscripten/WebGL bridge. Its `console.h`
+adapter supplies catalog entries, platform actions and raw input to the shared
+menus and wizard. Pi display calibration and power-down remain Linux-only;
+fullscreen and sound muting are browser capabilities.
+
+`web/player.js` creates the canvas WebGL context once. The launcher module stays
+loaded while individual game modules load and unload on that same context via
+Emscripten's preinitialized-context support. Each module owns its renderer and
+GL resources; switching modules releases the outgoing game's resources, not the
+display. Every render makes that module's context registration current and
+binds its own GL state. URL/history changes do not reload the document. This
+keeps fullscreen, screen geometry and console navigation intact.
+
+Browser services own DOM keyboard codes, Gamepad API buttons/axes, localStorage,
+WebAudio, fetch and animation frames. Raw device codes are platform-specific;
+logical buttons, menus, mapping workflow, game runtime and rendering are shared.
+Controller mappings are saved per browser-reported device identity. Unrecognized
+USB adapters use the same mapping wizard as standard controllers.
 
 ## Rendering roadmap
 

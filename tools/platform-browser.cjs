@@ -74,12 +74,13 @@ const instrumentation = `(() => {
 })();`;
 
 const attachProbe = `(() => {
-  if(globalThis.__platformProbe)return;
-  const probe=globalThis.__platformProbe={runtime,ticks:0,masks:[],assetPlays:0};
-  probe.state=()=>({ready,paused,muted,leaving,status:status.textContent,assetSounds:assetSounds.size,
+  const probe=globalThis.__platformProbe ||= {ticks:0,masks:[],assetPlays:0,seen:new WeakSet()};
+  probe.runtime=runtime;probe.shell=shell;
+  probe.state=()=>({ready,paused,muted,leaving,loading,id,status:status.textContent,screen:shell._web_console_state(),capture:shell._web_capture_keyboard(),assetSounds:assetSounds.size,
     callbacks:['onSound','onAssetReady','onAssetSound'].map(key=>[key,typeof runtime[key]]),
     audioState:audio?.state,activeSounds:sources.size,ticks:probe.ticks,masks:probe.masks,assetPlays:probe.assetPlays,
     audit:{...__platformAudit,contexts:__platformAudit.contexts.map(context=>context.state)}});
+  if(probe.seen.has(runtime))return;probe.seen.add(runtime);
   let tick=runtime._web_tick;const tickProbe=function(mask){probe.ticks++;if(mask && probe.masks.at(-1)!==mask)probe.masks.push(mask);return tick(mask);};
   Object.defineProperty(runtime,'_web_tick',{configurable:true,get:()=>tickProbe,set:value=>{tick=value;}});
   const play=runtime.onAssetSound;runtime.onAssetSound=function(...args){probe.assetPlays++;return play(...args);};
@@ -115,7 +116,7 @@ async function main() {
     // including fractional OS scale and narrow windows.
     const diagnostic=catalog.games.findIndex(game=>game.role==='diagnostic');
     assert(diagnostic>=0);
-    for(const [width,height,density] of [[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1]]){
+    for(const [width,height,density] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1]])){
       const label=`layout-${width}-${density}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
       const page=new CDP(target.webSocketDebuggerUrl);await page.open;
       const report={label,checks:[],errors:[],warnings:[],failedRequests:[],passed:false};reports.push(report);
@@ -137,12 +138,10 @@ async function main() {
         await page.call('Page.navigate',{url:base.href});
         const launcher=await checkLoading('Launcher');
         await page.eval('document.querySelector("#screen").focus()');
-        for(let i=0;i<diagnostic;i++){
-          await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'ArrowDown',key:'ArrowDown',windowsVirtualKeyCode:40});await delay(80);
-          await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'ArrowDown',key:'ArrowDown',windowsVirtualKeyCode:40});await delay(80);
+        for(const [code,key,value] of [['Escape','Escape',27],['ArrowDown','ArrowDown',40],['KeyX','x',88]]){
+          await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(100);
+          await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(100);
         }
-        await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyX',key:'x',windowsVirtualKeyCode:88});await delay(80);
-        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyX',key:'x',windowsVirtualKeyCode:88});
         const game=await checkLoading(catalog.games[diagnostic].name);
         report.screen=game;
         assert.deepEqual(game,launcher,'Launcher and game must use the same screen size');
@@ -153,7 +152,8 @@ async function main() {
         assert(Math.abs(game.y*density-Math.round(game.y*density))<.03);
         const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(screenshot.data,'base64'));
-        await page.eval(`(()=>{document.querySelector('#pause').focus();document.querySelector('#pause').click();const gl=document.querySelector('#screen').getContext('webgl');gl.enable(gl.SCISSOR_TEST);for(let x=0;x<320;x++){gl.scissor(x,0,1,240);gl.clearColor(x%2,0,1-x%2,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.disable(gl.SCISSOR_TEST);})()`);
+        await page.eval('window.requestAnimationFrame=()=>0');await delay(100);
+        await page.eval(`(()=>{document.querySelector('#screen').blur();const gl=document.querySelector('#screen').getContext('webgl');gl.enable(gl.SCISSOR_TEST);for(let x=0;x<320;x++){gl.scissor(x,0,1,240);gl.clearColor(x%2,0,1-x%2,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.disable(gl.SCISSOR_TEST);})()`);
         const stripes=Buffer.from((await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64');
         fs.writeFileSync(path.join(out,`${label}-pixels.png`),stripes);
         const {pixels,channels}=pngRow(stripes,Math.round((game.y+game.height/2)*density));
@@ -177,7 +177,7 @@ async function main() {
     }
     if(process.argv.includes('--layout-only')){assert(reports.every(report=>report.passed),'Layout checks failed');return;}
     // Exercise the real launcher for every manifest entry, including new games.
-    for(const mobile of [false,true]) for(const [index,game] of catalog.games.entries()) {
+    for(const mobile of (process.argv.includes('--console-only')?[]:[false,true])) for(const [index,game] of catalog.games.entries()) {
       const label=`launcher-${game.id}-${mobile?'mobile':'desktop'}`;
       const report={label,errors:[],warnings:[],failedRequests:[],checks:[]};reports.push(report);
       const target=await (await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
@@ -214,7 +214,10 @@ async function main() {
           fs.writeFileSync(path.join(out,`launcher-${mobile?'mobile':'desktop'}.png`),Buffer.from(shot.data,'base64'));
         }
         await page.eval('document.querySelector("#screen").focus()');
-        for(let i=0;i<index;i++)await press('ArrowDown','ArrowDown',40);
+        if(game.role==='diagnostic'){
+          await press('Escape','Escape',27);
+          for(let i=0;i<=catalog.games.filter(g=>g.role==='diagnostic').findIndex(g=>g.id===game.id);i++)await press('ArrowDown','ArrowDown',40);
+        }else for(let i=0;i<catalog.games.filter(g=>g.role==='game').findIndex(g=>g.id===game.id);i++)await press('ArrowDown','ArrowDown',40);
         await press('KeyX','x',88);
         await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(game.name)} && new URL(location.href).searchParams.get('game')===${JSON.stringify(game.id)}`);
         assert.equal(await page.eval('document.querySelector("#status").textContent'),game.name);
@@ -233,8 +236,9 @@ async function main() {
         console.log(JSON.stringify(report));
       }
     }
+    if(process.argv.includes('--catalog-only')){assert(reports.every(r=>r.passed && !r.errors.length && !r.failedRequests.length),'Catalog checks failed');return;}
     const source = await (await fetch(new URL('player.js',base))).text();
-    const readyLine = source.split('\n').findIndex(line => /ready=true;/.test(line));
+    const readyLine = source.split('\n').findIndex(line => /id=nextId;/.test(line));
     assert(readyLine>=0, 'Cannot locate initialization checkpoint');
     for (const game of ['phosphor-run','rosey-chop']) for (const mobile of [false,true]) {
       const label = `${game}-${mobile?'mobile':'desktop'}`;
@@ -283,7 +287,7 @@ async function main() {
       }
       async function key(code,key,value,hold=100) {
         await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(hold);
-        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});
+        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(120);
       }
       async function capture(name) {
         const pixels=await page.eval(`(() => {__platformProbe.runtime._web_render();const c=document.querySelector('#screen'),g=c.getContext('webgl'),p=new Uint8Array(c.width*c.height*4);g.readPixels(0,0,c.width,c.height,g.RGBA,g.UNSIGNED_BYTE,p);let hash=2166136261,lit=0;const colors=new Set();for(let i=0;i<p.length;i+=4){hash=Math.imul(hash^p[i],16777619);hash=Math.imul(hash^p[i+1],16777619);hash=Math.imul(hash^p[i+2],16777619);if(p[i]||p[i+1]||p[i+2])lit++;colors.add((p[i]<<16)|(p[i+1]<<8)|p[i+2]);}const r=c.getBoundingClientRect();return {hash:hash>>>0,lit,colors:colors.size,glError:g.getError(),rect:{x:r.x,y:r.y,width:r.width,height:r.height},overflow:document.documentElement.scrollWidth>innerWidth,touchVisible:getComputedStyle(document.querySelector('.touch')).display!=='none'};})()`);
@@ -295,6 +299,7 @@ async function main() {
       }
       try {
         console.log(`Checking ${label}`);
+        await page.call('Storage.clearDataForOrigin',{origin:base.origin,storageTypes:'local_storage'});
         await page.call('Page.navigate',{url:new URL(`?game=${game}`,base).href});await ready();
         report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?6:7);
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
@@ -314,50 +319,88 @@ async function main() {
         assert(report.afterInput.masks.some(mask=>mask&2));assert(report.afterInput.masks.some(mask=>mask&(1<<4)));
         assert.equal(report.afterInput.audioState,'running');assert(report.afterInput.assetPlays>0 && report.afterInput.audit.starts>0);
         report.checks.push('title, gameplay, directional/action input, decoded asset sounds played');
-        await click('#pause');assert((await state()).paused);const ticks=(await state()).ticks;await delay(250);assert.equal((await state()).ticks,ticks);
-        await click('#pause');await delay(150);assert(!(await state()).paused && (await state()).ticks>ticks);
-        await click('#mute');assert((await state()).muted);assert.equal(await page.eval('document.querySelector("#mute").getAttribute("aria-pressed")'),'true');
-        const starts=(await state()).audit.starts;
-        if(mobile)await click('[data-button="5"]');else{await click('#screen');await key('KeyX','x',88);}
-        await delay(100);assert.equal((await state()).audit.starts,starts);
-        await click('#mute');assert(!(await state()).muted);report.checks.push('pause freezes updates, resume, mute/unmute');
-        await click('#input-settings');
-        assert(await page.eval('document.querySelector("#settings").open'));
-        await click('[data-bind="4"]');await key('KeyZ','z',90);
-        assert.match(await page.eval('document.querySelector("#binding-message").textContent'),/already assigned/);
-        await key('KeyQ','q',81);
+        await click('#screen');await key('Escape','Escape',27);
+        assert((await state()).paused);const ticks=(await state()).ticks;await delay(250);assert.equal((await state()).ticks,ticks);
+        await key('KeyZ','z',90);await delay(150);assert(!(await state()).paused && (await state()).ticks>ticks);
+        report.checks.push('shared pause menu freezes updates and Secondary resumes');
+        // Fullscreen is requested inside the shared Settings menu below. Enter
+        // it here with the screen gesture to verify pause/return preserve it.
+        const point=await page.eval(`(()=>{const r=document.querySelector('#screen').getBoundingClientRect();return {x:r.x+20,y:r.y+20};})()`);
+        await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:2});
+        await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:2});await delay(200);
+        assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
+        const original=await page.eval('globalThis.__originalCanvas=document.querySelector("#screen");globalThis.__originalGL=__originalCanvas.getContext("webgl");true');assert(original);
+        if((await state()).screen===5)await key('KeyZ','z',90);
+        await page.eval(`globalThis.__menuPad={id:'Standard test pad',mapping:'standard',buttons:Array.from({length:16},(_,i)=>({pressed:i===8})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__menuPad]});`);await delay(130);
+        await page.eval('__menuPad.buttons[8].pressed=false');await delay(130);
+        assert.equal((await state()).screen,5);
+        await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);await delay(250);
+        assert.equal((await state()).screen,0);assert.equal((await state()).id,'launcher');
+        const unloaded=await state();
+        assert.equal(unloaded.audit.texturesCreated-unloaded.audit.texturesDeleted,1,'Only the persistent launcher texture should remain');
+        assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
+        assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
+        report.checks.push('in-console return keeps canvas, WebGL context and fullscreen alive');
+        await key('Escape','Escape',27);assert.equal((await state()).screen,1);
+        await key('KeyX','x',88);assert.equal((await state()).screen,2);
+        await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);assert.equal((await state()).capture,1);
+        // Cancel a partial draft. It must not reach browser storage.
+        await key('KeyA','a',65);await key('F1','F1',112);assert.equal((await state()).capture,-1);
+        assert.equal(await page.eval('localStorage.getItem("chirky.inputs.v1")'),null);
+        await key('KeyX','x',88);
+        await key('ArrowLeft','ArrowLeft',37);await key('ArrowLeft','ArrowLeft',37); // duplicate rejected
+        for(const [code,k,v] of [['ArrowRight','ArrowRight',39],['ArrowUp','ArrowUp',38],['ArrowDown','ArrowDown',40],['KeyQ','q',81],['KeyZ','z',90],['Enter','Enter',13],['Escape','Escape',27]])await key(code,k,v);
+        assert.equal((await state()).capture,-1);
+        assert.deepEqual(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys'),['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyZ','Enter','Escape']);
         const settingsShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}-settings.png`),Buffer.from(settingsShot.data,'base64'));
-        await click('#save-settings');assert(!await page.eval('document.querySelector("#settings").open'));
-        await click('#pause');await click('#screen');await page.eval('__platformProbe.masks.length=0');await key('KeyQ','q',81);
-        assert((await state()).masks.some(mask=>mask&(1<<4)));
-        await click('#fullscreen');await delay(200);
+        // Raw USB gamepad: map button AND axis events through the actual C wizard.
+        await key('ArrowUp','ArrowUp',38);await key('KeyQ','q',81);assert.equal((await state()).capture,0);
+        await page.eval(`globalThis.__pad={id:'USB SNES test adapter',index:0,connected:true,mapping:'',buttons:Array.from({length:10},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__pad]});`);
+        for(const [kind,code,direction] of [[2,0,-1],[2,0,1],[2,1,-1],[2,1,1],[1,1,0],[1,0,0],[1,9,0],[1,8,0]]){
+          await page.eval(kind===2?`__pad.axes[${code}]=${direction}`:`__pad.buttons[${code}]={pressed:true,value:1}`);await delay(130);
+          await page.eval(kind===2?`__pad.axes[${code}]=0`:`__pad.buttons[${code}]={pressed:false,value:0}`);await delay(130);
+        }
+        assert.equal((await state()).capture,-1);
+        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v1")))[0].length'),8);
+        // Secondary on this otherwise-unrecognized adapter returns through menus.
+        for(let i=0;i<2;i++){
+          await page.eval('__pad.buttons[0]={pressed:true,value:1}');await delay(130);
+          await page.eval('__pad.buttons[0]={pressed:false,value:0}');await delay(130);
+        }
+        assert.equal((await state()).screen,0);
+        await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');
+        // Settings includes browser capabilities, without Pi display placement.
+        await key('Escape','Escape',27);
+        const diagnostics=catalog.games.filter(g=>g.role==='diagnostic').length;
+        for(let i=0;i<1+diagnostics;i++)await key('ArrowDown','ArrowDown',40);
+        await key('KeyQ','q',81);await delay(200);assert(!await page.eval('!!document.fullscreenElement'));
+        await key('KeyQ','q',81);await delay(200);assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
+        await key('ArrowDown','ArrowDown',40);await key('KeyQ','q',81);assert((await state()).muted);
+        assert.equal((await state()).activeSounds,0);await key('KeyQ','q',81);assert(!(await state()).muted);
+        await key('KeyZ','z',90);
+        await key('KeyQ','q',81); // selected game remains selected in persistent launcher
+        for(let i=0;i<150 && (await state()).id==='launcher';i++)await delay(100);
+        assert.equal((await state()).id,game);
+        assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
         const full=await capture('fullscreen');assert.equal(full.rect.width%320,0);
-        if(mobile)assert(full.touchVisible);
         if(mobile){
           await page.call('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});await delay(200);
           const landscape=await capture('fullscreen-landscape');assert.equal(landscape.rect.width%320,0);
-          assert(await page.eval('Array.from(document.querySelectorAll(".touch button, #fullscreen")).every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})'),'Fullscreen controls must stay onscreen');
+          assert(await page.eval('Array.from(document.querySelectorAll(".touch button")).every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})'),'Fullscreen touch controls must stay onscreen');
           await page.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(150);
         }
-        await click('#fullscreen');await delay(150);assert(!await page.eval('!!document.fullscreenElement'));
-        report.checks.push('key remapping, duplicate rejection, full player fullscreen toggle');
-        await click('#restart');await delay(150);await ready();await capture('restarted');
+        report.checks.push('shared keyboard/USB mapping wizard, duplicate rejection, cancel, controller navigation, fullscreen setting, mute');
+        // A fresh module in the same page has its title/audio/assets restored.
+        assert.equal((await state()).assetSounds,report.initial.assetSounds);
+        await page.call('Page.reload');await delay(200);await ready();
         assert.equal(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys[4]'),'KeyQ');
-        await click('#input-settings');await click('#reset-bindings');await click('#save-settings');await click('#pause');
-        report.checks.push('bindings persist across reload; reset restores defaults');
+        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v1"))).length'),1);
+        await capture('restarted');
         report.lifecycle=await page.eval('JSON.parse(sessionStorage.getItem("platform-browser-lifecycle")||"[]")');
-        report.destroys=report.lifecycle.filter(event=>event.event==='destroy-end');
-        assert.equal(report.destroys.length,1,'Restart did not call web_destroy exactly once');
-        assert(report.destroys.every(d=>d.texturesCreated===d.texturesDeleted),'Texture teardown imbalance');
-        report.restartedState=await state();assert.equal(report.restartedState.assetSounds,report.initial.assetSounds);
-        await click('nav a');await delay(150);await ready();assert.equal((await state()).status,'Launcher');
-        report.lifecycle=await page.eval('JSON.parse(sessionStorage.getItem("platform-browser-lifecycle")||"[]")');
-        report.destroys=report.lifecycle.filter(event=>event.event==='destroy-end');
-        assert.equal(report.destroys.length,2,'Launcher navigation did not destroy game');
-        assert(report.destroys.every(d=>d.texturesCreated===d.texturesDeleted));
-        report.checks.push('UI restart reloads title, launcher navigation destroys game, all textures deleted');
+        assert(report.lifecycle.filter(e=>e.event==='destroy-end').length>=2);
+        report.checks.push('module teardown and relaunch; keyboard/controller bindings survive reload');
         report.passed=true;
       } catch(error) {report.failure=error.stack;console.error(`${label}: ${error.message}`);}
       finally {
@@ -376,4 +419,5 @@ async function main() {
   }
   console.log(`All integrated browser checks passed. Artifacts: ${out}`);
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
+if(require.main===module)main().catch(error=>{console.error(error);process.exitCode=1;});
+module.exports={CDP,instrumentation,attachProbe};

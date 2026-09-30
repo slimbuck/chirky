@@ -34,30 +34,8 @@ bool parse_binding(const char *text, struct controller_binding *binding)
     return false;
 }
 
-void setup_begin(struct binding_setup *setup, bool keyboard)
-{
-    *setup=(struct binding_setup){.active=true,.keyboard=keyboard,.wait_release=true,.message=""};
-}
-
 void setup_offer(struct binding_setup *setup, struct controller_binding binding)
 {
-    if (!setup->active || setup->wait_release || setup->ready || setup->complete) return;
     if (setup->keyboard && (binding.kind!=BINDING_KEY || binding.code>=BTN_MISC || binding.code==KEY_F1 || binding.code==KEY_F12)) return;
-    setup->candidate=binding; setup->ready=true; setup->wait_release=true;
-}
-
-void setup_release(struct binding_setup *setup, bool released)
-{
-    if (!setup->active || !setup->wait_release || !released) return;
-    setup->wait_release=false;
-    if (!setup->ready) return;
-    setup->ready=false;
-    for (int i=0;i<setup->step;i++) {
-        const struct controller_binding *old=&setup->pending[i], *next=&setup->candidate;
-        if (old->kind==next->kind && old->code==next->code && old->direction==next->direction) {
-            setup->message="ALREADY USED - TRY ANOTHER"; return;
-        }
-    }
-    setup->pending[setup->step++]=setup->candidate; setup->message="";
-    if (setup->step==CHIRKY_BUTTON_COUNT) setup->complete=true;
+    chirky_setup_offer(setup,binding);
 }

@@ -13,6 +13,7 @@
 #include "viewport.h"
 #include "asset_file.h"
 #include "input_gate.h"
+#include "console_ui.h"
 #include "launcher_config.h"
 #include "launcher_wordmark.h"
 #include "splash_art.h"
@@ -1017,74 +1018,26 @@ static void clear_screen(void)
     glDisable(GL_SCISSOR_TEST); glClearColor(.012f,.019f,.032f,1); glClear(GL_COLOR_BUFFER_BIT);
 }
 
-static void menu_text(struct host *host, int x, int y, const char *value, int scale,
-                      unsigned char r, unsigned char g, unsigned char b)
+static struct chirky_host_api console_api(struct host *host)
 {
-    char clipped[128];
-    int columns=(host->api.screen_width-x-8)/(6*scale);
-    if (columns<0) columns=0;
-    if (columns>127) columns=127;
-    snprintf(clipped,sizeof(clipped),"%.*s",columns,value);
-    draw_text(host,x,y,clipped,scale,r,g,b);
+    struct chirky_host_api api=host->api;
+    api.context=host;api.fill_rect=fill_rect;api.button_label=button_label;
+    return api;
 }
+static void menu_text(struct host *host,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
+{ struct chirky_host_api ui=console_api(host); console_menu_text(&ui,x,y,value,scale,r,g,b); }
 
-static void menu_row(struct host *host, int y, const char *label, bool selected)
-{
-    fill_rect(host,8,y-13,host->api.screen_width-16,20,selected?28:14,selected?74:30,selected?84:40);
-    fill_rect(host,12,y-9,3,10,selected?244:70,selected?194:110,70);
-    menu_text(host,22,y,label,1,selected?250:170,selected?248:185,selected?236:190);
-}
+static void menu_row(struct host *host,int y,const char *label,bool selected)
+{ struct chirky_host_api ui=console_api(host); console_menu_row(&ui,y,label,selected); }
 
-static void menu_footer(struct host *host, bool can_go_back)
-{
-    char confirm[32],back[32],line[80]; button_label(host,CHIRKY_BUTTON_PRIMARY,confirm,sizeof(confirm));
-    button_label(host,CHIRKY_BUTTON_SECONDARY,back,sizeof(back));
-    if (can_go_back) snprintf(line,sizeof(line),"%s SELECT - %s BACK",confirm,back);
-    else snprintf(line,sizeof(line),"%s SELECT - UP DOWN MOVE",confirm);
-    menu_text(host,10,14,line,1,112,160,170);
-}
+static void menu_footer(struct host *host,bool back)
+{ struct chirky_host_api ui=console_api(host); console_menu_footer(&ui,back); }
 
 static void draw_launcher(struct host *host)
-{
-    clear_screen();
-    splash_draw(&host->launcher_art,&host->api);
-    int height=host->api.screen_height;
-    struct chirky_host_api title_api=host->api;
-    title_api.context=host;
-    title_api.fill_rect=fill_rect;
-    launcher_wordmark(&title_api);
-    ensure_launcher(host);
-    int count=launcher_count(&host->launcher,false), first=host->selected_game<4?0:host->selected_game-3;
-    for (int row=0;row<4 && first+row<count;row++) {
-        int index=first+row;
-        const char *label=launcher_at(&host->launcher,false,index)->label;
-        int y=height-83-row*24;
-        bool selected=index==host->selected_game;
-        int width=host->api.screen_width*2/3;
-        fill_rect(host,8,y-13,width,20,selected?28:5,selected?74:17,selected?84:23);
-        fill_rect(host,12,y-9,3,10,selected?244:40,selected?194:85,selected?70:91);
-        char visible[64];
-        snprintf(visible,sizeof(visible),"%.*s",(width-20)/6,label);
-        menu_text(host,22,y,visible,1,selected?250:170,selected?248:185,selected?236:190);
-    }
-    if (first+4<count) menu_text(host,10,30,"MORE BELOW",1,112,160,170);
-    else if (first>0) menu_text(host,10,30,"MORE ABOVE",1,112,160,170);
-    fill_rect(host,8,5,host->api.screen_width-16,18,5,17,23);
-    menu_footer(host,false);
-}
+{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_launcher(&ui,&host->launcher_art,&host->launcher,host->selected_game); }
 
 static void draw_settings_menu(struct host *host)
-{
-    clear_screen();
-    int height=host->api.screen_height;
-    fill_rect(host,8,height-7,host->api.screen_width-16,3,40,175,212);
-    menu_text(host,10,height-23,"SETTINGS",3,238,240,232);
-    ensure_launcher(host);
-    for(int i=0;i<launcher_count(&host->launcher,true);i++)menu_row(host,height-83-i*24,launcher_at(&host->launcher,true,i)->label,i==host->settings_option);
-    int back_index=launcher_count(&host->launcher,true);
-    menu_row(host,height-83-back_index*24,"BACK",host->settings_option==back_index);
-    menu_footer(host,true);
-}
+{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_settings_menu(&ui,&host->launcher,host->settings_option); }
 
 static bool binding_down(const struct input_set *inputs, const struct controller_binding *binding, bool keyboard);
 static int axis_direction(const struct input_device *device, unsigned int code, int value);
@@ -1136,51 +1089,19 @@ static void held_input_names(const struct host *host, bool keyboard, char *line,
 }
 
 static void draw_live_inputs(struct host *host)
-{
-    int cell=(host->api.screen_width-20)/4;
-    menu_text(host,10,87,"PAD GREEN / KEY GOLD",1,155,175,180);
-    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        bool pad=binding_down(&host->inputs,&host->bindings[i],false);
-        bool key=binding_down(&host->inputs,&host->keyboard_bindings[i],true);
-        int x=10+(i%4)*cell, y=61-(i/4)*21;
-        fill_rect(host,x,y,cell-2,18,pad||key?45:22,pad||key?65:32,pad||key?58:38);
-        menu_text(host,x+2,y+14,button_names[i],1,pad||key?250:130,pad||key?245:150,pad||key?220:157);
-        fill_rect(host,x+2,y+2,(cell-6)/2,3,pad?93:40,pad?220:60,pad?153:60);
-        fill_rect(host,x+cell/2,y+2,(cell-6)/2,3,key?250:60,key?196:55,key?75:40);
+{ struct chirky_host_api ui=console_api(host);
+    unsigned pad=0,key=0;char pad_line[96],key_line[96];
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
+        if(binding_down(&host->inputs,&host->bindings[i],false))pad|=1u<<i;
+        if(binding_down(&host->inputs,&host->keyboard_bindings[i],true))key|=1u<<i;
     }
-    char line[96]; size_t capacity=(size_t)(host->api.screen_width-20)/6+1;
-    if (capacity>sizeof(line)) capacity=sizeof(line);
-    held_input_names(host,false,line,capacity); menu_text(host,10,38,line,1,93,220,153);
-    held_input_names(host,true,line,capacity); menu_text(host,10,26,line,1,250,196,75);
+    held_input_names(host,false,pad_line,sizeof(pad_line));held_input_names(host,true,key_line,sizeof(key_line));
+    console_draw_live_inputs(&ui,pad,key,pad_line,key_line);
 }
 
 static void draw_controller_settings(struct host *host)
-{
-    clear_screen();
-    int height=host->api.screen_height;
-    if (host->setup.active) {
-        struct binding_setup *setup=&host->setup;
-        menu_text(host,10,height-18,setup->keyboard?"MAP KEYBOARD":"MAP CONTROLLER",2,238,240,232);
-        int step=setup->step<CHIRKY_BUTTON_COUNT?setup->step:CHIRKY_BUTTON_COUNT-1;
-        menu_text(host,10,height-47,button_names[step],3,244,194,70);
-        char line[80];
-        snprintf(line,sizeof(line),"%d OF %d - %s",step+1,CHIRKY_BUTTON_COUNT,
-            setup->wait_release?"RELEASE ALL INPUTS":"PRESS NOW");
-        menu_text(host,10,height-74,line,1,112,180,190);
-        menu_text(host,10,99,setup->message,1,244,160,70);
-        menu_text(host,10,12,setup->keyboard?"F1 CANCEL - SAVES AFTER ALL 8":"HOLD TWO BUTTONS TO CANCEL",1,112,160,170);
-    } else if (host->input_test) {
-        menu_text(host,10,height-22,"TEST BUTTONS",2,238,240,232);
-        menu_text(host,10,height-49,"PRESS ANY KEYS OR BUTTONS",1,112,180,190);
-        menu_text(host,10,height-64,"BOTH SOURCES LIGHT UP BELOW",1,112,180,190);
-        menu_text(host,10,12,"HOLD SECONDARY 1 SECOND TO RETURN",1,112,160,170);
-    } else {
-        menu_text(host,10,height-19,"INPUT SETTINGS",2,238,240,232);
-        menu_text(host,10,height-35,host->settings_message?host->settings_message:"",1,244,194,70);
-        const char *labels[]={"MAP CONTROLLER","MAP KEYBOARD","TEST BUTTONS","BACK"};
-        for (int i=0;i<4;i++) menu_row(host,height-48-i*16,labels[i],host->selected_option==i);
-        menu_text(host,10,12,"PRIMARY SELECT - SECONDARY BACK",1,112,160,170);
-    }
+{ struct chirky_host_api ui=console_api(host);
+    clear_screen();console_draw_controller_settings(&ui,&host->setup,host->input_test,host->selected_option,host->settings_message);
     draw_live_inputs(host);
 }
 
@@ -1631,9 +1552,9 @@ static void update_host(struct host *host)
             unload_game(host); host->controller_settings=false;
             host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         } else if(host->paused) {
-            if(direction)host->pause_option=(host->pause_option+direction+2)%2;
-            else if(back || input->button_pressed[CHIRKY_BUTTON_MENU])host->paused=false;
-            else if(confirm) {
+            int choice=console_menu_update(&host->pause_option,2,input,back || input->button_pressed[CHIRKY_BUTTON_MENU]);
+            if(choice==-2)host->paused=false;
+            else if(choice>=0) {
                 if(host->pause_option==0)host->paused=false;
                 else {host->settings_menu=false;unload_game(host);}
             }
@@ -1666,27 +1587,27 @@ static void update_host(struct host *host)
             host->input_test=false; host->controller_menu_chord_frames=0; host->ui_wait_release=true;
         }
     } else if (host->controller_settings) {
-        if (direction) host->selected_option=(host->selected_option+direction+4)%4;
-        else if (back) host->controller_settings=false;
-        else if (confirm) {
+        int choice=console_menu_update(&host->selected_option,4,input,back);
+        if(choice==-2)host->controller_settings=false;
+        else if(choice>=0) {
             if (host->selected_option==3) host->controller_settings=false;
             else if (host->selected_option==2) { host->input_test=true; host->controller_menu_chord_frames=0; }
             else { setup_begin(&host->setup,host->selected_option==1); host->settings_message=""; }
         }
     } else if (host->settings_menu) {
         int count=launcher_count(&host->launcher,true)+1;
-        if(direction)host->settings_option=(host->settings_option+direction+count)%count;
-        else if(back || (confirm && host->settings_option==count-1))host->settings_menu=false;
-        else if(confirm)open_settings_screen(host,-3-launcher_at(&host->launcher,true,host->settings_option)->action);
+        int choice=console_menu_update(&host->settings_option,count,input,back);
+        if(choice==-2 || choice==count-1)host->settings_menu=false;
+        else if(choice>=0)open_settings_screen(host,-3-launcher_at(&host->launcher,true,host->settings_option)->action);
     } else {
         int count=launcher_count(&host->launcher,false);
-        if(direction)host->selected_game=(host->selected_game+direction+count)%count;
-        else if(confirm) {
+        int choice=console_menu_update(&host->selected_game,count,input,false);
+        if(choice>=0) {
             int action=launcher_at(&host->launcher,false,host->selected_game)->action;
             if(action>=0)load_game(host,action);
             else if(action==-1){host->settings_menu=true;host->settings_option=0;}
             else power_down_pi();
-        }
+        } else if(input->button_pressed[CHIRKY_BUTTON_MENU]){host->settings_menu=true;host->settings_option=0;}
     }
     if(current_screen(host)!=previous_screen) { block_transition_input(host);write_status(host); }
     memset(input->button_pressed,0,sizeof(input->button_pressed));
@@ -1764,24 +1685,7 @@ static void draw_frame_timing(struct host *host)
 }
 
 static void draw_pause_menu(struct host *host)
-{
-    const int width=216,height=112;
-    int x=(host->api.screen_width-width)/2,y=(host->api.screen_height-height)/2;
-    fill_rect(host,x+3,y-3,width,height,4,8,11);
-    fill_rect(host,x,y,width,height,40,175,212);
-    fill_rect(host,x+1,y+1,width-2,height-2,12,22,28);
-    menu_text(host,x+12,y+89,"PAUSED",2,238,240,232);
-    fill_rect(host,x+12,y+77,width-24,1,40,75,85);
-    const char *labels[]={"CONTINUE GAME","RETURN TO LAUNCHER"};
-    for(int i=0;i<2;i++) {
-        bool selected=host->pause_option==i;
-        int row=y+61-i*24;
-        fill_rect(host,x+8,row-13,width-16,20,selected?28:14,selected?74:30,selected?84:40);
-        fill_rect(host,x+12,row-9,3,10,selected?244:70,selected?194:110,70);
-        menu_text(host,x+22,row,labels[i],1,selected?250:170,selected?248:185,selected?236:190);
-    }
-    menu_text(host,x+12,y+10,"PRIMARY OK - SECONDARY BACK",1,112,160,170);
-}
+{ struct chirky_host_api ui=console_api(host); console_draw_pause_menu(&ui,host->pause_option); }
 
 static void capture_gpu_resolve(struct host *host,const struct profile_shared *shared)
 {

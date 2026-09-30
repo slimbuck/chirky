@@ -75,20 +75,31 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 ## Controls and behaviour
 
 - Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
-- **Input settings** remaps all eight inputs. Duplicate keys are rejected;
-  Cancel preserves the live mapping; Save persists this browser's settings.
-  Reset defaults restores keyboard and touch preferences. Pi mappings remain
-  independent. Games display Chirky input names; the page shows bound keys.
-- Menu pauses/resumes. Hardware Test uses Menu to return to the launcher.
-  The page also offers Pause, Restart, Launcher, Mute, and Full screen.
+- **Settings → Input Settings** uses the Pi's shared console UI: Map Controller,
+  Map Keyboard and Test Buttons. The wizard captures all eight inputs and saves
+  after the last release. Duplicate inputs are rejected. F1 cancels a draft;
+  holding two controller buttons also cancels controller setup. In Test Buttons,
+  hold Secondary for one second to return. Cancel or a storage failure preserves
+  the old mapping. Pi and browser mappings are stored independently.
+- Menu opens the shared pause menu: Continue Game or Return to Launcher.
+  Primary selects and Secondary goes back. Hardware Test lives in Settings and
+  Menu returns there. Relaunching a game starts a fresh run. F1 provides keyboard
+  recovery even if the saved mapping is inconvenient.
 - Standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
-  and Start/Select for Start/Menu. Pi's SNES adapter has its own native defaults.
-- Touch controls support simultaneous movement/actions and Auto/Show/Hide.
-  Pointer cancellation or loss of focus clears held inputs.
-- Full screen toggles the whole player, including touch controls and navigation.
+  and Start/Select for Start/Menu. Unrecognized USB/SNES adapters can map their
+  raw buttons and axes in Map Controller; use the keyboard to get there first.
+  Each controller identity keeps its own mapping. Pi's SNES defaults remain native.
+- Existing touch controls appear on touch devices and support simultaneous
+  movement/actions. Pointer cancellation or loss of focus clears held inputs.
+- **Settings → Full Screen** toggles the whole player. Double-clicking the screen
+  also toggles it. Browser permission requires a recent keyboard or pointer
+  gesture; a gamepad alone may not authorize entry. Escape may exit browser
+  fullscreen, so map Menu to another key if desired. **Mute / Unmute** is also
+  inside Settings. There are no external navigation/settings buttons.
   The 320x240 framebuffer uses whole physical screen pixels at browser/OS zoom
   levels whenever space permits. Its size is set before WASM loading, and the
-  launcher and games share the same sizing rules. No game sprite sizes change.
+  launcher and games share one persistent canvas and WebGL context. Switching
+  games does not reload the page or leave fullscreen. No game sprite sizes change.
   Unsupported fullscreen browsers display an explanatory message.
 - Losing focus or hiding the tab pauses play. Resume continues the run.
 - Games still render into the normal CRT-safe logical viewport. Simulation

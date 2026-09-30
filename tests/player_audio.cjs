@@ -64,11 +64,11 @@ test('voice bound, pause and mute release sources so sounds can play again', () 
   assert.ok(created.every(source => source.stops === 1));
   run('setPaused(false); playAssetSound(1);');
   assert.equal(created.length, 10);
-  elements.get('#mute').onclick();
+  run('toggleMute();');
   run('playAssetSound(1);');
   assert.equal(run('sources.size'), 0);
   assert.equal(created.length, 10);
-  elements.get('#mute').onclick();
+  run('toggleMute();');
   run('playAssetSound(1);');
   assert.equal(created.length, 11);
   // A delayed ended event from a stopped source must not remove its replacement.

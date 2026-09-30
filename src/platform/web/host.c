@@ -21,12 +21,6 @@ static struct image_cache images;
 EMSCRIPTEN_KEEPALIVE void web_destroy(void);
 #ifdef CHIRKY_WEB_LAUNCHER
 static struct splash_art art;
-static int selected;
-EM_JS(void, launch, (int index), { Module.onLaunch(index); });
-EM_JS(int, launcher_count, (void), { return Module.onLauncherCount(); });
-EM_JS(void, launcher_name, (int index,char *text,int capacity), {
-    stringToUTF8(Module.onLauncherName(index) || "UNKNOWN",text,capacity);
-});
 #else
 extern const struct chirky_game_api *chirky_game_entry(void);
 static struct chirky_runtime runtime;
@@ -111,6 +105,9 @@ static void label(void *unused,enum chirky_button button,char *out,size_t size)
     const char *names[]={"LEFT","RIGHT","UP","DOWN","PRIMARY","SECONDARY","START","MENU"};
     snprintf(out,size,"%s",button>=0 && button<CHIRKY_BUTTON_COUNT?names[button]:"?");
 }
+#ifdef CHIRKY_WEB_LAUNCHER
+#include "console.h"
+#endif
 EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
 {
     EmscriptenWebGLContextAttributes attrs;emscripten_webgl_init_context_attributes(&attrs);
@@ -127,7 +124,7 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api};
 #ifdef CHIRKY_WEB_LAUNCHER
-    (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");return 1;
+    (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");console_init();return 1;
 #else
     char directory[1024];snprintf(directory,sizeof(directory),"%s",config);
     char *slash=strrchr(directory,'/');if(!slash)goto failed;*slash=0;
@@ -145,31 +142,23 @@ EMSCRIPTEN_KEEPALIVE void web_tick(unsigned mask)
     }
     previous=mask;
 #ifdef CHIRKY_WEB_LAUNCHER
-    int count=launcher_count();
-    if(count>0) {
-        if(selected>=count)selected=0;
-        if(input.button_pressed[CHIRKY_BUTTON_UP])selected=(selected+count-1)%count;
-        if(input.button_pressed[CHIRKY_BUTTON_DOWN])selected=(selected+1)%count;
-        if(input.button_pressed[CHIRKY_BUTTON_PRIMARY])launch(selected);
-    }
+    (void)mask;
 #else
     chirky_runtime_update(&runtime,&input);
 #endif
 }
 EMSCRIPTEN_KEEPALIVE void web_render(void)
 {
+    emscripten_webgl_make_context_current(context);
     glViewport(0,0,CHIRKY_FRAMEBUFFER_WIDTH,CHIRKY_FRAMEBUFFER_HEIGHT);
-    glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);rect_renderer_begin(&renderer);
+    glDisable(GL_SCISSOR_TEST);
 #ifdef CHIRKY_WEB_LAUNCHER
-    splash_draw(&art,&api);launcher_wordmark(&api);
-    int count=launcher_count();
-    for(int i=0;i<count;i++) {
-        char name[48];launcher_name(i,name,sizeof(name));
-        int y=api.screen_height-83-i*24;bool active=i==selected;
-        fill(NULL,8,y-13,192,20,active?28:5,active?74:17,active?84:23);
-        fill(NULL,12,y-9,3,10,244,194,70);text(NULL,22,y,name,1,250,248,236);
-    }
-    fill(NULL,8,5,272,18,5,17,23);text(NULL,10,14,"PRIMARY SELECT - ARROWS MOVE",1,112,160,170);
+    if(screen!=CONSOLE_PAUSE)
+#endif
+    {glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);}
+    rect_renderer_begin(&renderer);
+#ifdef CHIRKY_WEB_LAUNCHER
+    console_render();
 #else
     chirky_runtime_render(&runtime);
 #endif
@@ -182,6 +171,7 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void)
 #else
     chirky_runtime_stop(&runtime);
 #endif
+    emscripten_webgl_make_context_current(context);
     disconnect_director();
     image_cache_clear(&images,&renderer);
     asset_store_destroy(assets);assets=NULL;

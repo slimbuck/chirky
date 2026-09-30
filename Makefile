@@ -17,7 +17,7 @@ GAME_TARGETS := $(patsubst games/%/game.c,build/games/%.so,$(GAME_SOURCES))
 .PHONY: all clean test benchmark performance-benchmark web
 
 EMCC ?= emcc
-WEB_FLAGS = -D_GNU_SOURCE -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall --no-entry
+WEB_FLAGS = -D_GNU_SOURCE -Iinclude -Isrc -std=c11 -O2 -Wall -Wextra -sGL_PREINITIALIZED_CONTEXT=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ccall --no-entry
 WEB_COMMON = src/platform/web/host.c src/platform/web/asset_platform.c src/rect_renderer.c $(CORE_SOURCES)
 WEB_HEADERS = $(wildcard include/*.h src/*.h src/platform/web/*.h)
 WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.js,$(wildcard games/*/game.c))
