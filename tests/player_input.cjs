@@ -209,3 +209,43 @@ test('keyboard keycaps follow saved mappings and release their pressed state',()
   p.run('inputSettings.keys[4]="KeyQ";refreshInputSettings()');
   assert.equal(p.element('#key-help-4').textContent,'Q');
 });
+
+test('startup percentage follows downloaded bytes, reserves initialization, and never goes backwards',async()=>{
+  const p=player();
+  p.run(`
+    globalThis.progress=[];const reportProgress=startupProgress;
+    startupProgress=value=>{reportProgress(value);progress.push(startupPercent);};
+    checked=async()=>({headers:{get:name=>name==='Content-Length'?'8':null},body:{getReader(){
+      let part=0;return {async read(){return ++part<=2?{value:new Uint8Array(4).fill(part),done:false}:{done:true};}};
+    }}});
+  `);
+  const bytes=await p.run('startupBinary("launcher.wasm")');
+  assert.deepEqual(Array.from(bytes),[1,1,1,1,2,2,2,2]);
+  assert.deepEqual(Array.from(p.run('progress')),[47,75,75]);
+  assert.equal(p.element('#startup-percent').textContent,'75%');
+  p.run('startupProgress(20)');assert.equal(p.run('startupPercent'),75);
+  p.run('startupProgress(100)');assert.equal(p.element('#startup-percent').textContent,'100%');
+});
+
+test('compressed or unknown byte totals do not produce invented download percentages',async()=>{
+  for(const encoded of [false,true]){
+    const p=player();
+    p.run(`
+      startupProgress(20);globalThis.during=[];
+      checked=async()=>({headers:{get:name=>name==='Content-Length'?${encoded?"'2'":"null"}:${encoded?"'gzip'":"null"}},body:{getReader(){
+        let part=0;return {async read(){during.push(startupPercent);return ++part<=2?{value:new Uint8Array(4),done:false}:{done:true};}};
+      }}});
+    `);
+    await p.run('startupBinary("launcher.wasm")');
+    assert.deepEqual(Array.from(p.run('during')),[20,20,20]);
+    assert.equal(p.run('startupPercent'),75);
+  }
+});
+
+test('startup failure keeps progress unfinished and explains how to retry inside the display',()=>{
+  const p=player();p.run('console={error(){}};startupProgress(20);startupFailed(new Error("HTTP 503"))');
+  assert.equal(p.run('startupPercent'),20);
+  assert.equal(p.element('#startup-error').hidden,false);
+  assert.match(p.element('#startup-error').textContent,/Reload/);
+  assert.equal(p.element('#status').textContent,'HTTP 503');
+});

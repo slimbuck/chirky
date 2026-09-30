@@ -13,6 +13,36 @@ const assetSounds=new Map();
 let moduleLoadQueue=Promise.resolve(),loadCompletion=null;
 let fullscreenQueued=false,fullscreenBusy=false,lastScreenTap=null,screenContact=null,lastTouchFullscreen=-Infinity;
 let director=null;
+let startupPercent=0;
+function startupProgress(percent){
+  startupPercent=Math.max(startupPercent,Math.min(100,Math.floor(percent)));
+  $("#startup-fill").style.width=`${startupPercent}%`;
+  $("#startup-percent").textContent=`${startupPercent}%`;
+  $("#startup-progress").setAttribute("aria-valuenow",String(startupPercent));
+}
+// Give the browser a paint before compilation or synchronous initialization.
+const startupPaint=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+async function startupBinary(url){
+  const response=await checked(url);
+  const length=Number(response.headers.get("Content-Length"));
+  // Content-Length may describe compressed bytes, while fetch yields decoded bytes.
+  const measurable=length>0 && !response.headers.get("Content-Encoding");
+  if(!response.body){const bytes=new Uint8Array(await response.arrayBuffer());startupProgress(75);return bytes;}
+  const reader=response.body.getReader(),chunks=[];let size=0;
+  for(;;){
+    const {done,value}=await reader.read();if(done)break;
+    chunks.push(value);size+=value.length;
+    if(measurable)startupProgress(20+55*Math.min(size/length,1));
+  }
+  const bytes=new Uint8Array(size);let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  startupProgress(75);return bytes;
+}
+function startupFailed(error){
+  status.textContent=error.message;
+  const notice=$("#startup-error");notice.textContent="Unable to load Chirky. Reload to try again.";notice.hidden=false;
+  console.error(error);
+}
 function directorSession(){return crypto.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 async function syncDirector(){
   if(!director || director.syncing || leaving)return;
@@ -387,6 +417,7 @@ function frame(now){
 async function checked(url){const response=await fetch(url,{cache:"no-store"});if(!response.ok)throw new Error(`Unable to load ${url} (${response.status})`);return response;}
 async function start(){
   const catalogDocument=await (await checked("catalog.json")).json();
+  startupProgress(5);
   if(catalogDocument?.version!==1 || !Array.isArray(catalogDocument.games))throw new Error("Invalid game catalog");
   catalog=catalogDocument.games;
   if(!catalog.length || catalog.some(game=>!game || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(game.id) ||
@@ -396,20 +427,28 @@ async function start(){
   titles={launcher:"Launcher",...Object.fromEntries(catalog.map(game=>[game.id,game.name]))};
   files=await (await checked("assets.json")).json();
   configs=await (await checked("configs.json")).json();
+  startupProgress(10);
   displayContext=canvas.getContext("webgl",{alpha:false,depth:false,stencil:false,antialias:false});
   if(!displayContext)throw new Error("WebGL is unavailable");
   shell=await createModule("launcher");runtime=shell;
-  await loadFiles(shell,"launcher");
+  startupProgress(85);
+  await loadFiles(shell,"launcher",()=>true,fraction=>startupProgress(85+10*fraction));
+  startupProgress(95);await startupPaint();
   if(!shell.ccall("web_init","number",["string"],[""]))throw new Error("Could not initialise the console");
   ready=true;
   resizePlayer();status.textContent="Launcher";
+  shell._web_render();startupProgress(100);await startupPaint();
+  $("#startup").hidden=true;
   if(window===window.top)canvas.focus({preventScroll:true});
   requestAnimationFrame(frame);
   if(id!=="launcher")await switchGame(id,false,params.get("level"));
 }
 async function createModule(gameId){
   const {default:create}=await import(`./${gameId}.js`);
-  return create({canvas,preinitializedWebGLContext:displayContext,
+  startupProgress(20);
+  const wasmBinary=await startupBinary(`${gameId}.wasm`);
+  await startupPaint();
+  return create({canvas,wasmBinary,preinitializedWebGLContext:displayContext,
     onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,
     onDirectorConnect,onDirectorDisconnect,onDirectorEvent,onDirectorState,
     onLauncherCount:()=>ids.length,onLauncherName:index=>titles[ids[index]],onLauncherId:index=>ids[index],
@@ -418,9 +457,10 @@ async function createModule(gameId){
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
     onSaveMapping,onRawNames,printErr:message=>console.warn(message)});
 }
-async function loadFiles(module,gameId,isCurrent=()=>true){
+async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();
-  await Promise.all(files.filter(file=>gameId==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${gameId}/`)).map(async file=>{
+  const selected=files.filter(file=>gameId==="launcher"?file.startsWith("assets/launcher/"):file.startsWith(`games/${gameId}/`));let completed=0;
+  await Promise.all(selected.map(async file=>{
     let bytes;
     if(file.endsWith(".conf")){
       if(typeof configs[file]!=="string")throw new Error(`Missing game configuration: ${file}`);
@@ -429,6 +469,7 @@ async function loadFiles(module,gameId,isCurrent=()=>true){
     if(!isCurrent())return;
     module.FS.mkdirTree("/"+file.slice(0,file.lastIndexOf("/")));module.FS.writeFile("/"+file,bytes);
     if(file.endsWith(".wav"))loadedSounds.set(file,bytes);
+    onProgress(++completed/selected.length);
   }));
   return loadedSounds;
 }
@@ -492,4 +533,4 @@ window.addEventListener("popstate",()=>{const query=new URLSearchParams(location
 window.addEventListener("pagehide",()=>{leaving=true;++loadSequence;stopSounds();if(ready)shell._web_destroy();audio?.close();});
 window.addEventListener("pageshow",event=>{if(event.persisted)location.reload();});
 canvas.addEventListener("webglcontextlost",event=>{event.preventDefault();leaving=true;stopSounds();status.textContent="Display connection lost. Reload to continue.";});
-start().catch(error=>{status.textContent=error.message;console.error(error);});
+start().catch(startupFailed);

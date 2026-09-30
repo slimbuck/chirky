@@ -131,23 +131,40 @@ async function main() {
       const measure=`(()=>{const c=document.querySelector('#screen'),r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,density:devicePixelRatio,buffer:[c.width,c.height],overflow:document.documentElement.scrollWidth>innerWidth};})()`;
       async function checkLoading(name){
         for(let i=0;i<150&&!held;i++)await delay(100);assert(held,'WASM request must be held to test loading');
-        if(name!=='Launcher'){
-          // Hold the download long enough to inspect the shared loading badge.
-          await delay(100);
-          const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
-          fs.writeFileSync(path.join(out,`${label}-loading.png`),Buffer.from(screenshot.data,'base64'));
+        if(name==='Launcher'){
+          const startup=await page.eval(`(()=>{const e=document.querySelector('#startup'),r=e.getBoundingClientRect(),d=document.querySelector('#display').getBoundingClientRect();return {visible:!e.hidden && getComputedStyle(e).display!=='none',percent:Number(document.querySelector('#startup-progress').getAttribute('aria-valuenow')),inside:r.left>=d.left && r.right<=d.right && r.top>=d.top && r.bottom<=d.bottom};})()`);
+          assert(startup.visible && startup.inside,'Startup progress must appear inside the display before WASM arrives');
+          assert(startup.percent>0 && startup.percent<100,'Startup must not claim completion before WASM loads');
         }
-        const loading=await page.eval(measure);await page.call('Fetch.continueRequest',{requestId:held});held=null;
+        // Inspect both the pre-WASM progress screen and the shared game-loading badge.
+        await delay(100);
+        const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+        fs.writeFileSync(path.join(out,`${label}-${name==='Launcher'?'startup':'loading'}.png`),Buffer.from(screenshot.data,'base64'));
+        const loading=await page.eval(measure),requestId=held;held=null;await page.call('Fetch.continueRequest',{requestId});
         await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(name)}`);
+        await waitFor(`document.querySelector('#startup').hidden`);
         const loaded=await page.eval(measure);assert.deepEqual(loaded,loading,'Loading must not resize or move the screen');return loaded;
       }
       try{
         await page.call('Page.enable');await page.call('Runtime.enable');await page.call('Network.enable');
         await page.call('Network.setCacheDisabled',{cacheDisabled:true});
-        await page.call('Fetch.enable',{patterns:[{urlPattern:'*.wasm'}]});
+        await page.call('Fetch.enable',{patterns:[{urlPattern:'*player.js'},{urlPattern:'*.wasm'}]});
         await page.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:density,mobile:touch});
         await page.call('Emulation.setTouchEmulationEnabled',{enabled:touch,maxTouchPoints:5});
         await page.call('Page.navigate',{url:base.href});
+        for(let i=0;i<150&&!held;i++)await delay(100);assert(held,'Player script must be held to inspect first paint');
+        assert(await page.eval(`(()=>{const e=document.querySelector('#startup');return e && !e.hidden && getComputedStyle(e).display!=='none' && e.getBoundingClientRect().height>0 && document.querySelector('#startup-percent').textContent==='0%';})()`),'Progress must be visible before player JavaScript downloads');
+        await page.call('Fetch.enable',{patterns:[{urlPattern:'*.wasm'}]});
+        const scriptRequest=held;held=null;await page.call('Fetch.continueRequest',{requestId:scriptRequest});
+        if(width===1280 && density===1.25){
+          for(let i=0;i<150&&!held;i++)await delay(100);assert(held);
+          const failedRequest=held;held=null;await page.call('Fetch.fulfillRequest',{requestId:failedRequest,responseCode:503,body:''});
+          await waitFor(`document.querySelector('#startup-error')?.hidden===false`);
+          assert(await page.eval(`!document.querySelector('#startup').hidden && Number(document.querySelector('#startup-progress').getAttribute('aria-valuenow'))<100`),'A failed download must retain the unfinished loader and retry message');
+          const errorShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+          fs.writeFileSync(path.join(out,`${label}-startup-error.png`),Buffer.from(errorShot.data,'base64'));
+          await page.call('Page.reload',{ignoreCache:true});
+        }
         const launcher=await checkLoading('Launcher');
         await page.eval('document.querySelector("#screen").focus()');
         for(const [code,key,value] of [['Escape','Escape',27],['ArrowDown','ArrowDown',40],['KeyX','x',88]]){

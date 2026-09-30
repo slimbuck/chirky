@@ -1,8 +1,16 @@
 # Chirky
 
-**Chirky** is the software behind **The Chirky Joybox**: a simple, low-latency Raspberry Pi CRT games console using the RGBerry SCART HAT.
+**Chirky** (or **Chirky Box** can't decide) is a simple, low-latency games console written in c.
 
-Repository: [slimbuck/chirky](https://github.com/slimbuck/chirky).
+I originally made Chirky run on a Raspberry Pi 3b+ connected to CRT monitor. My idea was to recreate the old-school console game feeling with snappy response.
+
+And it totally worked. This thing has 16ms delay between SNES button press and my little man jumping on screen. It feels and looks great.
+
+I then got my agent to compile the box to WASM in order to easily share it with family and friends.
+
+This explains the constraints of the box: 320x240@60hz.
+
+---
 
 The dashboard is the browser-based editing portal; the launcher is the menu
 running on the Pi. Both use the Chirky name.

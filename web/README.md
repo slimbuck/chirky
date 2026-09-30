@@ -159,6 +159,14 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   launcher and games share one persistent canvas, WebGL context, renderer and
   asset store. Switching
   games does not reload the page or leave fullscreen. No game sprite sizes change.
+  Initial page startup has an HTML progress bar centred inside the display,
+  visible before JavaScript or WASM is ready. Its percentage combines completed
+  startup stages with host WASM download bytes (when an uncompressed byte total
+  is available); it is not an elapsed-time estimate. Compilation and asset setup
+  reserve the final portion, and 100% appears only after the first console render.
+  Unknown or compressed response sizes advance at stage completion. Startup
+  failures keep an in-display reload message visible. This browser bootstrap
+  overlay does not replace the shared console's game-loading screen.
   While a game loads, the shared console draws a small single-scale `LOADING`
   badge in the safe viewport's top-right corner, clear of the launcher rows.
   Standard and WebKit-prefixed fullscreen APIs are supported. Unsupported or

@@ -7,7 +7,13 @@
 <body><main>
   <header><h1>Chirky Box</h1><span id="status" role="status">Loading…</span></header>
   <section id="player" aria-label="Chirky player">
-    <div id="screen-slot"><div id="display"><canvas id="screen" width="320" height="240" tabindex="0" aria-label="Chirky Box game screen"></canvas></div></div>
+    <div id="screen-slot"><div id="display">
+      <canvas id="screen" width="320" height="240" tabindex="0" aria-label="Chirky Box game screen"></canvas>
+      <div id="startup" aria-label="Starting Chirky">
+        <div id="startup-progress" role="progressbar" aria-label="Loading Chirky" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="startup-fill"></span><span id="startup-percent" aria-hidden="true">0%</span></div>
+        <p id="startup-error" role="alert" hidden></p>
+      </div>
+    </div></div>
     <div class="touch controller-left" role="group" aria-label="Directional controls">
       <button class="system-button" data-button="7"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M3 5h14M3 10h14M3 15h14"/></svg><span>Menu</span></button>
       <div class="dpad">
