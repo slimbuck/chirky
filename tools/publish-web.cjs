@@ -50,7 +50,8 @@ async function main(){
   for(const name of bundle.names.filter(name=>name!=='build.json')){
     const type=name.endsWith('.wasm')?'application/wasm':name.endsWith('.js')?'text/javascript':name.endsWith('.json')?'application/json':name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':null;
     const args=['s3','cp',path.join(bundle.root,name),`s3://${bucket}/${name}`,'--cache-control','public,max-age=0,must-revalidate','--only-show-errors'];
-    if(type)args.push('--content-type',type);aws(...args);
+    const imageType=name.endsWith('.svg')?'image/svg+xml':name.endsWith('.ico')?'image/x-icon':null;
+    if(type || imageType)args.push('--content-type',type || imageType);aws(...args);
   }
   aws('s3','cp',path.join(bundle.root,'build.json'),`s3://${bucket}/build.json`,'--content-type','application/json','--cache-control','no-store','--only-show-errors');
   const invalidation=aws('cloudfront','create-invalidation','--distribution-id',distribution,'--paths','/*','--query','Invalidation.Id','--output','text');

@@ -26,7 +26,7 @@ const browserPlayerFiles = new Set(["launcher", ...browserGames]
   .flatMap(id => [`${id}.js`, `${id}.wasm`]));
 
 function isBrowserPlayerFile(relative) {
-  return ["index.html", "player.js", "style.css", "catalog.json"].includes(relative) ||
+  return ["index.html", "player.js", "style.css", "favicon.svg", "favicon.ico", "catalog.json"].includes(relative) ||
     browserPlayerFiles.has(relative);
 }
 
@@ -190,7 +190,7 @@ function json(response, status, body) {
 function contentType(file) {
   const extension = path.extname(file).toLowerCase();
   return ({ ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8",
-    ".wasm":"application/wasm", ".json":"application/json", ".png":"image/png", ".js":"text/javascript; charset=utf-8", ".wav":"audio/wav", ".ppm":"image/x-portable-pixmap" })[extension]
+    ".wasm":"application/wasm", ".json":"application/json", ".png":"image/png", ".svg":"image/svg+xml", ".ico":"image/x-icon", ".js":"text/javascript; charset=utf-8", ".wav":"audio/wav", ".ppm":"image/x-portable-pixmap" })[extension]
     || "application/octet-stream";
 }
 

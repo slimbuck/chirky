@@ -22,6 +22,8 @@ function fixture(t) {
   }
   const config = 'games/phosphor-run/game.conf', text = 'start_level=1\r\n';
   const files = { 'index.html':'<html>Chirky</html>', 'player.js':'// player\r\n', 'style.css':'body{}',
+    'favicon.svg':fs.readFileSync(path.join(__dirname,'../web/favicon.svg')),
+    'favicon.ico':fs.readFileSync(path.join(__dirname,'../web/favicon.ico')),
     'assets.json':JSON.stringify([config]), 'configs.json':JSON.stringify({ [config]:text }),
     'catalog.json':JSON.stringify(catalog),
     ['runtime/'+config]:text };
@@ -79,6 +81,9 @@ test('standalone preview serves exact build with WASM MIME, but not .conf or arb
   assert.equal(response.headers.get('content-type'), 'application/wasm');
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), fs.readFileSync(path.join(f.source, 'phosphor-run.wasm')));
   assert.equal((await (await fetch(base+'configs.json')).json())[f.config], f.text);
+  for(const [name,type] of [['favicon.svg','image/svg+xml'],['favicon.ico','image/x-icon']]){
+    const icon=await fetch(base+name);assert.equal(icon.status,200);assert.equal(icon.headers.get('content-type'),type);
+  }
   for (const name of ['runtime/'+f.config, '../package.json', 'unknown.js'])
     assert.equal((await fetch(base+name)).status, 404);
   assert.equal((await fetch(base, { method:'POST' })).status, 405);

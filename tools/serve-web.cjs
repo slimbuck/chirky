@@ -8,7 +8,8 @@ function createServer(directory) {
   const bundle = readPackage(directory);
   const files = new Set(bundle.names);
   const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
-    '.css':'text/css', '.json':'application/json', '.wasm':'application/wasm', '.wav':'audio/wav' };
+    '.css':'text/css', '.json':'application/json', '.wasm':'application/wasm', '.wav':'audio/wav',
+    '.svg':'image/svg+xml', '.ico':'image/x-icon' };
   return http.createServer((request, response) => {
     try {
       const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1) || 'index.html';

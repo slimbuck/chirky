@@ -23,7 +23,7 @@ function configs(root=ROOT,files=assets(root)) {
 module.exports={assets,catalog,configs,games,ROOT};
 if(require.main===module) {
   const destination=path.join(ROOT,"build/web");fs.mkdirSync(destination,{recursive:true});
-  for(const name of ["index.html","player.js","style.css"])fs.copyFileSync(path.join(ROOT,"web",name),path.join(destination,name));
+  for(const name of ["index.html","player.js","style.css","favicon.svg","favicon.ico"])fs.copyFileSync(path.join(ROOT,"web",name),path.join(destination,name));
   // Game JavaScript is only a generated descriptor. The persistent host owns
   // the one renderer, filesystem, asset store and runtime for every game.
   for(const id of games)fs.writeFileSync(path.join(destination,id+".js"),
@@ -39,7 +39,7 @@ if(require.main===module) {
   const {execFileSync}=require("node:child_process");
   const {hash}=require("./web-package.cjs");
   const git=(...args)=>execFileSync("git",args,{cwd:ROOT,encoding:"utf8"}).trim();
-  const publicFiles=["index.html","player.js","style.css","assets.json","configs.json","catalog.json",
+  const publicFiles=["index.html","player.js","style.css","favicon.svg","favicon.ico","assets.json","configs.json","catalog.json",
     ...["launcher",...games].flatMap(id=>[id+".js",id+".wasm"]),...files.map(file=>"runtime/"+file)];
   const build={version:1,sourceCommit:git("rev-parse","HEAD"),
     sourceDirty:!!git("status","--porcelain","--untracked-files=normal"),
