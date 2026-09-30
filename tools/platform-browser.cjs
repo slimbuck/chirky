@@ -78,7 +78,7 @@ const attachProbe = `(() => {
   probe.runtime=runtime;probe.shell=shell;
   probe.state=()=>({ready,paused,muted,leaving,loading,id,status:status.textContent,screen:shell._web_console_state(),capture:shell._web_capture_keyboard(),assetSounds:assetSounds.size,
     callbacks:['onSound','onAssetReady','onAssetSound'].map(key=>[key,typeof runtime[key]]),
-    audioState:audio?.state,activeSounds:sources.size,ticks:probe.ticks,masks:probe.masks,assetPlays:probe.assetPlays,
+    audioState:audio?.state,activeSounds:sources.size,ticks:probe.ticks,masks:probe.masks,inputs:mask(),assetPlays:probe.assetPlays,
     audit:{...__platformAudit,contexts:__platformAudit.contexts.map(context=>context.state)}});
   if(probe.seen.has(runtime))return;probe.seen.add(runtime);
   let tick=runtime._web_tick;const tickProbe=function(mask){probe.ticks++;if(mask && probe.masks.at(-1)!==mask)probe.masks.push(mask);return tick(mask);};
@@ -418,6 +418,27 @@ async function main() {
           await page.call('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});await delay(200);
           const landscape=await capture('fullscreen-landscape');assert.equal(landscape.rect.width%320,0);
           assert(await page.eval('Array.from(document.querySelectorAll(".touch button")).every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})'),'Fullscreen touch controls must stay onscreen');
+          const pad=await page.eval(`(()=>{const r=document.querySelector('.dpad').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+          const action=await page.eval(`(()=>{const r=document.querySelector('[data-button="4"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,id:2};})()`);
+          const thumb=(x,y)=>({x:pad.x+x,y:pad.y+y,id:1});
+          await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(-70,0)]});
+          assert.equal((await state()).inputs,1,'The area just outside the visible cross accepts a thumb');
+          await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(-70,0),action]});
+          for(const [x,y,bits] of [[-44,-44,5],[0,-44,4],[44,-44,6],[44,0,2],[44,44,10],[0,44,8],[-44,44,9],[-44,0,1],[0,0,0],[100,0,2]]){
+            await page.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[thumb(x,y),action]});await delay(35);
+            assert.equal((await state()).inputs,bits|16,'A captured thumb steers while the other holds Primary');
+          }
+          await page.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[thumb(-44,-44),action]});
+          await capture('diagonal-touch');
+          // For a partial touchEnd, CDP takes the contact being released.
+          await page.call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[thumb(-44,-44)]});
+          assert.equal((await state()).inputs,16,'Releasing the D-pad preserves the action finger');
+          await page.call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+          assert.equal((await state()).inputs,0);
+          await page.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[thumb(44,44)]});
+          await page.call('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+          assert.equal((await state()).inputs,0,'Touch cancellation releases both directions');
+          report.checks.push('sliding eight-way D-pad, neutral centre, forgiving edge, capture outside pad, concurrent action and cancellation');
           await page.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(150);
         }
         report.checks.push('shared keyboard/USB mapping wizard, duplicate rejection, cancel, controller navigation, fullscreen setting, mute');

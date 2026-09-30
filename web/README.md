@@ -112,7 +112,11 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   Each controller identity keeps its own mapping. Pi's SNES defaults remain native.
 - Touch devices get a controller-shaped D-pad, distinct Primary/Secondary face
   buttons, and smaller Menu/Start buttons. All targets are at least 44 CSS pixels;
-  simultaneous movement/actions show held-button feedback. Pointer cancellation,
+  the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
+  the thumb around the fixed centre, with eight sectors (including diagonals)
+  and a small neutral centre. Dragging beyond the pad keeps the direction held
+  until release. A second finger can hold an action while steering; extra fingers
+  on the D-pad do not take it over. Held directions/actions light up. Pointer cancellation,
   lost capture or loss of focus clears held inputs and the pressed appearance.
   In landscape, controls flank a centred display sized to the available height
   and width, in both normal and fullscreen mode. Portrait keeps the display above

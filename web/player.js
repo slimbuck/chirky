@@ -8,6 +8,7 @@ let files,configs,loadSequence=0,cancelPressed=false,mappingPad=null;
 let navigation={push:true,level:null};
 let returnNavigation=null;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
+let dpadPointer=null,dpadBounds=null,dpadPending=0;
 const assetSounds=new Map();
 let moduleLoadQueue=Promise.resolve(),loadCompletion=null;
 let fullscreenQueued=false,fullscreenBusy=false,lastScreenTap=null,screenContact=null,lastTouchFullscreen=-Infinity;
@@ -125,7 +126,7 @@ function padMask(pad){
 function pads(){return Array.from(navigator.getGamepads?.() || []).filter(Boolean);}
 function keyboardMask(){let value=0;for(const key of keys)if(key in bindings)value|=1<<bindings[key];return value;}
 function controllerMask(){return pads().reduce((value,pad)=>value|padMask(pad),0);}
-function mask(){let value=keyboardMask()|controllerMask();for(const button of touch.values())value|=1<<button;return value;}
+function mask(){let value=keyboardMask()|controllerMask();for(const buttons of touch.values())value|=buttons;return value;}
 function onRawNames(keyboard){
   if(keyboard)return "KEY "+([...keys].map(keyName).join(" ") || "NONE");
   return "PAD "+(pads().flatMap(p=>rawPad(p).map(v=>v.kind===1?`B${v.code}`:`AX${v.code}${v.direction<0?"NEG":"POS"}`)).join(" ") || "NONE");
@@ -158,7 +159,7 @@ async function playSound(path){
   }catch(error){console.warn("Sound unavailable",path,error);}
 }
 function setPaused(value){
-  paused=value;keys.clear();touch.clear();fullscreenQueued=false;refreshTouchFeedback();pending=0;last=0;accumulator=0;
+  paused=value;keys.clear();touch.clear();dpadPointer=null;dpadBounds=null;dpadPending=0;fullscreenQueued=false;refreshTouchFeedback();pending=0;last=0;accumulator=0;
   if(value){shell?._web_console_pause();stopSounds();}
 }
 function toggleMute(){muted=!muted;if(muted)stopSounds();}
@@ -189,9 +190,9 @@ function consoleGesture(){
   // the browser's user gesture. Gameplay stays on the fixed simulation clock.
   if(shell && !loading && shell._web_console_state()!==4){
     const connected=pads();
-    shell._web_console_tick(mask()|pending,keyboardMask(),controllerMask(),keys.size,
+    shell._web_console_tick(mask()|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
       connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
-    pending=0;cancelPressed=false;
+    pending=0;dpadPending=0;cancelPressed=false;
   }
   if(fullscreenQueued)void toggleFullscreen();
 }
@@ -274,11 +275,41 @@ function watchPixelDensity(){
 watchPixelDensity();
 resizePlayer();
 function refreshTouchFeedback(){
-  const held=new Set(touch.values());
-  document.querySelectorAll("[data-button]").forEach(button=>{button.dataset.pressed=String(held.has(Number(button.dataset.button)));});
+  let held=0;for(const buttons of touch.values())held|=buttons;
+  document.querySelectorAll("[data-button]").forEach(button=>{button.dataset.pressed=String(!!(held&(1<<Number(button.dataset.button))));});
 }
+const dpad=$(".dpad");
+function moveDpad(event){
+  if(event.pointerId!==dpadPointer)return;
+  const x=event.clientX-dpadBounds.left-dpadBounds.width/2,y=event.clientY-dpadBounds.top-dpadBounds.height/2;
+  let value=0;
+  // Eight equal angular sectors, with a neutral centre. Capture keeps a thumb
+  // dragging outside the pad engaged until release, like a physical D-pad.
+  if(Math.hypot(x,y)>Math.min(dpadBounds.width,dpadBounds.height)*.12){
+    const diagonal=Math.SQRT2-1;
+    if(Math.abs(x)>Math.abs(y)*diagonal)value|=x<0?1:2;
+    if(Math.abs(y)>Math.abs(x)*diagonal)value|=y<0?4:8;
+  }
+  touch.set(dpadPointer,value);dpadPending=value;refreshTouchFeedback();
+}
+dpad.onpointerdown=event=>{
+  if(event.button>0 || dpadPointer!==null)return;
+  event.preventDefault();dpadPointer=event.pointerId;dpadBounds=dpad.getBoundingClientRect();
+  dpad.setPointerCapture(event.pointerId);moveDpad(event);unlock();
+};
+dpad.onpointermove=moveDpad;
+dpad.onpointerup=event=>{
+  if(event.pointerId!==dpadPointer)return;
+  consoleGesture();touch.delete(dpadPointer);dpadPointer=null;dpadBounds=null;refreshTouchFeedback();
+};
+dpad.onpointercancel=dpad.onlostpointercapture=event=>{
+  if(event.pointerId!==dpadPointer)return;
+  touch.delete(dpadPointer);dpadPointer=null;dpadBounds=null;dpadPending=0;fullscreenQueued=false;refreshTouchFeedback();
+};
+dpad.oncontextmenu=event=>event.preventDefault();
 document.querySelectorAll("[data-button]").forEach(button=>{
-  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
+  if(Number(button.dataset.button)<4)return; // Directions share the sliding pad.
+  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,1<<Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
   button.onpointerup=event=>{if(touch.has(event.pointerId))consoleGesture();touch.delete(event.pointerId);refreshTouchFeedback();};
   button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);fullscreenQueued=false;refreshTouchFeedback();};
   button.oncontextmenu=event=>event.preventDefault();
@@ -299,11 +330,11 @@ function frame(now){
   if(last)accumulator+=Math.min(now-last,100);
   while(accumulator>=1000/60){
     {
-      const gameTick=shell._web_console_tick(current|pending,keyboardMask(),controllerMask(),keys.size,
+      const gameTick=shell._web_console_tick(current|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
         connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
-      if(gameTick)runtime._web_tick(current|pending);
+      if(gameTick)runtime._web_tick(current|pending|dpadPending);
     }
-    pending=0;cancelPressed=false;accumulator-=1000/60;
+    pending=0;dpadPending=0;cancelPressed=false;accumulator-=1000/60;
   }
   const state=shell._web_console_state(),nextPaused=state!==4;
   if(returnNavigation!==null && !loading){
@@ -364,7 +395,7 @@ async function loadFiles(module,gameId,isCurrent=()=>true){
 }
 function gameStopped(){
   ++loadSequence;loading=false;stopSounds();onDirectorDisconnect();
-  assetSounds.clear();sounds.clear();pending=0;
+  assetSounds.clear();sounds.clear();pending=0;dpadPending=0;
   id="launcher";status.textContent="Launcher";
   // The console owns the destination screen, including returning to Settings.
   returnNavigation=navigation.push;

@@ -10,6 +10,7 @@ function player(saved){
     return elements.get(selector);
   }
   const touch=Array.from({length:8},(_,i)=>Object.assign(element('touch'+i),{dataset:{button:String(i)},setPointerCapture(){}}));
+  Object.assign(element('.dpad'),{setPointerCapture(){},getBoundingClientRect:()=>({left:10,top:10,width:132,height:132})});
   const document={querySelector:element,querySelectorAll:()=>touch,addEventListener:(name,fn)=>{events[name]=fn;}};
   const window={addEventListener:(name,fn)=>{events[name]=fn;}};
   const localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)};
@@ -72,21 +73,49 @@ test('mapping commits atomically, rejects duplicates and preserves old bindings 
   assert.equal(p.run('bindings.KeyQ'),4);assert.equal(p.run('bindings.KeyR'),undefined);
 });
 test('touch, release and focus loss do not leave stuck buttons',()=>{
-  const p=player(),down=id=>({pointerId:id,preventDefault(){}});
-  p.touch[0].onpointerdown(down(1));p.touch[4].onpointerdown(down(2));assert.equal(p.run('mask()'),17);
+  const p=player(),pad=p.element('.dpad'),down=id=>({pointerId:id,clientX:10,clientY:76,preventDefault(){}});
+  pad.onpointerdown(down(1));p.touch[4].onpointerdown(down(2));assert.equal(p.run('mask()'),17);
   assert.equal(p.touch[0].dataset.pressed,'true');assert.equal(p.touch[4].dataset.pressed,'true');
-  p.touch[0].onpointercancel({pointerId:1});assert.equal(p.run('mask()'),16);
+  pad.onpointercancel({pointerId:1});assert.equal(p.run('mask()'),16);
   assert.equal(p.touch[0].dataset.pressed,'false');assert.equal(p.touch[4].dataset.pressed,'true');
   p.touch[4].onlostpointercapture({pointerId:2});assert.equal(p.run('mask()'),0);
   p.touch[4].onpointerdown(down(3));p.touch[4].onpointerdown(down(4));
   p.touch[4].onpointerup({pointerId:3});assert.equal(p.touch[4].dataset.pressed,'true');
-  p.run('runtime={};keys.add("KeyX");pending=16');p.events.blur();assert.equal(p.run('mask()|pending'),0);assert.equal(p.run('paused'),true);
+  pad.onpointerdown(down(5));
+  p.run('runtime={};keys.add("KeyX");pending=16');p.events.blur();assert.equal(p.run('mask()|pending|dpadPending'),0);assert.equal(p.run('paused'),true);
+  pad.onpointermove({...down(5),clientX:150});assert.equal(p.run('mask()'),0);
   assert.equal(p.touch[4].dataset.pressed,'false');
 });
 test('game transitions preserve held raw inputs for the shared release gate',()=>{
   const p=player();
-  p.run('keys.add("KeyX");touch.set(1,0);pending=16;gameStopped()');
+  p.run('keys.add("KeyX");touch.set(1,1);pending=16;gameStopped()');
   assert.equal(p.run('mask()'),17);assert.equal(p.run('pending'),0);
+});
+
+test('sliding D-pad supports eight directions, neutral, nearby starts and concurrent actions',()=>{
+  const p=player(),pad=p.element('.dpad');
+  const at=(x,y,id=1)=>({pointerId:id,clientX:76+x,clientY:76+y,preventDefault(){}});
+  pad.onpointerdown(at(-70,0));assert.equal(p.run('mask()'),1,'Start in the forgiving margin');
+  p.touch[4].onpointerdown(at(0,0,2));
+  for(const [x,y,bits] of [[-44,-44,5],[0,-44,4],[44,-44,6],[44,0,2],[44,44,10],[0,44,8],[-44,44,9],[-44,0,1],[0,0,0],[6,6,0],[200,0,2]]){
+    pad.onpointermove(at(x,y));assert.equal(p.run('mask()'),bits|16);
+    assert.equal(p.run('dpadPending'),bits,'Sliding replaces previous directions between frames');
+    for(let i=0;i<4;i++)assert.equal(p.touch[i].dataset.pressed,String(!!(bits&(1<<i))));
+  }
+  pad.onpointerdown(at(-44,0,3));pad.onpointermove(at(-44,0,3));pad.onpointerup(at(-44,0,3));
+  assert.equal(p.run('mask()'),18,'Another finger must not steal steering');
+  pad.onpointerup(at(200,0));assert.equal(p.run('mask()'),16);
+  pad.onlostpointercapture(at(200,0));assert.equal(p.run('mask()'),16);
+  p.touch[4].onpointerup(at(0,0,2));assert.equal(p.run('mask()'),0);
+});
+
+test('D-pad cancellation clears queued direction and capture loss permits a fresh gesture',()=>{
+  const p=player(),pad=p.element('.dpad');
+  const down={pointerId:1,clientX:20,clientY:20,preventDefault(){}};
+  pad.onpointerdown(down);assert.equal(p.run('mask()|dpadPending'),5);
+  pad.onlostpointercapture(down);assert.equal(p.run('mask()|dpadPending'),0);
+  pad.onpointerdown({...down,pointerId:2});assert.equal(p.run('mask()'),5);
+  pad.onpointercancel({pointerId:2});assert.equal(p.run('mask()|dpadPending'),0);
 });
 test('fullscreen targets the persistent console container',async()=>{
   const p=player();let entered=0,exited=0;
