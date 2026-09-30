@@ -15,7 +15,7 @@ function player(saved){
   const window={addEventListener:(name,fn)=>{events[name]=fn;}};
   const localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)};
   const context=vm.createContext({document,window,localStorage,location:{search:''},URLSearchParams,console,
-    navigator:{getGamepads:()=>[]},fetch:()=>new Promise(()=>{}),URL,TextEncoder,AudioContext:class{resume(){return Promise.resolve();}}});
+    navigator:{getGamepads:()=>[]},fetch:()=>new Promise(()=>{}),URL,TextEncoder,atob,btoa,AudioContext:class{resume(){return Promise.resolve();}}});
   const run=code=>vm.runInContext(code,context);
   run(fs.readFileSync(require.resolve('../web/player.js'),'utf8'));
   return {run,element,touch,events,storage,document,localStorage};
@@ -248,4 +248,16 @@ test('startup failure keeps progress unfinished and explains how to retry inside
   assert.equal(p.element('#startup-error').hidden,false);
   assert.match(p.element('#startup-error').textContent,/Reload/);
   assert.equal(p.element('#status').textContent,'HTTP 503');
+});
+
+test('game saves retain bytes across player instances and reject invalid or unavailable storage',()=>{
+  const p=player();assert(p.run('onSaveWrite("phosphor-run","scores-relay-shaft",new Uint8Array([0,127,255]))'));
+  const next=player();for(const [key,value] of p.storage)next.storage.set(key,value);
+  assert.deepEqual(Array.from(next.run('onSaveRead("phosphor-run","scores-relay-shaft")')),[0,127,255]);
+  assert.equal(next.run('onSaveRead("another-game","scores-relay-shaft")'),null);
+  assert.equal(p.run('onSaveWrite("../bad","scores",new Uint8Array([1]))'),false);
+  assert.equal(p.run('onSaveWrite("phosphor-run","scores",new Uint8Array(65537))'),false);
+  next.localStorage.setItem=()=>{throw Error('quota');};
+  assert.equal(next.run('onSaveWrite("phosphor-run","scores",new Uint8Array([1]))'),false);
+  p.storage.set('chirky.save.v1.phosphor-run.bad','not base64!');assert.equal(p.run('onSaveRead("phosphor-run","bad")'),null);
 });

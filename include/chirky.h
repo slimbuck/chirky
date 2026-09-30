@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 12
+#define CHIRKY_ABI_VERSION 13
 
 typedef uint32_t chirky_asset;
 enum chirky_asset_type { CHIRKY_ASSET_BLOB, CHIRKY_ASSET_IMAGE, CHIRKY_ASSET_SOUND };
@@ -84,6 +84,12 @@ struct chirky_host_api {
     bool (*director_event)(void *context,const char *json,size_t size);
     size_t (*director_state)(void *context,uint32_t after_revision,char *text,
                              size_t capacity,uint32_t *revision);
+    /* Optional local persistent records, isolated by game and key. Names use
+       letters, digits, '-' or '_', at most 95 bytes. Records are 1..65536 bytes.
+       Read returns 0 if missing, invalid, unavailable or larger than capacity.
+       Write replaces one record atomically and reports whether it was saved. */
+    size_t (*save_read)(void *context,const char *game,const char *key,void *data,size_t capacity);
+    bool (*save_write)(void *context,const char *game,const char *key,const void *data,size_t size);
 };
 
 static inline void chirky_scope(const struct chirky_host_api *api,const char *name,bool begin)

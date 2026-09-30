@@ -8,7 +8,7 @@ LDLIBS += -pthread -ldl -Wl,--no-as-needed -l:libdrm.so.2 -l:libgbm.so.1 -l:libE
 
 TARGET := build/chirky-host
 CORE_SOURCES := src/asset_store.c src/runtime.c src/console.c
-PLATFORM_SOURCES := src/platform/linux/asset_platform.c src/platform/linux/audio_mixer.c src/platform/linux/director_client.c
+PLATFORM_SOURCES := src/platform/linux/asset_platform.c src/platform/linux/audio_mixer.c src/platform/linux/director_client.c src/platform/linux/save_store.c
 LINUX_HEADERS := $(wildcard src/platform/linux/*.h)
 SOURCES := src/platform/linux/host.c src/platform/linux/input_bindings.c src/rect_renderer.c $(CORE_SOURCES) $(PLATFORM_SOURCES)
 GAME_SOURCES := $(wildcard games/*/game.c)
@@ -75,6 +75,8 @@ test: $(GAME_TARGETS)
 	/tmp/console-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/runtime.c src/runtime.c -o /tmp/runtime-test
 	/tmp/runtime-test
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/save_store.c src/platform/linux/save_store.c -o /tmp/save-store-test
+	/tmp/save-store-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/asset_store.c src/asset_store.c src/platform/linux/asset_platform.c -pthread -o /tmp/asset-store-test
 	/tmp/asset-store-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/audio_mixer.c -pthread -ldl -o /tmp/audio-mixer-test

@@ -1,4 +1,5 @@
 #include "console.h"
+#include "console_ui.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -67,8 +68,19 @@ static void shared_trace(unsigned caps)
     }
     assert(!c->game_active && !c->paused && chirky_console_screen(c)==SCREEN_LAUNCHER);
 }
+static int pause_text_bottom,pause_divider;
+static void pause_rect(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
+{
+    (void)unused;(void)x;(void)w;(void)h;
+    if(r==238 && g==240 && b==232 && y<pause_text_bottom)pause_text_bottom=y;
+    if(r==40 && g==75 && b==85)pause_divider=y;
+}
 int main(void)
 {
+    pause_text_bottom=999;pause_divider=-1;
+    const struct chirky_host_api api={.screen_width=288,.screen_height=216,.fill_rect=pause_rect};
+    console_draw_pause_menu(&api,0);
+    assert(pause_divider>=0 && pause_text_bottom-(pause_divider+1)>=3);
     shared_trace(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     shared_trace(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     struct fixture web;init(&web,CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);

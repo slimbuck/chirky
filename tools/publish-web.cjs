@@ -40,6 +40,8 @@ async function main(){
     const {spawn}=require('node:child_process');
     const child=spawn(process.execPath,[path.join(__dirname,'platform-browser.cjs'),`http://127.0.0.1:${server.address().port}/`,path.join(__dirname,'../build/publish-checks')],{stdio:'inherit',windowsHide:true});
     const [code]=await once(child,'exit');assert.equal(code,0,'Browser checks failed; nothing uploaded');
+    const scores=spawn(process.execPath,[path.join(__dirname,'phosphor-scores-browser.cjs'),`http://127.0.0.1:${server.address().port}/`,path.join(__dirname,'../build/publish-checks/scores')],{stdio:'inherit',windowsHide:true});
+    const [scoreCode]=await once(scores,'exit');assert.equal(scoreCode,0,'Score persistence checks failed; nothing uploaded');
   }finally{await new Promise(resolve=>server.close(resolve));}
   assert.equal(readPackage(bundle.root).identity,bundle.identity,'Package changed after testing');
   if(checkOnly)return;

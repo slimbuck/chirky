@@ -8,6 +8,7 @@
 #include "asset_store.h"
 #include "audio_mixer.h"
 #include "director_client.h"
+#include "save_store.h"
 #include "image_cache.h"
 #include "runtime.h"
 #include "viewport.h"
@@ -1759,7 +1760,7 @@ int main(void)
         .asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
         .draw_sprite=draw_sprite,.sound_play=sound_play,
         .director_connect=director_connect_api,.director_event=director_event_api,
-        .director_state=director_state_api};
+        .director_state=director_state_api,.save_read=save_store_read,.save_write=save_store_write};
     host.assets=asset_store_create();
     host.director=director_client_create();
     if(!host.assets || !host.director){fprintf(stderr,"Could not start host services\n");cleanup(&host);return EXIT_FAILURE;}

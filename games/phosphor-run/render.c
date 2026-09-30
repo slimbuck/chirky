@@ -75,6 +75,21 @@ static void draw_sprite(const char *id, int x, int y, bool flip, int tick,
     }
 }
 
+/* Phase comes from a stable world identity, never a camera/screen coordinate.
+   Different scenery keeps its authored speed without blinking in lockstep. */
+int scenery_animation_tick(const char *id,int world_x,int world_y)
+{
+    const struct animation *animation=content_animation(&content,id);
+    if(!animation || animation->count<1 || animation->ticks<1)return 0;
+    uint32_t hash=(uint32_t)world_x*0x9e3779b1u^(uint32_t)world_y*0x85ebca6bu;
+    for(const char *p=id;*p;p++)hash=(hash^(unsigned char)*p)*16777619u;
+    hash^=hash>>16;hash*=0x7feb352du;hash^=hash>>15;
+    unsigned period=(unsigned)animation->count*(unsigned)animation->ticks;
+    return (int)(((unsigned)frame_number+hash%period)%period);
+}
+static void draw_scenery(const char *id,int x,int y,int world_x,int world_y)
+{ draw_sprite(id,x,y,false,scenery_animation_tick(id,world_x,world_y),NULL); }
+
 static void render_background(void)
 {
     rectangle(0,0,host->screen_width,host->screen_height,settings.background);
@@ -82,15 +97,16 @@ static void render_background(void)
     for (int index = -1; index < 8; ++index) {
         int x = index*52-(slow%52);
         int height = 58 + ((index*37+113)&63);
-        draw_sprite("machinery",x,height-70,false,frame_number,NULL);
+        int world_column=index+slow/52;
+        draw_scenery("machinery",x,height-70,world_column,0);
         for (int lamp=0;lamp<3;++lamp)
-            draw_sprite("lamp",x+13,height-14-lamp*13,false,frame_number+(index+lamp+8)*45,NULL);
+            draw_scenery("lamp",x+13,height-14-lamp*13,world_column,lamp);
     }
     for (int index=0;index<18;++index) {
         int x=(index*71-(int)(camera_x*.05f))%360;
         if (x<0) x+=360;
         int y=52+(index*43)%165;
-        draw_sprite("spark",x,y,false,frame_number+index*30,NULL);
+        draw_scenery("spark",x,y,index,0);
     }
 }
 
@@ -108,15 +124,15 @@ static void render_world(void)
             char tile=tile_at(tx,ty);
             int x=tx*TILE-(int)camera_x, y=ty*TILE-(int)camera_y;
             if (tile=='#') {
-                draw_sprite(tile_at(tx,ty+1)=='#'?"platform":"platform-top",x,y,false,frame_number,NULL);
-                if (((tx*13+ty*7)&3)==0) draw_sprite("platform-detail",x,y,false,frame_number,NULL);
-            } else if (tile=='^') draw_sprite("hazard",x,y,false,frame_number,NULL);
-            else if (tile=='o') draw_sprite("shard",x,y,false,frame_number,NULL);
+                draw_scenery(tile_at(tx,ty+1)=='#'?"platform":"platform-top",x,y,tx,ty);
+                if (((tx*13+ty*7)&3)==0) draw_scenery("platform-detail",x,y,tx,ty);
+            } else if (tile=='^') draw_scenery("hazard",x,y,tx,ty);
+            else if (tile=='o') draw_scenery("shard",x,y,tx,ty);
             else if (tile=='C') {
                 bool active=respawn_x==tx*TILE-2 && respawn_y==(ty+1)*TILE;
-                draw_sprite(active?"checkpoint-active":"checkpoint",x,y,false,frame_number,NULL);
-            } else if (tile=='E') draw_sprite(collected_shards==level.total_shards?
-                "portal-active":"portal-locked",x-5,y-6,false,frame_number,NULL);
+                draw_scenery(active?"checkpoint-active":"checkpoint",x,y,tx,ty);
+            } else if (tile=='E') draw_scenery(collected_shards==level.total_shards?
+                "portal-active":"portal-locked",x-5,y-6,tx,ty);
         }
     }
 }
@@ -221,8 +237,10 @@ static void render_initials(void)
             format_time(entry.ticks,clock,sizeof(clock));
             snprintf(line,sizeof(line),"%02d  %s  %s",row+1,entry.initials,clock);
         } else snprintf(line,sizeof(line),"%02d  ---  --:--.--",row+1);
-        text(56,top-15-row*10,line,1,pending?settings.amber:settings.paper);
-        if (pending) rectangle(74+initial_cursor*6,top-18-row*10,5,1,settings.amber);
+        int table_x=(host->screen_width-17*6)/2,baseline=top-15-row*10;
+        if(pending && initials_blink>=30)line[4+initial_cursor]=' ';
+        text(table_x,baseline,line,1,pending?settings.amber:settings.paper);
+        if(pending)rectangle(table_x+(4+initial_cursor)*6,baseline-9,5,1,settings.amber);
     }
     centered_text(29,"UP/DOWN LETTER  PRIMARY NEXT",1,settings.edge);
 }
@@ -287,7 +305,8 @@ void render_game(void)
         snprintf(line,sizeof(line),"TIME %s",clock);
         centered_text(middle-22,line,1,settings.edge);
         if (score_rank>=0) {
-            snprintf(line,sizeof(line),"TOP 10 RANK %02d",score_rank+1);
+            if(score_save_failed)snprintf(line,sizeof(line),"SCORE NOT SAVED");
+            else snprintf(line,sizeof(line),"TOP 10 RANK %02d",score_rank+1);
             centered_text(middle-34,line,1,settings.amber);
         }
         snprintf(line,sizeof(line),"%s - %s",confirm,current_level+1<content.level_count?"NEXT LEVEL":"RUN AGAIN");

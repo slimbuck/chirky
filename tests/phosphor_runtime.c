@@ -9,6 +9,24 @@ static unsigned int draws;
 static struct colour pixels[240][320];
 static bool saw_level_title,saw_lives,saw_time,saw_old_level,saw_old_signal,saw_pickup_multiplier;
 static bool saw_hud_panel,saw_intro_panel;
+static char save_keys[CONTENT_LIMIT][96],save_bytes[CONTENT_LIMIT][256];
+static size_t save_sizes[CONTENT_LIMIT];
+static size_t read_score(void *unused,const char *game,const char *key,void *data,size_t capacity)
+{
+    (void)unused;assert(!strcmp(game,"phosphor-run"));
+    for(int i=0;i<CONTENT_LIMIT;i++)if(!strcmp(save_keys[i],key)){
+        assert(save_sizes[i]<=capacity);memcpy(data,save_bytes[i],save_sizes[i]);return save_sizes[i];
+    }
+    return 0;
+}
+static bool write_score(void *unused,const char *game,const char *key,const void *data,size_t size)
+{
+    (void)unused;assert(!strcmp(game,"phosphor-run") && size<256);
+    for(int i=0;i<CONTENT_LIMIT;i++)if(!save_keys[i][0] || !strcmp(save_keys[i],key)){
+        snprintf(save_keys[i],sizeof(save_keys[i]),"%s",key);memcpy(save_bytes[i],data,size);save_sizes[i]=size;return true;
+    }
+    return false;
+}
 static void rectangle(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)ctx; draws++;
@@ -57,7 +75,8 @@ static void finish_intro(const struct chirky_game_api *api, struct chirky_input 
 int main(void)
 {
     struct chirky_host_api host_api={.abi_version=CHIRKY_ABI_VERSION,
-        .screen_width=320,.screen_height=240,.fill_rect=rectangle,.play_sound=sound,.draw_text=text};
+        .screen_width=320,.screen_height=240,.fill_rect=rectangle,.play_sound=sound,.draw_text=text,
+        .save_read=read_score,.save_write=write_score};
     const struct chirky_game_api *api=chirky_game_entry();
     struct chirky_input input={0};
     assert(api->init(&host_api,"games/phosphor-run/game.conf"));
@@ -76,6 +95,14 @@ int main(void)
     assert(shard && shard->count==3);
     assert(animation_frame(shard,0)==animation_frame(shard,shard->ticks*3));
     assert(animation_frame(shard,0)!=animation_frame(shard,shard->ticks));
+    unsigned seen=0;
+    for(int x=0;x<32;x++)seen|=1u<<(scenery_animation_tick("shard",x,4)/shard->ticks);
+    assert(seen==7u); /* Objects at the same time occupy all three frames. */
+    int scenery_before=scenery_animation_tick("shard",3,4),saved_frame=frame_number;
+    camera_x+=100;camera_y+=10;
+    assert(scenery_animation_tick("shard",3,4)==scenery_before);
+    frame_number+=shard->ticks*shard->count;
+    assert(scenery_animation_tick("shard",3,4)==scenery_before);frame_number=saved_frame;
     /* Default player is the articulated model; legacy sprites remain available
        only as a fallback. Rendering must not mutate animation or gameplay. */
     assert(robot_ready());
@@ -116,12 +143,16 @@ int main(void)
         if (expected_rank>=0) {
             assert(phase==PHASE_INITIALS);
             neutral(api,&input,2);
+            neutral(api,&input,30);assert(initials_blink>=30);
+            press(api,&input,CHIRKY_BUTTON_UP);assert(initials_blink<3);
+            press(api,&input,CHIRKY_BUTTON_DOWN);assert(initials_blink<3);
             if (stage==0) press(api,&input,CHIRKY_BUTTON_UP);
             press(api,&input,CHIRKY_BUTTON_PRIMARY);
             press(api,&input,CHIRKY_BUTTON_PRIMARY);
             if (stage==0) press(api,&input,CHIRKY_BUTTON_DOWN);
             press(api,&input,CHIRKY_BUTTON_PRIMARY);
             assert(high_scores[stage][expected_rank].ticks==completed_ticks);
+            assert(!score_save_failed);
             assert(!strcmp(high_scores[stage][expected_rank].initials,stage==0?"BAZ":"AAA"));
             if (stage==1) assert(high_scores[stage][3].ticks==300);
         }
@@ -175,7 +206,13 @@ int main(void)
         assert(camera_y>old_ceiling);api->render();
     }
     api->shutdown(); api->shutdown();
-    assert(api->init(&host_api,"games/phosphor-run/game.conf")); api->shutdown();
+    assert(api->init(&host_api,"games/phosphor-run/game.conf"));
+    assert(high_scores[0][0].ticks==61 && !strcmp(high_scores[0][0].initials,"BAZ"));
+    assert(high_scores[1][2].ticks==250 && !strcmp(high_scores[1][2].initials,"AAA"));
+    const char broken[]="CHIRKY-SCORES-1\n-1 BAD\n";
+    assert(write_score(NULL,"phosphor-run","scores-relay-shaft",broken,sizeof(broken)-1));
+    api->shutdown();assert(api->init(&host_api,"games/phosphor-run/game.conf"));
+    assert(high_scores[0][0].ticks==0 && high_scores[1][2].ticks==250);api->shutdown();
     FILE *file=fopen("/tmp/phosphor-invalid.sprite","w"); assert(file);
     fputs("# ticks=0\ncc\n---\nc\n",file); fclose(file);
     struct animation invalid={0};

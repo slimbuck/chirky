@@ -148,7 +148,7 @@ static inline void console_draw_pause_menu(const struct chirky_host_api *api, in
     api->fill_rect(api->context,x,y,width,height,40,175,212);
     api->fill_rect(api->context,x+1,y+1,width-2,height-2,12,22,28);
     console_menu_text(api,x+12,y+89,"PAUSED",2,238,240,232);
-    api->fill_rect(api->context,x+12,y+77,width-24,1,40,75,85);
+    api->fill_rect(api->context,x+12,y+72,width-24,1,40,75,85);
     const char *labels[]={"CONTINUE GAME","RETURN TO LAUNCHER"};
     for(int i=0;i<2;i++) {
         bool selected=pause_option==i;

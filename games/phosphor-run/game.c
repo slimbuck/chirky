@@ -27,6 +27,8 @@ int collected_shards, lives, coyote_timer, jump_buffer, dash_timer;
 int death_timer, title_timer, win_timer, frame_number, facing;
 int level_ticks, completed_ticks, level_intro_timer;
 int initial_cursor, score_rank;
+int initials_blink;
+bool score_save_failed;
 char score_initials[4];
 struct high_score high_scores[CONTENT_LIMIT][HIGH_SCORE_COUNT];
 bool on_ground, touching_left, touching_right, dash_available;
@@ -240,6 +242,7 @@ static void submit_score(void)
     high_scores[current_level][score_rank].ticks=completed_ticks;
     copy_text(high_scores[current_level][score_rank].initials,
               sizeof(high_scores[current_level][score_rank].initials),score_initials);
+    score_save_failed=!scores_save(current_level);
     phase=PHASE_WIN;
     win_timer=0;
 }
@@ -250,6 +253,7 @@ static void finish_level(float x, float y)
     score_rank=qualifying_rank(completed_ticks);
     memcpy(score_initials,"AAA",4);
     initial_cursor=0;
+    initials_blink=0;score_save_failed=false;
     phase=score_rank>=0?PHASE_INITIALS:PHASE_WIN;
     win_timer=0;
     burst(x,y,32,settings.phosphor);
@@ -367,6 +371,9 @@ static void update_play(const struct chirky_input *input)
 
 static void update_initials(const struct chirky_input *input)
 {
+    int before_cursor=initial_cursor;
+    char before=score_initials[initial_cursor];
+    initials_blink=(initials_blink+1)%60;
     if (input->button_pressed[CHIRKY_BUTTON_UP]) {
         score_initials[initial_cursor]=score_initials[initial_cursor]=='Z'?'A':
             (char)(score_initials[initial_cursor]+1);
@@ -380,6 +387,7 @@ static void update_initials(const struct chirky_input *input)
         if (initial_cursor<2) initial_cursor++;
         else submit_score();
     }
+    if(before_cursor!=initial_cursor || before!=score_initials[initial_cursor])initials_blink=0;
 }
 
 static void game_shutdown(void)
@@ -419,6 +427,7 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
     player_animation_tick=0;
     begin_level();
     memset(high_scores,0,sizeof(high_scores));
+    scores_load();score_save_failed=false;initials_blink=0;
     frame_number=0; phase=PHASE_TITLE; title_timer=0; facing=1; lives=STARTING_LIVES;
     return true;
 }

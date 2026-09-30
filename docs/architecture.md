@@ -34,6 +34,15 @@ Portable code must not include Linux, Emscripten, DOM, WebAudio, DRM, ALSA,
 evdev, or socket APIs. Add a platform operation or callback instead of testing
 for a game id or operating system in core or game code.
 
+Game-local persistent records use the optional ABI 13 `save_read` / `save_write`
+callbacks. Games own versioned record formats; hosts own storage. Names are
+bounded game/key identifiers, and records are limited to 64 KiB. Linux writes
+`saves/<game>/<key>` using a flushed temporary file and atomic rename; deployment
+leaves this directory intact. The browser stores the same bytes in localStorage
+under `chirky.save.v1.<game>.<key>`. Storage is local to the device/browser origin,
+not cloud-synced. Missing, oversized or unreadable records return zero; failed
+writes return false so games can show a useful failure message.
+
 ## Linux platform
 
 `src/platform/linux/` owns the Raspberry Pi executable and every Linux-only

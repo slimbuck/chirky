@@ -72,6 +72,8 @@ extern int collected_shards, lives, coyote_timer, jump_buffer, dash_timer;
 extern int death_timer, title_timer, win_timer, frame_number, facing;
 extern int level_ticks, completed_ticks, level_intro_timer;
 extern int initial_cursor, score_rank;
+extern int initials_blink;
+extern bool score_save_failed;
 extern char score_initials[4];
 extern struct high_score high_scores[CONTENT_LIMIT][HIGH_SCORE_COUNT];
 extern bool on_ground, touching_left, touching_right, dash_available;
@@ -90,4 +92,7 @@ void render_title(void);
 void render_game(void);
 void title_art_load(const char *config);
 void title_art_free(void);
+void scores_load(void);
+bool scores_save(int level_index);
+int scenery_animation_tick(const char *id,int world_x,int world_y);
 #endif

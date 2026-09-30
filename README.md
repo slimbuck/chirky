@@ -178,7 +178,7 @@ these offsets to the existing margins, with no scaling or additional render pass
 bindings migrate to Primary/Secondary/Menu; earlier action mappings still migrate.
 Explicit new names take precedence. Conflicting new defaults are left unbound.
 Retired A/X/L/R bindings are removed when saving. Host and all games must be
-rebuilt together for ABI 12. `safe_x` and `safe_y` retain display margins.
+rebuilt together for ABI 13. `safe_x` and `safe_y` retain display margins.
 
 The program uses `/dev/dri/card0` and reads Linux evdev keyboard devices under
 `/dev/input`. The `retro` user is already a member of the `video`, `render`,

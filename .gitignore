@@ -1,5 +1,6 @@
 /build/
 /run/
+/saves/
 /snapshots/
 /dashboard/config.local.json
 /deploy/AWS.local.md

@@ -5,23 +5,29 @@ A 320×240, 60 Hz platformer for the Chirky CRT host.
 ## Playing
 
 - D-pad: move
-- B: jump; wall-jump while touching a wall; begin, advance, or replay on the corresponding screens
-- Y: air dash
-- L: sacrifice a life and respawn at the current checkpoint
-- Select: pause; choose Continue Game or Return to Launcher
+- Primary: jump; wall-jump while touching a wall; begin, advance, or replay
+- Secondary: air dash
+- Start: sacrifice a life and respawn at the current checkpoint
+- Menu: pause; choose Continue Game or Return to Launcher
 
-The game reads SNES buttons directly. Keyboard emulation is configured in the
-host's Input Settings; the default keys are arrows, Z for Y, X for B, A for L
-and Escape for Select. Game prompts always show SNES names.
+The game reads logical Chirky buttons. Keyboard and controller mappings live in
+the shared Input Settings. Default browser keys are arrows, X for Primary,
+Z for Secondary, Enter for Start and Escape for Menu.
 
 Collect every shard in the current level to unlock its portal. A run starts with
 three lives and ends when all three are lost. Lives carry between campaign levels.
 Each level starts with fresh shards, checkpoint, dash, particles, camera state and
 a 60 Hz timer. Its opening card shows the articulated player at 2× size running
-in place before control begins. A qualifying completion enters the in-memory top
-ten for that level;
-use Up/Down to select each initial and B to advance and submit. Scores last for the
-current game process. The host reserves a CRT-safe border; UI and cameras use the
+in place before control begins. A qualifying completion enters the top ten for
+that level. Use Up/Down to edit an initial, Left/Right to choose one, and Primary
+to advance and submit. The active letter blinks and editing restarts its blink.
+Scores save immediately through the host's persistent storage and survive game
+relaunches, browser reloads and Pi restarts. Each level is keyed by its catalog ID
+so reordering levels preserves its scores. The browser uses localStorage; Pi
+records live under `saves/phosphor-run/`. These are device-local, not shared online.
+Unavailable storage is reported as `SCORE NOT SAVED`; malformed records are ignored.
+Scenery sprites use stable world-position phase offsets while retaining their
+authored animation speeds. The host reserves a CRT-safe border; UI and cameras use the
 remaining logical viewport. The camera follows both axes
 for wider or taller levels. `start_level` in `game.conf` selects the zero-based
 campaign starting position; the default is zero.
@@ -104,6 +110,7 @@ both the renderer and dashboard.
 - `game_state.h`: internal state/types shared by the game modules; the host ABI
   remains in `include/chirky.h`.
 - `settings.c`: defaults and configuration parsing.
+- `scores.c`: versioned per-level score records, validation and host persistence.
 - `assets.h` / `assets.c`: catalog, strict grid/animation loaders, frame sampling
   and memory ownership. Independent of input, gameplay and graphics APIs.
 - `render.c`: read-only drawing passes for background, world, particles, player

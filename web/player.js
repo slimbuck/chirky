@@ -13,6 +13,25 @@ const assetSounds=new Map();
 let moduleLoadQueue=Promise.resolve(),loadCompletion=null;
 let fullscreenQueued=false,fullscreenBusy=false,lastScreenTap=null,screenContact=null,lastTouchFullscreen=-Infinity;
 let director=null;
+function saveKey(game,key){
+  if(!/^[A-Za-z0-9_-]{1,95}$/.test(game) || !/^[A-Za-z0-9_-]{1,95}$/.test(key))throw Error("Invalid save name");
+  return `chirky.save.v1.${game}.${key}`;
+}
+function onSaveRead(game,key){
+  try{
+    const encoded=localStorage.getItem(saveKey(game,key));
+    if(!encoded || encoded.length>87384)return null;
+    const value=atob(encoded);if(value.length>65536)return null;
+    return Uint8Array.from(value,letter=>letter.charCodeAt(0));
+  }catch{return null;}
+}
+function onSaveWrite(game,key,bytes){
+  try{
+    if(!bytes.length || bytes.length>65536)return false;
+    let value="";for(const byte of bytes)value+=String.fromCharCode(byte);
+    localStorage.setItem(saveKey(game,key),btoa(value));return true;
+  }catch{return false;}
+}
 let startupPercent=0;
 function startupProgress(percent){
   startupPercent=Math.max(startupPercent,Math.min(100,Math.floor(percent)));
@@ -455,7 +474,7 @@ async function createModule(gameId){
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
-    onSaveMapping,onRawNames,printErr:message=>console.warn(message)});
+    onSaveMapping,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();

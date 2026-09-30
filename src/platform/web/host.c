@@ -7,6 +7,7 @@
 #include "image_cache.h"
 #include "runtime.h"
 #include "viewport.h"
+#include "save_data.h"
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <GLES2/gl2.h>
@@ -71,6 +72,25 @@ static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
 }
 static void sound_play(void *unused,chirky_asset asset)
 { (void)unused;play_asset_sound(asset); }
+EM_JS(unsigned,read_save,(const char *game,const char *key,void *data,unsigned capacity),{
+    const bytes=Module.onSaveRead(UTF8ToString(game),UTF8ToString(key));
+    if(!bytes || bytes.length>capacity)return 0;
+    HEAPU8.set(bytes,data);return bytes.length;
+});
+EM_JS(int,write_save,(const char *game,const char *key,const void *data,unsigned size),{
+    return Module.onSaveWrite(UTF8ToString(game),UTF8ToString(key),HEAPU8.subarray(data,data+size))?1:0;
+});
+static size_t save_read_api(void *unused,const char *game,const char *key,void *data,size_t capacity)
+{
+    (void)unused;
+    if(!chirky_save_name(game) || !chirky_save_name(key) || !data || !capacity)return 0;
+    return read_save(game,key,data,(unsigned)(capacity<CHIRKY_SAVE_LIMIT?capacity:CHIRKY_SAVE_LIMIT));
+}
+static bool save_write_api(void *unused,const char *game,const char *key,const void *data,size_t size)
+{
+    (void)unused;
+    return chirky_save_name(game) && chirky_save_name(key) && data && size && size<=CHIRKY_SAVE_LIMIT && write_save(game,key,data,(unsigned)size);
+}
 static bool director_connect_api(void *unused,const char *url,const char *game,const char *world)
 { (void)unused;return connect_director(url,game,world)!=0; }
 static bool director_event_api(void *unused,const char *json,size_t size)
@@ -114,7 +134,7 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
         .draw_sprite=sprite,.sound_play=sound_play,
         .director_connect=director_connect_api,.director_event=director_event_api,
-        .director_state=director_state_api};
+        .director_state=director_state_api,.save_read=save_read_api,.save_write=save_write_api};
     (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");console_init();return 1;
 failed:
     web_destroy();return 0;
