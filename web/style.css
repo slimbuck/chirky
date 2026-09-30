@@ -35,7 +35,16 @@ button{font:inherit;color:var(--ink);background:#ffedaa;border:2px solid var(--i
 #player.side-controls .help{display:none}
 #player.side-controls .shell-brand{left:max(22px,env(safe-area-inset-left));font-size:24px}.side-controls .shell-brand span{display:block;margin:5px 0 0 2px;font-size:7px}
 #player.side-controls .shell-speaker{display:flex;right:max(76px,env(safe-area-inset-right))}
-body.controller-wide main{max-width:none;padding:0}body.controller-wide header{display:none}
+/* Portrait is a viewport-sized console too. The screen gets the full width;
+   a flexible upper row leaves both grips anchored above the bottom safe area. */
+#player.bottom-controls{height:var(--player-height);grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr) auto;row-gap:24px;padding:calc(44px + env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));align-content:stretch;border:0;box-shadow:inset 0 0 0 3px var(--ink),inset 0 6px 0 var(--shell-shine),inset 0 -10px 0 var(--shell-rim)}
+#player.bottom-controls #screen-slot{min-height:0;height:100%;padding:0}
+#player.bottom-controls .touch{grid-row:2;align-self:end}
+#player.bottom-controls .controller-left{grid-column:1;justify-self:start}
+#player.bottom-controls .controller-right{grid-column:2;justify-self:end}
+#player.bottom-controls .help{display:none}
+#player.bottom-controls .shell-brand{top:calc(13px + env(safe-area-inset-top));left:max(22px,env(safe-area-inset-left))}
+body:is(.controller-wide,.controller-portrait) main{max-width:none;padding:0}body:is(.controller-wide,.controller-portrait) header{display:none}
 @media(max-width:600px){main{padding:12px}header{align-items:start;flex-direction:column;gap:0}#status{margin-bottom:12px}.help{font-size:12px}}
 @media(max-height:400px){#player.side-controls .shell-brand{top:10px;font-size:22px}#player.side-controls .shell-brand span{display:none}#player.side-controls .shell-speaker{bottom:12px}}
 @media(prefers-reduced-motion:reduce){.touch button{transition:none}}

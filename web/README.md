@@ -123,10 +123,17 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   on the D-pad do not take it over. Held directions/actions light up. Pointer cancellation,
   lost capture or loss of focus clears held inputs and the pressed appearance.
   In landscape, controls flank a centred display sized to the available height
-  and width, in both normal and fullscreen mode. Portrait keeps the display above
-  the two controller grips. Safe-area padding keeps landscape controls clear of
+  and width, in both normal and fullscreen mode. Portrait uses the visible viewport:
+  the display gets the full available width at the largest whole physical-pixel
+  scale that fits, centred above the two grips anchored at the bottom. The page
+  heading and keyboard help are hidden on touch layouts to leave room for play.
+  Browser toolbar resizing and rotation recalculate the layout; bottom safe-area
+  padding keeps controls above the phone's gesture bar. Safe-area padding keeps landscape controls clear of
   device cutouts. Layout and touch event handling belong in `web/`; they send the
   same logical Chirky inputs to the shared console and games.
+  The canvas transform uses a one-third-physical-pixel sampling bias to avoid
+  nearest-neighbour rounding ties at fractional Android densities. Browser
+  screenshot checks verify uniform pixel widths and heights, as well as layout.
 - **Settings → Full Screen** toggles the whole player. Double-clicking or
   double-tapping the display also toggles it. Touch selections request fullscreen
   on finger-up, when the browser grants permission; short menu taps are delivered

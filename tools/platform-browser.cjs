@@ -9,11 +9,12 @@ const { EventEmitter } = require('node:events');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Decode a screenshot scanline to check the actual rasterized pixel widths.
-function pngRow(png, y) {
+function pngRow(png, y, column) {
   const width=png.readUInt32BE(16), channels=png[25]===2?3:4, chunks=[];
   assert.equal(png[24],8);assert([2,6].includes(png[25]));
   for(let p=8;p<png.length;){const size=png.readUInt32BE(p);if(png.toString('ascii',p+4,p+8)==='IDAT')chunks.push(png.subarray(p+8,p+8+size));p+=size+12;}
   const raw=require('node:zlib').inflateSync(Buffer.concat(chunks)),stride=width*channels;
+  const strip=column===undefined?null:Buffer.alloc((y+1)*channels);
   let previous=Buffer.alloc(stride),offset=0;
   for(let row=0;row<=y;row++){
     const filter=raw[offset++],decoded=Buffer.alloc(stride);
@@ -23,9 +24,10 @@ function pngRow(png, y) {
       const prediction=[0,a,b,Math.floor((a+b)/2),pa<=pb&&pa<=pc?a:pb<=pc?b:c][filter];
       assert.notEqual(prediction,undefined);decoded[x]=(raw[offset++]+prediction)&255;
     }
+    if(strip)decoded.copy(strip,row*channels,column*channels,(column+1)*channels);
     previous=decoded;
   }
-  return {pixels:previous,channels};
+  return {pixels:strip || previous,channels};
 }
 
 class CDP extends EventEmitter {
@@ -119,7 +121,7 @@ async function main() {
     // including fractional OS scale and narrow windows.
     const diagnostic=catalog.games.findIndex(game=>game.role==='diagnostic');
     assert(diagnostic>=0);
-    for(const [width,height,density,touch=false] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1],[844,390,3,true],[667,375,2,true],[390,844,3,true],[1024,768,2,true]])){
+    for(const [width,height,density,touch=false] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1],[844,390,3,true],[667,375,2,true],[390,844,3,true],[390,844,2.625,true],[412,915,2.625,true],[360,640,3,true],[320,568,2,true],[1024,768,2,true]])){
       const label=`layout-${width}-${density}${touch?'-touch':''}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
       const page=new CDP(target.webSocketDebuggerUrl);await page.open;
       const report={label,checks:[],errors:[],warnings:[],failedRequests:[],passed:false};reports.push(report);
@@ -152,8 +154,10 @@ async function main() {
         assert.deepEqual(game.buffer,[320,240]);assert(!game.overflow);
         const physicalScale=game.width*density/320;
         assert(Math.abs(physicalScale-Math.round(physicalScale))<.001,'Each game pixel must use whole physical pixels');
-        assert(Math.abs(game.x*density-Math.round(game.x*density))<.03);
-        assert(Math.abs(game.y*density-Math.round(game.y*density))<.03);
+        // The sampling bias stays within the same physical raster pixel;
+        // screenshot checks below verify actual horizontal AND vertical texels.
+        assert(Math.abs(game.x*density+1/3-Math.round(game.x*density+1/3))<.03);
+        assert(Math.abs(game.y*density+1/3-Math.round(game.y*density+1/3))<.03);
         if(touch){
           const controls=await page.eval(`Array.from(document.querySelectorAll('.touch button')).map(e=>{const r=e.getBoundingClientRect();return {button:e.dataset.button,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})`);
           assert.equal(controls.length,8);
@@ -168,6 +172,17 @@ async function main() {
             assert(controls.filter(r=>['0','1','2','3','7'].includes(r.button)).every(r=>r.right<=game.x),'D-pad and Menu must sit left of the display');
             assert(controls.filter(r=>['4','5','6'].includes(r.button)).every(r=>r.x>=game.x+game.width),'Actions and Start must sit right of the display');
             assert(Math.abs(game.y+game.height/2-height/2)<=1,'Display must be vertically centred');
+          }else{
+            const portrait=await page.eval(`(()=>{const rect=e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height}};return {player:rect(document.querySelector('#player')),slot:rect(document.querySelector('#screen-slot')),grips:Array.from(document.querySelectorAll('.touch')).map(rect),overflow:document.documentElement.scrollHeight>innerHeight,heading:getComputedStyle(document.querySelector('header')).display,help:getComputedStyle(document.querySelector('.help')).display};})()`);
+            assert.equal(portrait.heading,'none');assert.equal(portrait.help,'none');
+            assert(!portrait.overflow,'Portrait touch console must fit the visible viewport');
+            assert(Math.abs(portrait.player.height-height)<1);
+            assert(portrait.grips.every(r=>Math.abs(r.bottom-(height-18))<1),'Both portrait grips must stay anchored at the bottom');
+            assert(game.y+game.height+12<=Math.min(...portrait.grips.map(r=>r.top)),'Display must not overlap bottom controls');
+            const maximumScale=Math.floor(Math.min((width-18)/320,(portrait.slot.height-2)/240)*density+1e-6);
+            assert(Math.abs(game.width*density-320*maximumScale)<.03,'Portrait display must use the full available width at the largest crisp scale');
+            if(width===390 && density===2.625)assert(game.width>360,'Typical Android portrait display must grow beyond the old nested-page size');
+            report.checks.push('portrait fills visible viewport, maximizes display and anchors both grips at bottom');
           }
           report.checks.push('touch targets fit, controller wings flank the centred landscape display');
         }
@@ -192,6 +207,17 @@ async function main() {
         // measure complete color runs, excluding only the two clipped end runs.
         assert(runs.length>=287);
         for(const run of runs.slice(1,-1))assert.equal(run.width,step,'Every game pixel must have the same physical width');
+        await page.eval(`(()=>{const gl=document.querySelector('#screen').getContext('webgl');gl.enable(gl.SCISSOR_TEST);for(let y=0;y<240;y++){gl.scissor(0,y,320,1);gl.clearColor(y%2,0,1-y%2,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.disable(gl.SCISSOR_TEST);})()`);
+        const rows=Buffer.from((await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64');
+        const vertical=pngRow(rows,rows.readUInt32BE(20)-1,Math.round((game.x+game.width/2)*density));
+        const rowRuns=[],top=Math.round(game.y*density);
+        for(let y=12*step;y<(240-12)*step;y++){
+          const offset=(top+y)*vertical.channels,red=vertical.pixels[offset];
+          assert(red===0 || red===255);assert.equal(vertical.pixels[offset+1],0);assert.equal(vertical.pixels[offset+2],255-red);
+          if(rowRuns.at(-1)?.red===red)rowRuns.at(-1).height++;else rowRuns.push({red,height:1});
+        }
+        assert(rowRuns.length>=215);
+        for(const run of rowRuns.slice(1,-1))assert.equal(run.height,step,'Every game pixel must have the same physical height');
         report.checks.push('stable loading and launcher/game size; native framebuffer; uniform screenshot pixel widths at display scale');report.passed=true;
       }catch(error){report.failure=error.stack;console.error(`${label}: ${error.message}`);}
       finally{await page.call('Page.navigate',{url:'about:blank'}).catch(()=>{});page.close();await fetch(`${endpoint}/json/close/${target.id}`).catch(()=>{});console.log(JSON.stringify(report));}

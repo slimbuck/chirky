@@ -235,12 +235,15 @@ function resizePlayer(){
   player.classList.toggle("is-fullscreen",fullscreen);
   const touchVisible=getComputedStyle($(".touch")).display!=="none";
   const sideControls=touchVisible && innerWidth>innerHeight;
+  const bottomControls=touchVisible && !sideControls;
   player.classList.toggle("side-controls",sideControls);
+  player.classList.toggle("bottom-controls",bottomControls);
   document.body.classList.toggle("controller-wide",sideControls && !fullscreen);
+  document.body.classList.toggle("controller-portrait",bottomControls && !fullscreen);
   player.style.setProperty("--player-height",`${window.visualViewport?.height || innerHeight}px`);
   const touchHeight=touchVisible?$(".touch").getBoundingClientRect().height+12:0;
   const availableWidth=Math.max(1,slot.clientWidth-2);
-  const availableHeight=sideControls?Math.max(1,slot.clientHeight-2):
+  const availableHeight=sideControls || bottomControls?Math.max(1,slot.clientHeight-2):
     fullscreen?Math.max(1,innerHeight-touchHeight-58):Infinity;
   // CSS pixels can be fractional physical pixels at browser/OS zoom. Quantize
   // the framebuffer's physical scale, then convert back to CSS dimensions.
@@ -258,9 +261,11 @@ function resizePlayer(){
   display.style.left=`${Math.round(rect.left*density)/density-rect.left}px`;
   display.style.top=`${Math.round(rect.top*density)/density-rect.top}px`;
   // Relative positioning rounds to CSS layout units. Correct the remaining
-  // subpixel error on the canvas transform, which preserves compositor precision.
+  // error in the transform, biasing a third of a physical pixel before the edge.
+  // This stays in the same raster pixel while avoiding nearest-neighbour
+  // rounding ties that produce alternating widths at fractional Android DPRs.
   const aligned=canvas.getBoundingClientRect();
-  canvas.style.transform=`translate(${Math.round(aligned.left*density)/density-aligned.left}px,${Math.round(aligned.top*density)/density-aligned.top}px) scale(${scale})`;
+  canvas.style.transform=`translate(${(Math.round(aligned.left*density)-1/3)/density-aligned.left}px,${(Math.round(aligned.top*density)-1/3)/density-aligned.top}px) scale(${scale})`;
 }
 document.addEventListener("fullscreenchange",resizePlayer);
 document.addEventListener("webkitfullscreenchange",resizePlayer);
