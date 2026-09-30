@@ -354,6 +354,7 @@ async function main() {
         }
       }
       async function key(code,key,value,hold=100) {
+        const origin=await page.eval('({id:__platformProbe.state().id,screen:__platformProbe.state().screen,fullscreen:!!document.fullscreenElement,focus:document.hasFocus()})');
         await page.eval(`globalThis.__testKeyEvents=[];for(const type of ['keydown','keyup']){addEventListener(type,function delivered(event){if(event.code===${JSON.stringify(code)}){__testKeyEvents.push(type);removeEventListener(type,delivered,true);}},{capture:true});}`);
         async function delivered(type){
           let seen=false;
@@ -362,7 +363,7 @@ async function main() {
             if(seen)break;
             await delay(50);
           }
-          assert(seen,`Chrome must deliver ${code} ${type}`);
+          assert(seen,`Chrome must deliver ${code} ${type}; origin=${JSON.stringify(origin)}; current=${JSON.stringify(await page.eval('({id:__platformProbe.state().id,screen:__platformProbe.state().screen,fullscreen:!!document.fullscreenElement,focus:document.hasFocus(),events:__testKeyEvents})'))}`);
         }
         // A CDP acknowledgement may precede DOM delivery while WASM loads.
         // Do not send release before the corresponding press has arrived.
