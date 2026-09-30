@@ -157,7 +157,7 @@ async function playSound(path){
   }catch(error){console.warn("Sound unavailable",path,error);}
 }
 function setPaused(value){
-  paused=value;keys.clear();touch.clear();pending=0;last=0;accumulator=0;
+  paused=value;keys.clear();touch.clear();refreshTouchFeedback();pending=0;last=0;accumulator=0;
   if(value){shell?._web_console_pause();stopSounds();}
 }
 function toggleMute(){muted=!muted;if(muted)stopSounds();}
@@ -184,13 +184,16 @@ window.addEventListener("blur",()=>{if(runtime)setPaused(true);});
 document.addEventListener("visibilitychange",()=>{if(document.hidden && runtime)setPaused(true);});
 function resizePlayer(){
   if(typeof innerWidth!=="number")return;
-  const fullscreen=!!document.fullscreenElement,player=$("#player"),display=$("#display");
-  const landscape=fullscreen && innerWidth>innerHeight && getComputedStyle($(".touch")).display!=="none";
-  player.classList.toggle("landscape",landscape);
-  const touchHeight=getComputedStyle($(".touch")).display==="none"?0:$(".touch").getBoundingClientRect().height+12;
-  const touchWidth=landscape?$(".touch").getBoundingClientRect().width+12:0;
-  const availableWidth=Math.max(1,fullscreen?innerWidth-18-touchWidth:player.clientWidth-4);
-  const availableHeight=fullscreen?Math.max(1,innerHeight-(landscape?0:touchHeight)-24):Infinity;
+  const fullscreen=!!document.fullscreenElement,player=$("#player"),display=$("#display"),slot=$("#screen-slot");
+  const touchVisible=getComputedStyle($(".touch")).display!=="none";
+  const sideControls=touchVisible && innerWidth>innerHeight;
+  player.classList.toggle("side-controls",sideControls);
+  document.body.classList.toggle("controller-wide",sideControls && !fullscreen);
+  player.style.setProperty("--player-height",`${window.visualViewport?.height || innerHeight}px`);
+  const touchHeight=touchVisible?$(".touch").getBoundingClientRect().height+12:0;
+  const availableWidth=Math.max(1,slot.clientWidth-2);
+  const availableHeight=sideControls?Math.max(1,slot.clientHeight-2):
+    fullscreen?Math.max(1,innerHeight-touchHeight-58):Infinity;
   // CSS pixels can be fractional physical pixels at browser/OS zoom. Quantize
   // the framebuffer's physical scale, then convert back to CSS dimensions.
   const density=window.devicePixelRatio || 1;
@@ -206,9 +209,15 @@ function resizePlayer(){
   const rect=canvas.getBoundingClientRect();
   display.style.left=`${Math.round(rect.left*density)/density-rect.left}px`;
   display.style.top=`${Math.round(rect.top*density)/density-rect.top}px`;
+  // Relative positioning rounds to CSS layout units. Correct the remaining
+  // subpixel error on the canvas transform, which preserves compositor precision.
+  const aligned=canvas.getBoundingClientRect();
+  canvas.style.transform=`translate(${Math.round(aligned.left*density)/density-aligned.left}px,${Math.round(aligned.top*density)/density-aligned.top}px) scale(${scale})`;
 }
 document.addEventListener("fullscreenchange",resizePlayer);
 window.addEventListener("resize",resizePlayer);
+window.visualViewport?.addEventListener("resize",resizePlayer);
+if(typeof matchMedia==="function")matchMedia("(any-pointer: coarse)").addEventListener("change",resizePlayer);
 // Moving between monitors can change density without changing the CSS viewport.
 function watchPixelDensity(){
   if(typeof matchMedia!=="function")return;
@@ -216,9 +225,14 @@ function watchPixelDensity(){
 }
 watchPixelDensity();
 resizePlayer();
+function refreshTouchFeedback(){
+  const held=new Set(touch.values());
+  document.querySelectorAll("[data-button]").forEach(button=>{button.dataset.pressed=String(held.has(Number(button.dataset.button)));});
+}
 document.querySelectorAll("[data-button]").forEach(button=>{
-  button.onpointerdown=event=>{event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,Number(button.dataset.button));pending|=1<<Number(button.dataset.button);unlock();};
-  button.onpointerup=button.onpointercancel=button.onlostpointercapture=event=>touch.delete(event.pointerId);
+  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
+  button.onpointerup=button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);refreshTouchFeedback();};
+  button.oncontextmenu=event=>event.preventDefault();
 });
 function frame(now){
   if(leaving)return;

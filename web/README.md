@@ -110,8 +110,15 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
   and Start/Select for Start/Menu. Unrecognized USB/SNES adapters can map their
   raw buttons and axes in Map Controller; use the keyboard to get there first.
   Each controller identity keeps its own mapping. Pi's SNES defaults remain native.
-- Existing touch controls appear on touch devices and support simultaneous
-  movement/actions. Pointer cancellation or loss of focus clears held inputs.
+- Touch devices get a controller-shaped D-pad, distinct Primary/Secondary face
+  buttons, and smaller Menu/Start buttons. All targets are at least 44 CSS pixels;
+  simultaneous movement/actions show held-button feedback. Pointer cancellation,
+  lost capture or loss of focus clears held inputs and the pressed appearance.
+  In landscape, controls flank a centred display sized to the available height
+  and width, in both normal and fullscreen mode. Portrait keeps the display above
+  the two controller grips. Safe-area padding keeps landscape controls clear of
+  device cutouts. Layout and touch event handling belong in `web/`; they send the
+  same logical Chirky inputs to the shared console and games.
 - **Settings → Full Screen** toggles the whole player. Double-clicking the screen
   also toggles it. Browser permission requires a recent keyboard or pointer
   gesture; a gamepad alone may not authorize entry. Escape may exit browser

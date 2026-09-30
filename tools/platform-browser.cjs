@@ -119,8 +119,8 @@ async function main() {
     // including fractional OS scale and narrow windows.
     const diagnostic=catalog.games.findIndex(game=>game.role==='diagnostic');
     assert(diagnostic>=0);
-    for(const [width,height,density] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1]])){
-      const label=`layout-${width}-${density}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
+    for(const [width,height,density,touch=false] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1],[844,390,3,true],[667,375,2,true],[390,844,3,true],[1024,768,2,true]])){
+      const label=`layout-${width}-${density}${touch?'-touch':''}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
       const page=new CDP(target.webSocketDebuggerUrl);await page.open;
       const report={label,checks:[],errors:[],warnings:[],failedRequests:[],passed:false};reports.push(report);
       let held;
@@ -137,7 +137,8 @@ async function main() {
         await page.call('Page.enable');await page.call('Runtime.enable');await page.call('Network.enable');
         await page.call('Network.setCacheDisabled',{cacheDisabled:true});
         await page.call('Fetch.enable',{patterns:[{urlPattern:'*.wasm'}]});
-        await page.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:density,mobile:false});
+        await page.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:density,mobile:touch});
+        await page.call('Emulation.setTouchEmulationEnabled',{enabled:touch,maxTouchPoints:5});
         await page.call('Page.navigate',{url:base.href});
         const launcher=await checkLoading('Launcher');
         await page.eval('document.querySelector("#screen").focus()');
@@ -153,6 +154,17 @@ async function main() {
         assert(Math.abs(physicalScale-Math.round(physicalScale))<.001,'Each game pixel must use whole physical pixels');
         assert(Math.abs(game.x*density-Math.round(game.x*density))<.03);
         assert(Math.abs(game.y*density-Math.round(game.y*density))<.03);
+        if(touch){
+          const controls=await page.eval(`Array.from(document.querySelectorAll('.touch button')).map(e=>{const r=e.getBoundingClientRect();return {button:e.dataset.button,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})`);
+          assert.equal(controls.length,8);
+          assert(controls.every(r=>r.width>=44 && r.height>=44 && r.x>=0 && r.y>=0 && r.right<=width && r.bottom<=height),'All eight touch targets must fit and be at least 44 CSS pixels');
+          if(width>height){
+            assert(controls.filter(r=>['0','1','2','3','7'].includes(r.button)).every(r=>r.right<=game.x),'D-pad and Menu must sit left of the display');
+            assert(controls.filter(r=>['4','5','6'].includes(r.button)).every(r=>r.x>=game.x+game.width),'Actions and Start must sit right of the display');
+            assert(Math.abs(game.y+game.height/2-height/2)<=1,'Display must be vertically centred');
+          }
+          report.checks.push('touch targets fit, controller wings flank the centred landscape display');
+        }
         const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(screenshot.data,'base64'));
         await page.eval('window.requestAnimationFrame=()=>0');await delay(100);

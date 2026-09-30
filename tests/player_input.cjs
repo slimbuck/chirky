@@ -74,9 +74,14 @@ test('mapping commits atomically, rejects duplicates and preserves old bindings 
 test('touch, release and focus loss do not leave stuck buttons',()=>{
   const p=player(),down=id=>({pointerId:id,preventDefault(){}});
   p.touch[0].onpointerdown(down(1));p.touch[4].onpointerdown(down(2));assert.equal(p.run('mask()'),17);
+  assert.equal(p.touch[0].dataset.pressed,'true');assert.equal(p.touch[4].dataset.pressed,'true');
   p.touch[0].onpointercancel({pointerId:1});assert.equal(p.run('mask()'),16);
+  assert.equal(p.touch[0].dataset.pressed,'false');assert.equal(p.touch[4].dataset.pressed,'true');
   p.touch[4].onlostpointercapture({pointerId:2});assert.equal(p.run('mask()'),0);
+  p.touch[4].onpointerdown(down(3));p.touch[4].onpointerdown(down(4));
+  p.touch[4].onpointerup({pointerId:3});assert.equal(p.touch[4].dataset.pressed,'true');
   p.run('runtime={};keys.add("KeyX");pending=16');p.events.blur();assert.equal(p.run('mask()|pending'),0);assert.equal(p.run('paused'),true);
+  assert.equal(p.touch[4].dataset.pressed,'false');
 });
 test('game transitions preserve held raw inputs for the shared release gate',()=>{
   const p=player();

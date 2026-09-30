@@ -1,12 +1,28 @@
 <!doctype html>
 <html lang="en">
 <head>
-<link rel="icon" href="data:,"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chirky Box</title><link rel="stylesheet" href="style.css"></head>
+<link rel="icon" href="data:,"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Chirky Box</title><link rel="stylesheet" href="style.css"></head>
 <body><main>
   <header><h1>Chirky Box</h1><span id="status" role="status">Loading…</span></header>
   <section id="player" aria-label="Chirky player">
-    <div id="display"><canvas id="screen" width="320" height="240" tabindex="0" aria-label="Chirky Box game screen"></canvas></div>
+    <div id="screen-slot"><div id="display"><canvas id="screen" width="320" height="240" tabindex="0" aria-label="Chirky Box game screen"></canvas></div></div>
+    <div class="touch controller-left" role="group" aria-label="Directional controls">
+      <div class="dpad">
+        <button class="up" data-button="2" aria-label="Up">▲</button>
+        <button class="left" data-button="0" aria-label="Left">◀</button>
+        <span class="dpad-centre" aria-hidden="true"></span>
+        <button class="right" data-button="1" aria-label="Right">▶</button>
+        <button class="down" data-button="3" aria-label="Down">▼</button>
+      </div>
+      <button class="system-button" data-button="7"><span aria-hidden="true">≡</span> Menu</button>
+    </div>
+    <div class="touch controller-right" role="group" aria-label="Action controls">
+      <div class="actions">
+        <button class="secondary" data-button="5"><span aria-hidden="true">Ⅱ</span><span>Secondary</span></button>
+        <button class="primary" data-button="4"><span aria-hidden="true">Ⅰ</span><span>Primary</span></button>
+      </div>
+      <button class="system-button" data-button="6"><span aria-hidden="true">▷</span> Start</button>
+    </div>
     <p class="help" id="control-help"></p>
-    <div class="touch" aria-label="Touch controller"><div class="dpad"><button data-button="2" aria-label="Up">↑</button><button data-button="0" aria-label="Left">←</button><button data-button="3" aria-label="Down">↓</button><button data-button="1" aria-label="Right">→</button></div><div class="actions"><button data-button="4">Primary</button><button data-button="5">Secondary</button><button data-button="6">Start</button><button data-button="7">Menu</button></div></div>
   </section>
 </main><script type="module" src="player.js"></script></body></html>
