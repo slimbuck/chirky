@@ -290,7 +290,9 @@ export function createDirectorServer({
     }
     const timer = setTimeout(() => {
       generationTimers.delete(id);
-      generateWorld(id).catch(error => console.error(`Director generation failed for ${id}: ${error.message}`));
+      // Timers can wake before the wall-clock cooldown has elapsed. Recheck
+      // and rearm so an early wakeup does not strand the pending events.
+      scheduleGeneration(id);
     }, delay);
     timer.unref?.();
     generationTimers.set(id, timer);

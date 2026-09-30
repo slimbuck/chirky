@@ -128,6 +128,31 @@ test("director schedules cooldown events and supplies recent state history", asy
   assert.equal(status.recent_revisions, 2);
 });
 
+test("an early cooldown timer keeps pending events scheduled", async t => {
+  const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chirky-director-early-"));
+  t.after(() => fs.rmSync(dataDirectory, {recursive: true, force: true}));
+  let clock = 1000, calls = 0;
+  const app = createDirectorServer({dataDirectory, defaultsPath, generationIntervalMs: 40,
+    now: () => clock, generator: async ({state}) => {calls++; return {...state};}});
+  const address = await app.listen(0, "127.0.0.1");
+  t.after(() => app.close());
+  const send = sequence => fetch(`http://127.0.0.1:${address.port}/v1/sync`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({protocol: 1, game: "bramble-hollow", world: "early-world",
+      session: "early-test", last_revision: 0,
+      events: [{sequence, event: {tick: sequence, day: 1, kind: "talk", detail: "Maple"}}]})});
+  assert.equal((await send(1)).status, 200);
+  assert.equal(calls, 1);
+  assert.equal((await send(2)).status, 200);
+  // Let the real timer fire while the injected cooldown clock is still early.
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.equal(calls, 1, "An early wakeup must not bypass the cooldown");
+  clock += 40;
+  for (let tries = 0; tries < 100 && calls < 2; tries++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(calls, 2, "The pending event must run without another sync request");
+  assert.equal(app.getWorld("early-world").generation_cursor, 2);
+});
+
 test("weather controls publish immediately and repeated generated weather advances", async t => {
   const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chirky-director-weather-"));
   t.after(() => fs.rmSync(dataDirectory, {recursive: true, force: true}));
