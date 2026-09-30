@@ -201,9 +201,9 @@ static void render_scene(void)
         rect(0,top,host->screen_width,57,0x203d36);
         center(top+4,"CHOP BLACK ROSES BEFORE THE RAIN",1,0xffedcc);
         center(top+15,"DODGE THE WASP - ONE STING ENDS IT",1,0xe9b76a);
-        center(top+27,"D-PAD MOVE / HOLD B CHOP / Y JUMP",1,0xaacb9f);
-        center(top+38,"SELECT - PAUSE",1,0xaacb9f);
-        center(top+49,"B - BEGIN",1,0xffb8c6);
+        center(top+27,"PRIMARY CHOP / SECONDARY JUMP",1,0xaacb9f);
+        center(top+38,"ARROWS MOVE / MENU PAUSE",1,0xaacb9f);
+        center(top+49,"PRIMARY - BEGIN",1,0xffb8c6);
         return;
     }
     int view_h = host->screen_height-42;
