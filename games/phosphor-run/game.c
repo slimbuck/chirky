@@ -6,12 +6,14 @@
 
 const struct chirky_host_api *host;
 static struct chirky_input_gate transition_gate;
-static chirky_asset sound_assets[6];
+enum { SOUND_COUNT=8 };
+static chirky_asset sound_assets[SOUND_COUNT];
 
 static const char *sound_path(int index)
 {
     const char *paths[]={settings.jump_sound,settings.dash_sound,settings.shard_sound,
-        settings.checkpoint_sound,settings.death_sound,settings.win_sound};
+        settings.checkpoint_sound,settings.death_sound,settings.win_sound,
+        settings.letter_sound,settings.select_sound};
     return paths[index];
 }
 struct settings settings;
@@ -170,7 +172,7 @@ static bool move_axis(float amount, bool horizontal)
 static void play(const char *path)
 {
     if(host->sound_play) {
-        for(int i=0;i<6;i++)if(!strcmp(path,sound_path(i))) {
+        for(int i=0;i<SOUND_COUNT;i++)if(!strcmp(path,sound_path(i))) {
             host->sound_play(host->context,sound_assets[i]);return;
         }
     } else if(host->play_sound)host->play_sound(host->context, settings.sound_device, path);
@@ -371,28 +373,37 @@ static void update_play(const struct chirky_input *input)
 
 static void update_initials(const struct chirky_input *input)
 {
-    int before_cursor=initial_cursor;
-    char before=score_initials[initial_cursor];
     initials_blink=(initials_blink+1)%60;
-    if (input->button_pressed[CHIRKY_BUTTON_UP]) {
+    /* Only action buttons move the cursor. A sliding touch D-pad may report
+       Left/Right while editing; those directions must never change initials. */
+    if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) {
+        play(settings.select_sound);initials_blink=0;
+        if (initial_cursor<2) initial_cursor++;
+        else submit_score();
+        return;
+    }
+    if (input->button_pressed[CHIRKY_BUTTON_SECONDARY]) {
+        if (initial_cursor>0) {
+            initial_cursor--;initials_blink=0;play(settings.select_sound);
+        }
+        return;
+    }
+    bool up=input->button_pressed[CHIRKY_BUTTON_UP];
+    bool down=input->button_pressed[CHIRKY_BUTTON_DOWN];
+    if (up==down) return;
+    if (up) {
         score_initials[initial_cursor]=score_initials[initial_cursor]=='Z'?'A':
             (char)(score_initials[initial_cursor]+1);
-    } else if (input->button_pressed[CHIRKY_BUTTON_DOWN]) {
+    } else {
         score_initials[initial_cursor]=score_initials[initial_cursor]=='A'?'Z':
             (char)(score_initials[initial_cursor]-1);
     }
-    if (input->button_pressed[CHIRKY_BUTTON_LEFT] && initial_cursor>0) initial_cursor--;
-    if (input->button_pressed[CHIRKY_BUTTON_RIGHT] && initial_cursor<2) initial_cursor++;
-    if (input->button_pressed[CHIRKY_BUTTON_PRIMARY]) {
-        if (initial_cursor<2) initial_cursor++;
-        else submit_score();
-    }
-    if(before_cursor!=initial_cursor || before!=score_initials[initial_cursor])initials_blink=0;
+    initials_blink=0;play(settings.letter_sound);
 }
 
 static void game_shutdown(void)
 {
-    if(host && host->asset_release)for(int i=0;i<6;i++)host->asset_release(host->context,sound_assets[i]);
+    if(host && host->asset_release)for(int i=0;i<SOUND_COUNT;i++)host->asset_release(host->context,sound_assets[i]);
     memset(sound_assets,0,sizeof(sound_assets));
     robot_free();
     title_art_free();
@@ -422,7 +433,7 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
     if (!load_level(content.levels[current_level].path)) { game_shutdown(); return false; }
     title_art_load(config_path);
     if(!robot_load_api(host,config_path))fprintf(stderr,"phosphor-run: robot model unavailable; using legacy player sprites\n");
-    if(host->asset_request)for(int i=0;i<6;i++)
+    if(host->asset_request)for(int i=0;i<SOUND_COUNT;i++)
         sound_assets[i]=host->asset_request(host->context,sound_path(i),CHIRKY_ASSET_SOUND);
     player_animation_tick=0;
     begin_level();

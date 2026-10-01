@@ -15,7 +15,11 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
     const port=fs.readFileSync(portFile,'utf8').split('\n')[0];
     const tabs=await(await fetch(`http://127.0.0.1:${port}/json`)).json();page=new CDP(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);
     await page.call('Page.enable');await page.call('Runtime.enable');
-    await page.call('Emulation.setDeviceMetricsOverride',{width:1000,height:850,deviceScaleFactor:1,mobile:false});
+    await page.call('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});
+    await page.call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+    await page.call('Page.addScriptToEvaluateOnNewDocument',{source:`globalThis.__scoreSounds=[];
+      const originalStart=AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start=function(...args){__scoreSounds.push(this.buffer?.duration);return originalStart.apply(this,args);};`});
     const errors=[];page.on('Runtime.exceptionThrown',p=>errors.push(p.exceptionDetails.text));
     const rows=Array.from({length:26},()=>'.'.repeat(40));rows[24]='..S..E'+'.'.repeat(34);rows[25]='#'.repeat(40);
     await page.call('Fetch.enable',{patterns:[{urlPattern:'*runtime/games/phosphor-run/assets/levels/relay-shaft.txt'}]});
@@ -30,9 +34,22 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
       await delay(250);await key('KeyX','x',88);await delay(1900);await key('ArrowRight','ArrowRight',39,500);
     }
     await launch();await shot('initials');
-    await key('ArrowUp','ArrowUp',38);await shot('initials-edited');
+    await page.eval('__scoreSounds.length=0');
+    const pad=await page.eval(`(()=>{const r=document.querySelector('.dpad').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,r:r.width/2};})()`);
+    async function touch(type,x,y){await page.call('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y,id:1,radiusX:4,radiusY:4}]});await delay(120);}
+    await touch('touchStart',pad.x,pad.y-pad.r*.7);
+    await touch('touchMove',pad.x+pad.r*.7,pad.y-pad.r*.7);
+    await touch('touchMove',pad.x+pad.r*.7,pad.y);
+    await touch('touchEnd');await shot('initials-edited');
+    assert.deepEqual(await page.eval('__scoreSounds'),[.045],'A diagonal slide changes one letter, without a selection sound');
+    async function action(button){
+      const point=await page.eval(`(()=>{const r=document.querySelector('[data-button="${button}"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+      await touch('touchStart',point.x,point.y);await touch('touchEnd');
+    }
+    await action(4);await action(5); // A forward, B back; editing remains on B.
     await delay(520);await shot('initials-blink');
-    await key('KeyX','x',88);await key('KeyX','x',88);await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);
+    await action(4);await action(4);await key('ArrowDown','ArrowDown',40);await action(4);
+    assert.deepEqual(await page.eval('__scoreSounds'),[.045,.1,.1,.1,.1,.045,.1],'Letter ticks and confirmations play through real WASM audio');
     const storageKey='chirky.save.v1.phosphor-run.scores-relay-shaft';
     await wait(`!!localStorage.getItem('${storageKey}')`);
     const saved=await page.eval(`atob(localStorage.getItem('${storageKey}'))`);

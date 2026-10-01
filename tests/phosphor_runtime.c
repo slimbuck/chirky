@@ -35,7 +35,12 @@ static void rectangle(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned
     for (int yy=y;yy<y+h;yy++) for (int xx=x;xx<x+w;xx++)
         if (xx>=0 && xx<320 && yy>=0 && yy<240) pixels[yy][xx]=(struct colour){r,g,b};
 }
-static void sound(void *ctx,const char *device,const char *path) { (void)ctx;(void)device;(void)path; }
+static unsigned letter_sounds,select_sounds;
+static void sound(void *ctx,const char *device,const char *path) {
+    (void)ctx;(void)device;
+    if(strstr(path,"/ui-tick.wav"))letter_sounds++;
+    if(strstr(path,"/ui-select.wav"))select_sounds++;
+}
 static void text(void *ctx,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)ctx;(void)r;(void)g;(void)b;
@@ -143,6 +148,24 @@ int main(void)
         if (expected_rank>=0) {
             assert(phase==PHASE_INITIALS);
             neutral(api,&input,2);
+            unsigned edits=letter_sounds,selections=select_sounds;
+            press(api,&input,CHIRKY_BUTTON_LEFT);press(api,&input,CHIRKY_BUTTON_RIGHT);
+            press(api,&input,CHIRKY_BUTTON_SECONDARY);
+            assert(initial_cursor==0 && letter_sounds==edits && select_sounds==selections);
+            /* A touch slide can create diagonal edges; it edits only this letter. */
+            input.buttons[CHIRKY_BUTTON_UP]=input.button_pressed[CHIRKY_BUTTON_UP]=true;
+            input.buttons[CHIRKY_BUTTON_RIGHT]=input.button_pressed[CHIRKY_BUTTON_RIGHT]=true;
+            api->update(&input);neutral(api,&input,2);
+            assert(initial_cursor==0 && !strcmp(score_initials,"BAA") && letter_sounds==edits+1);
+            press(api,&input,CHIRKY_BUTTON_DOWN);
+            assert(letter_sounds==edits+2 && !strcmp(score_initials,"AAA"));
+            press(api,&input,CHIRKY_BUTTON_PRIMARY);
+            assert(initial_cursor==1 && initials_blink<3 && select_sounds==selections+1);
+            input.buttons[CHIRKY_BUTTON_PRIMARY]=true;
+            for(int held=0;held<10;held++)api->update(&input);
+            assert(initial_cursor==1 && select_sounds==selections+1);
+            neutral(api,&input,2);press(api,&input,CHIRKY_BUTTON_SECONDARY);
+            assert(initial_cursor==0 && initials_blink<3 && select_sounds==selections+2);
             neutral(api,&input,30);assert(initials_blink>=30);
             press(api,&input,CHIRKY_BUTTON_UP);assert(initials_blink<3);
             press(api,&input,CHIRKY_BUTTON_DOWN);assert(initials_blink<3);

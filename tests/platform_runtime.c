@@ -376,7 +376,7 @@ static void run_cycle(struct asset_store *store, const char *module_directory,
         .draw_sprite = sprite, .sound_play = sound};
     assert(game->init(&api, config));
     assert(p.requests[CHIRKY_ASSET_BLOB] >= 2 && p.requests[CHIRKY_ASSET_IMAGE] == 1);
-    assert(p.requests[CHIRKY_ASSET_SOUND] == (phosphor ? 6u : 7u));
+    assert(p.requests[CHIRKY_ASSET_SOUND] == (phosphor ? 8u : 7u));
     no_asset_work(&p);
     struct chirky_input input = {0};
     p.steady = true;

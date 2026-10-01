@@ -47,6 +47,12 @@ def main() -> None:
                 lambda t, p: (sine(240 - 170 * p, t) + .25 * sine(61, t)) * (1 - p))
     write_sound("win.wav", 0.65,
                 lambda t, p: sine((523, 659, 784, 1047)[min(3, int(p * 4))], t) * (1 - .55 * p))
+    # Quiet UI feedback with smooth attack/release; confirmation is two notes.
+    write_sound("ui-tick.wav", 0.045,
+                lambda t, p: .6 * sine(600, t) * math.sin(math.pi * p) ** 2)
+    write_sound("ui-select.wav", 0.10,
+                lambda t, p: .6 * sine(660 if p < .5 else 880, t)
+                * math.sin(math.pi * ((p * 2) % 1)) ** 2)
     for file in sorted(OUTPUT.glob("*.wav")):
         print(file)
 

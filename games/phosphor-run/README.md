@@ -19,8 +19,11 @@ three lives and ends when all three are lost. Lives carry between campaign level
 Each level starts with fresh shards, checkpoint, dash, particles, camera state and
 a 60 Hz timer. Its opening card shows the articulated player at 2× size running
 in place before control begins. A qualifying completion enters the top ten for
-that level. Use Up/Down to edit an initial, Left/Right to choose one, and Primary
-to advance and submit. The active letter blinks and editing restarts its blink.
+that level. Use Up/Down to edit an initial, Primary (touch A) to advance and
+submit the final letter, and Secondary (touch B) to go back for corrections.
+Left/Right are ignored so sliding the touch D-pad cannot change the active
+character. Letter edits play a short tick; advancing, going back and submitting
+play a two-note confirmation. The active letter blinks and editing restarts its blink.
 Scores save immediately through the host's persistent storage and survive game
 relaunches, browser reloads and Pi restarts. Each level is keyed by its catalog ID
 so reordering levels preserves its scores. The browser uses localStorage; Pi
@@ -63,6 +66,11 @@ Restart an already-running dashboard after updating its server code.
 - `assets/levels/`: all campaign level grids.
 - `assets/sprites/`: all named sprite and animation files.
 - `assets/*.wav`: sounds; `assets/concept.png`: visual reference.
+
+Regenerate the deterministic PCM sound effects with
+`python3 tools/generate_phosphor_assets.py` from the repository root. This includes
+the quiet 45 ms letter tick and 100 ms two-note selection sound, played through
+the same host audio service on Pi and in the browser.
 
 Catalog example (paths are relative to `content.conf`):
 

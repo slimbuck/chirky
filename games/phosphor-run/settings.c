@@ -39,6 +39,8 @@ static void default_settings(void)
     copy_text(settings.checkpoint_sound, sizeof(settings.checkpoint_sound), "games/phosphor-run/assets/checkpoint.wav");
     copy_text(settings.death_sound, sizeof(settings.death_sound), "games/phosphor-run/assets/death.wav");
     copy_text(settings.win_sound, sizeof(settings.win_sound), "games/phosphor-run/assets/win.wav");
+    copy_text(settings.letter_sound, sizeof(settings.letter_sound), "games/phosphor-run/assets/ui-tick.wav");
+    copy_text(settings.select_sound, sizeof(settings.select_sound), "games/phosphor-run/assets/ui-select.wav");
 }
 
 bool load_settings(const char *path)
@@ -76,6 +78,8 @@ bool load_settings(const char *path)
         else if (!strcmp(key,"sound_checkpoint")) copy_text(settings.checkpoint_sound,sizeof(settings.checkpoint_sound),value);
         else if (!strcmp(key,"sound_death")) copy_text(settings.death_sound,sizeof(settings.death_sound),value);
         else if (!strcmp(key,"sound_win")) copy_text(settings.win_sound,sizeof(settings.win_sound),value);
+        else if (!strcmp(key,"sound_letter")) copy_text(settings.letter_sound,sizeof(settings.letter_sound),value);
+        else if (!strcmp(key,"sound_select")) copy_text(settings.select_sound,sizeof(settings.select_sound),value);
         else if (!strcmp(key,"background")) settings.background=colour_from_hex(value,settings.background);
         else if (!strcmp(key,"deep_machinery")) settings.deep=colour_from_hex(value,settings.deep);
         else if (!strcmp(key,"platform")) settings.platform=colour_from_hex(value,settings.platform);

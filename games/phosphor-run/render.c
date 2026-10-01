@@ -242,7 +242,12 @@ static void render_initials(void)
         text(table_x,baseline,line,1,pending?settings.amber:settings.paper);
         if(pending)rectangle(table_x+(4+initial_cursor)*6,baseline-9,5,1,settings.amber);
     }
-    centered_text(29,"UP/DOWN LETTER  PRIMARY NEXT",1,settings.edge);
+    char next[16],back[16];
+    controller_label(CHIRKY_BUTTON_PRIMARY,"PRIMARY",next,sizeof(next));
+    controller_label(CHIRKY_BUTTON_SECONDARY,"SECONDARY",back,sizeof(back));
+    centered_text(39,"UP/DOWN LETTER",1,settings.edge);
+    snprintf(line,sizeof(line),"%s %s  %s BACK",next,initial_cursor<2?"NEXT":"SAVE",back);
+    centered_text(29,line,1,settings.edge);
 }
 
 void render_title(void)

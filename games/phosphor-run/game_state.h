@@ -36,6 +36,7 @@ struct settings {
     int start_level;
     char jump_sound[512], dash_sound[512], shard_sound[512];
     char checkpoint_sound[512], death_sound[512], win_sound[512];
+    char letter_sound[512], select_sound[512];
     struct colour background, deep, platform, edge, phosphor, amber, hazard, paper;
 };
 
