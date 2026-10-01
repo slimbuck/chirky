@@ -5,7 +5,7 @@ const {gameCatalog}=require("./game-catalog");
 const catalog=gameCatalog(ROOT);
 const games=catalog.games.map(game=>game.id);
 function assets(root=ROOT) {
-  const files=["assets/launcher/splash.ppm"];
+  const files=["assets/launcher/mascot.ppm"];
   function walk(relative) {
     for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})) {
       const name=relative+"/"+entry.name;

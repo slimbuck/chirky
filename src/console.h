@@ -31,6 +31,8 @@ struct chirky_console {
     unsigned capabilities;
     struct launcher_config launcher;
     int selected_game,settings_option,selected_option,pause_option,display_option;
+    /* Presentation only: rows displaced from the fixed selection in shared menus. */
+    float menu_offset,menu_velocity;
     bool settings_menu,controller_settings,display_settings,input_test,paused;
     bool game_active,loading,diagnostic,ui_wait_release;
     struct binding_setup setup;

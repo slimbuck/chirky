@@ -13,10 +13,10 @@ static int launcher_game_count(const struct host *host)
 }
 
 static void draw_launcher(struct host *host)
-{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_launcher(&ui,&host->launcher_art,&host->console.launcher,host->console.selected_game); }
+{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_launcher(&ui,&host->launcher_art,&host->console.launcher,host->console.selected_game,host->console.menu_offset); }
 
 static void draw_settings_menu(struct host *host)
-{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_draw_settings_menu(&ui,&host->console.launcher,host->console.settings_option); }
+{ struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_page(&ui,&host->launcher_art,"Settings");console_draw_settings_menu(&ui,&host->console.launcher,host->console.settings_option,host->console.menu_offset); }
 
 static void draw_live_inputs(struct host *host)
 { struct chirky_host_api ui=console_api(host);
@@ -31,12 +31,12 @@ static void draw_live_inputs(struct host *host)
 
 static void draw_controller_settings(struct host *host)
 { struct chirky_host_api ui=console_api(host);
-    clear_screen();console_draw_controller_settings(&ui,&host->console.setup,host->console.input_test,host->console.selected_option,host->console.settings_message);
-    draw_live_inputs(host);
+    clear_screen();console_page(&ui,&host->launcher_art,host->console.input_test?"Test buttons":"Input settings");console_draw_controller_settings(&ui,&host->console.setup,host->console.input_test,host->console.selected_option,host->console.settings_message,host->console.menu_offset);
+    if(host->console.input_test)draw_live_inputs(host);
 }
 
 static void draw_display_settings(struct host *host)
-{ struct chirky_host_api ui=console_api(host);clear_screen();chirky_console_draw_display(&host->console,&ui); }
+{ struct chirky_host_api ui=console_api(host);clear_screen();console_page(&ui,&host->launcher_art,"Display area");chirky_console_draw_display(&host->console,&ui); }
 
 static void update_timing_toggle(struct host *host,uint64_t now_us)
 {
@@ -169,9 +169,9 @@ static void check_pause_menu(const char *output_dir)
     assert(framebuffer[h.safe_y+4][h.safe_x+4][0]==21);
     assert(framebuffer[h.safe_y+4][h.safe_x+4][1]==42);
     assert(framebuffer[h.safe_y+4][h.safe_x+4][2]==63);
-    int panel_x=h.safe_x+(h.api.screen_width-216)/2;
-    int panel_y=h.safe_y+(h.api.screen_height-112)/2;
-    assert(framebuffer[panel_y][panel_x][1]==175);
+    int panel_x=h.safe_x+(h.api.screen_width-232)/2;
+    int panel_y=h.safe_y+(h.api.screen_height-132)/2;
+    assert(!memcmp(framebuffer[panel_y][panel_x+8],(unsigned char[]){60,57,74},3));
     draw_host(&h);assert(pause_renders==2 && game_updates==saved_updates);
     char path[512];snprintf(path,sizeof(path),"%s/pause-menu.ppm",output_dir);write_preview(path);
     event(&h,1,EV_KEY,KEY_X,1);update_host(&h);assert(!h.console.paused && h.active_game);
@@ -220,14 +220,18 @@ static void check_launcher_menu(void)
     tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS && h.console.settings_option==2);
     tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER && h.console.selected_game==2);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
-    tap(&h,1,KEY_UP);assert(h.console.settings_option==3);
+    tap(&h,1,KEY_UP);assert(h.console.settings_option==0);
+    for(int i=0;i<4;i++)tap(&h,1,KEY_DOWN);
+    assert(h.console.settings_option==3);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_LAUNCHER);
     tap(&h,1,KEY_X);tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_INPUT);
     tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER);
     tap(&h,1,KEY_DOWN);assert(h.console.selected_game==3);
-    tap(&h,1,KEY_DOWN);assert(h.console.selected_game==0);
+    tap(&h,1,KEY_DOWN);assert(h.console.selected_game==3);
+    for(int i=0;i<5;i++)tap(&h,1,KEY_UP);
+    assert(h.console.selected_game==0);
 }
 
 static void check_transition_gates(void)
@@ -409,13 +413,14 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     held_input_names(host,true,name,sizeof(name));assert(strstr(name," R") && strstr(name," T"));
     draw_controller_settings(host);
     char output[512];snprintf(output,sizeof(output),"%s/input-test.ppm",output_dir);write_preview(output);
-    int cell=(host->api.screen_width-20)/4,x=host->safe_x+10+(CHIRKY_BUTTON_SECONDARY%4)*cell;
-    int indicator_y=host->safe_y+63-(CHIRKY_BUTTON_SECONDARY/4)*21;
-    assert(framebuffer[indicator_y][x+2][1]==220);
-    assert(framebuffer[indicator_y][x+cell/2][0]==250);
+    /* Secondary's wider column preserves its full label at CRT-safe sizes. */
+    int extra=(host->api.screen_width-24-208)/4,cell=66+extra,x=host->safe_x+12+58+extra;
+    int indicator_y=host->safe_y+host->api.screen_height-105-(CHIRKY_BUTTON_SECONDARY/4)*26;
+    assert(framebuffer[indicator_y][x+3][1]==220);
+    assert(framebuffer[indicator_y][x+cell/2][0]==244);
     event(host,1,EV_KEY,KEY_R,0);update_host(host);draw_controller_settings(host);
     assert(host->inputs.state.buttons[CHIRKY_BUTTON_SECONDARY]);
-    assert(framebuffer[indicator_y][x+cell/2][0]==60);
+    assert(framebuffer[indicator_y][x+cell/2][0]==37);
     event(host,0,EV_KEY,BTN_SOUTH,0);event(host,0,EV_KEY,BTN_MODE,0);event(host,1,EV_KEY,KEY_T,0);
     event(host,0,EV_ABS,ABS_HAT0X,0);update_host(host);
     held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"PAD NONE"));
@@ -443,7 +448,7 @@ int main(int argc,char **argv)
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
     fputs("boot_game=launcher\n# Keep this comment\nbind_confirm=key:313\nframe_timing=1\n",config);fclose(config);
     static struct host host;
-    char art_path[1024];snprintf(art_path,sizeof(art_path),"%s/../assets/launcher/splash.ppm",argv[1]);
+    char art_path[1024];snprintf(art_path,sizeof(art_path),"%s/../assets/launcher/mascot.ppm",argv[1]);
     assert(splash_load_file(&host.launcher_art,art_path));
     host.api.context=&host;host.api.fill_rect=fill_rect;
     host.mode.hdisplay=320;host.mode.vdisplay=240;

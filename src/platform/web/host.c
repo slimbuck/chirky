@@ -135,7 +135,7 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .draw_sprite=sprite,.sound_play=sound_play,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_read_api,.save_write=save_write_api};
-    (void)config;splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");console_init();return 1;
+    (void)config;splash_load_file_api(&art,&api,"assets/launcher/mascot.ppm");console_init();return 1;
 failed:
     web_destroy();return 0;
 }
@@ -161,7 +161,7 @@ EMSCRIPTEN_KEEPALIVE void web_unload(void)
     if(game_library){dlclose(game_library);game_library=NULL;}
     emscripten_webgl_make_context_current(context);
     splash_free(&art);image_cache_clear(&images,&renderer);
-    if(assets){asset_store_clear(assets);splash_load_file_api(&art,&api,"assets/launcher/splash.ppm");}
+    if(assets){asset_store_clear(assets);splash_load_file_api(&art,&api,"assets/launcher/mascot.ppm");}
 }
 struct module_load {unsigned generation;char config[1024];};
 EM_JS(void,module_loaded,(int success),{Module.onLoaded(!!success);});

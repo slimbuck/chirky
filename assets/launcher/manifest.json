@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "cell": [
+    64,
+    64
+  ],
+  "contentMax": [
+    60,
+    60
+  ],
+  "gutter": 2,
+  "baseline": 57,
+  "frames": [
+    "idle"
+  ],
+  "alpha": "binary",
+  "paletteMax": 49,
+  "renderScale": 1,
+  "fontSizes": [
+    11,
+    13,
+    17
+  ],
+  "fontCell": [
+    16,
+    20
+  ],
+  "identity": "Cream CRT, smiling green eyes, red comb, red/green/blue tail, orange beak and feet",
+  "hashes": {
+    "assets/launcher/mascot.png": "c14ae386b032c56f04df90b807cab1acf33ea611033eee87cc152f276a7b12cf",
+    "assets/launcher/mascot.ppm": "2a40f3b8ae49d76a7bab09a05480162f5e65395f9c033b46c43d0b97ea395ba4",
+    "include/launcher_font.h": "7ad8a14006c46c526287cb1945de5fdf1bc5c0e3b7d30d62590c1c7c587668e5",
+    "assets/launcher/source/mascot.png": "a9f46bc695b26a453718b101c3cdf20f77bc718b3affa1143b3f97acdad10d67",
+    "assets/launcher/source/Fredoka.ttf": "594cd6463e8eccef94423fba8e0114c137492f6415af4b414b21b73abcb644a8"
+  }
+}

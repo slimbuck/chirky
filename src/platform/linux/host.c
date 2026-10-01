@@ -767,7 +767,7 @@ static void unload_game(struct host *host)
         splash_free(&host->launcher_art);
         image_cache_clear(&host->images,&host->renderer);
         asset_store_clear(host->assets);
-        splash_load_file_api(&host->launcher_art,&host->api,"assets/launcher/splash.ppm");
+        splash_load_file_api(&host->launcher_art,&host->api,"assets/launcher/mascot.ppm");
     }
     write_status(host);
 }
@@ -1765,7 +1765,7 @@ int main(void)
     host.director=director_client_create();
     if(!host.assets || !host.director){fprintf(stderr,"Could not start host services\n");cleanup(&host);return EXIT_FAILURE;}
     update_safe_area(&host);
-    splash_load_file_api(&host.launcher_art,&host.api,"assets/launcher/splash.ppm");
+    splash_load_file_api(&host.launcher_art,&host.api,"assets/launcher/mascot.ppm");
     open_inputs(&host.inputs);
     mkdir("run", 0755);
     if (mkfifo("run/control.fifo", 0600) != 0 && errno != EEXIST) {

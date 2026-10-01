@@ -5,7 +5,7 @@
 
 /* Custom 7-by-9-pixel lettering, drawn at integer scale. The order spells
    CHIRKY BOX; two-pixel stems keep the maker's badge readable on a CRT. */
-static inline void launcher_wordmark(const struct chirky_host_api *api)
+static inline void launcher_wordmark_at(const struct chirky_host_api *api,int left,int top,int scale)
 {
     static const uint8_t letters[9][9]={
         {0x3f,0x7f,0x60,0x60,0x60,0x60,0x60,0x7f,0x3f}, /* C */
@@ -18,8 +18,6 @@ static inline void launcher_wordmark(const struct chirky_host_api *api)
         {0x3e,0x7f,0x63,0x63,0x63,0x63,0x63,0x7f,0x3e}, /* O */
         {0x63,0x63,0x36,0x3e,0x1c,0x3e,0x36,0x63,0x63}, /* X */
     };
-    int scale=api->screen_width>=248?3:2;
-    int left=10, top=api->screen_height-24;
     int badge_x=left+50*scale, badge_y=top-11*scale;
     int badge_w=27*scale, badge_h=13*scale;
     api->fill_rect(api->context,badge_x+1,badge_y-1,badge_w,badge_h,8,42,44);
@@ -40,5 +38,10 @@ static inline void launcher_wordmark(const struct chirky_host_api *api)
             col=end;
         }
     }
+}
+static inline void launcher_wordmark(const struct chirky_host_api *api)
+{
+    int scale=api->screen_width>=248?3:2;
+    launcher_wordmark_at(api,(api->screen_width-77*scale)/2,api->screen_height-24,scale);
 }
 #endif

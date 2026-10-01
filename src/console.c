@@ -29,6 +29,7 @@ void chirky_console_catalog(struct chirky_console *c,const struct console_game *
     if(caps&CONSOLE_CAN_FULLSCREEN)launcher_add(&c->launcher,"fullscreen","Full Screen",CONSOLE_FULLSCREEN,true);
     if(caps&CONSOLE_CAN_SOUND)launcher_add(&c->launcher,"sound","Mute / Unmute",CONSOLE_SOUND,true);
     c->selected_game=c->settings_option=0;
+    c->menu_offset=c->menu_velocity=0;
 }
 static void apply_display(struct chirky_console *c)
 { if(c->services.display)c->services.display(c->services.context,&c->display); }
@@ -39,6 +40,7 @@ void chirky_console_home(struct chirky_console *c,bool settings)
     leave_display(c);
     c->loading=c->game_active=c->paused=c->setup.active=c->controller_settings=c->input_test=false;
     c->settings_menu=settings;c->pause_option=0;c->controller_menu_chord_frames=0;
+    c->menu_offset=c->menu_velocity=0;
     chirky_console_block(c);
     if(c->services.unload)c->services.unload(c->services.context);
 }
@@ -100,6 +102,17 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
 {
     const struct chirky_input *input=frame->logical;
     enum console_screen before=chirky_console_screen(c);
+    if(before==SCREEN_LAUNCHER || before==SCREEN_SETTINGS || before==SCREEN_INPUT || before==SCREEN_DISPLAY) {
+        /* Two fixed substeps per console tick: continuous velocity on reversals,
+           gentle settling, and no render-rate-dependent navigation. */
+        for(int step=0;step<2;step++) {
+            c->menu_velocity+=(-230*c->menu_offset-23*c->menu_velocity)/120;
+            c->menu_offset+=c->menu_velocity/120;
+        }
+        if(c->menu_offset>-.0008f && c->menu_offset<.0008f &&
+           c->menu_velocity>-.009f && c->menu_velocity<.009f)
+            c->menu_offset=c->menu_velocity=0;
+    }
     chirky_console_timing(c,input->buttons[CHIRKY_BUTTON_START],frame->now_us);
     if(c->loading){if(frame->cancel)chirky_console_home(c,c->settings_menu);return false;}
     /* Recovery must remain available while Menu's pause transition waits for
@@ -139,7 +152,7 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
         else return true;
     } else if(c->display_settings) {
         int direction=(int)input->button_pressed[CHIRKY_BUTTON_DOWN]-(int)input->button_pressed[CHIRKY_BUTTON_UP];
-        if(direction)c->display_option=(c->display_option+direction+6)%6;
+        if(direction)c->menu_offset+=console_menu_move(&c->display_option,6,direction);
         int delta=(int)input->button_pressed[CHIRKY_BUTTON_RIGHT]-(int)input->button_pressed[CHIRKY_BUTTON_LEFT];
         int *values[]={&c->display.x,&c->display.y,&c->display.offset_x,&c->display.offset_y};
         int max[]={CHIRKY_FRAMEBUFFER_WIDTH/10,CHIRKY_FRAMEBUFFER_HEIGHT/10,c->display.x,c->display.y};
@@ -162,34 +175,38 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
         c->controller_menu_chord_frames=input->buttons[CHIRKY_BUTTON_SECONDARY]?c->controller_menu_chord_frames+1:0;
         if(frame->cancel || c->controller_menu_chord_frames>=60){c->input_test=false;c->controller_menu_chord_frames=0;}
     } else if(c->controller_settings) {
+        int previous=c->selected_option;
         int choice=console_menu_update(&c->selected_option,4,input,frame->cancel);
+        c->menu_offset+=c->selected_option-previous;
         if(choice==-2 || choice==3)c->controller_settings=false;
         else if(choice==2){c->input_test=true;c->controller_menu_chord_frames=0;}
         else if(choice>=0){setup_begin(&c->setup,choice==1);c->settings_message="";c->controller_menu_chord_frames=0;}
     } else if(c->settings_menu) {
+        int previous=c->settings_option;
         int count=launcher_count(&c->launcher,true),choice=console_menu_update(&c->settings_option,count+1,input,frame->cancel);
+        c->menu_offset+=c->settings_option-previous;
         if(choice==-2 || choice==count)c->settings_menu=false;
         else if(choice>=0)choose(c,launcher_at(&c->launcher,true,choice)->action,true);
     } else {
+        int previous=c->selected_game;
         int choice=console_menu_update(&c->selected_game,launcher_count(&c->launcher,false),input,false);
+        c->menu_offset+=c->selected_game-previous;
         if(choice>=0)choose(c,launcher_at(&c->launcher,false,choice)->action,false);
-        else if(input->button_pressed[CHIRKY_BUTTON_MENU])chirky_console_open(c,CONSOLE_SETTINGS);
     }
-    if(before!=chirky_console_screen(c))chirky_console_block(c);
+    if(before!=chirky_console_screen(c)){c->menu_offset=c->menu_velocity=0;chirky_console_block(c);}
     return false;
 }
 void chirky_console_draw_display(const struct chirky_console *c,const struct chirky_host_api *api)
 {
     int w=api->screen_width,h=api->screen_height;
-    api->fill_rect(api->context,0,0,w,1,40,175,212);api->fill_rect(api->context,0,h-1,w,1,40,175,212);
-    api->fill_rect(api->context,0,0,1,h,40,175,212);api->fill_rect(api->context,w-1,0,1,h,40,175,212);
-    console_menu_text(api,10,h-20,"DISPLAY AREA",2,238,240,232);
-    console_menu_text(api,10,h-47,"KEEP ALL FOUR EDGES VISIBLE",1,112,160,170);
-    const char *names[]={"SIDE MARGIN","TOP BOTTOM MARGIN","HORIZONTAL","VERTICAL"};
+    launcher_rect(api,0,0,w,1,launcher_gold,0,h);launcher_rect(api,0,h-1,w,1,launcher_gold,0,h);
+    launcher_rect(api,0,0,1,h,launcher_gold,0,h);launcher_rect(api,w-1,0,1,h,launcher_gold,0,h);
+    const char *names[]={"Side margin","Top / bottom margin","Horizontal offset","Vertical offset"};
     int values[]={c->display.x,c->display.y,c->display.offset_x,c->display.offset_y};
-    for(int i=0;i<4;i++){char line[64];snprintf(line,sizeof(line),"%s - %d",names[i],values[i]);console_menu_row(api,h-70-i*16,line,c->display_option==i);}
-    console_menu_row(api,h-134,"SAVE",c->display_option==4);console_menu_row(api,h-150,"BACK",c->display_option==5);
-    console_menu_text(api,10,25,c->settings_message && *c->settings_message?c->settings_message:"LEFT RIGHT ADJUST - UP DOWN MOVE",1,112,160,170);
+    char rows[4][64];const char *labels[6];
+    for(int i=0;i<4;i++){snprintf(rows[i],sizeof(rows[i]),"%s: %d",names[i],values[i]);labels[i]=rows[i];}labels[4]="Save";labels[5]="Back";
+    console_scroll_list(api,labels,6,c->display_option,c->menu_offset,45,h-78);
+    console_menu_text(api,12,34,c->settings_message && *c->settings_message?c->settings_message:"Left/Right adjusts - keep edges visible",1,201,191,173);
     console_menu_footer(api,true);
 }
 void chirky_console_render(struct chirky_console *c,const struct chirky_host_api *api,struct splash_art *art,unsigned pad,unsigned key,const char *pad_names,const char *key_names)
@@ -197,12 +214,14 @@ void chirky_console_render(struct chirky_console *c,const struct chirky_host_api
     switch(chirky_console_screen(c)) {
     case SCREEN_PAUSE:console_draw_pause_menu(api,c->pause_option);break;
     case SCREEN_GAME:break;
-    case SCREEN_DISPLAY:chirky_console_draw_display(c,api);break;
+    case SCREEN_DISPLAY:console_page(api,art,"Display area");chirky_console_draw_display(c,api);break;
     case SCREEN_INPUT:case SCREEN_SETUP:case SCREEN_TEST:
-        console_draw_controller_settings(api,&c->setup,c->input_test,c->selected_option,c->settings_message);
-        console_draw_live_inputs(api,pad,key,pad_names,key_names);break;
-    case SCREEN_SETTINGS:console_draw_settings_menu(api,&c->launcher,c->settings_option);break;
-    default:console_draw_launcher(api,art,&c->launcher,c->selected_game);break;
+        console_page(api,art,c->setup.active?(c->setup.keyboard?"Map keyboard":"Map controller"):c->input_test?"Test buttons":"Input settings");
+        console_draw_controller_settings(api,&c->setup,c->input_test,c->selected_option,c->settings_message,c->menu_offset);
+        if(c->input_test)console_draw_live_inputs(api,pad,key,pad_names,key_names);
+        break;
+    case SCREEN_SETTINGS:console_page(api,art,"Settings");console_draw_settings_menu(api,&c->launcher,c->settings_option,c->menu_offset);break;
+    default:console_draw_launcher(api,art,&c->launcher,c->selected_game,c->menu_offset);break;
     }
     if(c->loading)console_draw_loading(api);
 }

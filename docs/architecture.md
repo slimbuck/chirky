@@ -34,6 +34,19 @@ Portable code must not include Linux, Emscripten, DOM, WebAudio, DRM, ALSA,
 evdev, or socket APIs. Add a platform operation or callback instead of testing
 for a game id or operating system in core or game code.
 
+The shared menu scroll animation is presentation state in `src/console.c`, advanced
+by the same fixed update as navigation. Selection changes immediately; a damped
+spring moves the rows beneath a fixed highlight and retains velocity when input
+reverses. Lists stop at their first and last entries; blocked movement adds no
+animation, and rendering never repeats entries beyond either end. Rendering
+rounds to framebuffer pixels and never changes navigation.
+Launcher, Settings, Input settings and Display area use this same list renderer.
+Both hosts load the same 64x64 mascot, drawn inline with the wordmark or page
+title to leave the full width below for content. Fredoka glyph masks, rounded
+cards and the cream/gold/navy palette are shared with mapping, button testing
+and the in-game pause overlay. See `assets/launcher/README.md` for the offline
+asset pipeline.
+
 Game-local persistent records use the optional ABI 13 `save_read` / `save_write`
 callbacks. Games own versioned record formats; hosts own storage. Names are
 bounded game/key identifiers, and records are limited to 64 KiB. Linux writes

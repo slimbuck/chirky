@@ -27,7 +27,8 @@ function createServer(directory) {
 if (require.main === module) {
   const server = createServer(path.join(__dirname, '../build/web'));
   server.on('error', error => { console.error(error.message); process.exitCode=1; });
-  server.listen(Number(process.argv[2] || 3031), '127.0.0.1', () =>
-    console.log(`Chirky standalone: http://127.0.0.1:${server.address().port}/`));
+  const host = process.argv[3] || '127.0.0.1';
+  server.listen(Number(process.argv[2] || 3031), host, () =>
+    console.log(`Chirky standalone: http://${host}:${server.address().port}/`));
 }
 module.exports = { createServer };

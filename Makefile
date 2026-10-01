@@ -71,6 +71,7 @@ build/performance-benchmark: tools/performance_benchmark.c $(SOURCES) $(wildcard
 
 test: $(GAME_TARGETS)
 	mkdir -p build
+	$(NODE) --test tests/launcher_art.cjs
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/console.c src/console.c -o /tmp/console-test
 	/tmp/console-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/runtime.c src/runtime.c -o /tmp/runtime-test

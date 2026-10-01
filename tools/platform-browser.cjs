@@ -167,7 +167,7 @@ async function main() {
         }
         const launcher=await checkLoading('Launcher');
         await page.eval('document.querySelector("#screen").focus()');
-        for(const [code,key,value] of [['Escape','Escape',27],['ArrowDown','ArrowDown',40],['KeyX','x',88]]){
+        for(const [code,key,value] of [...catalog.games.filter(g=>g.role==='game').map(()=>['ArrowDown','ArrowDown',40]),['KeyX','x',88],['ArrowDown','ArrowDown',40],['KeyX','x',88]]){
           await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(100);
           await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(100);
         }
@@ -297,7 +297,8 @@ async function main() {
         }
         await page.eval('document.querySelector("#screen").focus()');
         if(game.role==='diagnostic'){
-          await press('Escape','Escape',27);
+          for(const entry of catalog.games.filter(g=>g.role==='game'))await press('ArrowDown','ArrowDown',40);
+          await press('KeyX','x',88);
           for(let i=0;i<=catalog.games.filter(g=>g.role==='diagnostic').findIndex(g=>g.id===game.id);i++)await press('ArrowDown','ArrowDown',40);
         }else for(let i=0;i<catalog.games.filter(g=>g.role==='game').findIndex(g=>g.id===game.id);i++)await press('ArrowDown','ArrowDown',40);
         await press('KeyX','x',88);
@@ -448,7 +449,10 @@ async function main() {
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
         assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
         report.checks.push('in-console return keeps canvas, WebGL context and fullscreen alive');
-        await key('Escape','Escape',27);assert.equal((await state()).screen,1);
+        await key('Escape','Escape',27);assert.equal((await state()).screen,0,'Menu must not bypass the launcher Settings entry');
+        const launchGames=catalog.games.filter(g=>g.role==='game');
+        for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowDown','ArrowDown',40);
+        await key('KeyX','x',88);assert.equal((await state()).screen,1);
         await key('KeyX','x',88);assert.equal((await state()).screen,2);
         await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);assert.equal((await state()).capture,1);
         // Cancel a partial draft. It must not reach browser storage.
@@ -479,7 +483,7 @@ async function main() {
         assert.equal((await state()).screen,0);
         await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');
         // Settings includes browser capabilities, without Pi display placement.
-        await key('Escape','Escape',27);
+        await key('KeyQ','q',81);
         const diagnostics=catalog.games.filter(g=>g.role==='diagnostic').length;
         for(let i=0;i<1+diagnostics;i++)await key('ArrowDown','ArrowDown',40);
         if(mobile){
@@ -496,7 +500,9 @@ async function main() {
         await key('ArrowDown','ArrowDown',40);await key('KeyQ','q',81);assert((await state()).muted);
         assert.equal((await state()).activeSounds,0);await key('KeyQ','q',81);assert(!(await state()).muted);
         await key('KeyZ','z',90);
-        await key('KeyQ','q',81); // selected game remains selected in persistent launcher
+        // Leaving Settings preserves its launcher row; scroll back to the game.
+        for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowUp','ArrowUp',38);
+        await key('KeyQ','q',81);
         for(let i=0;i<150 && (await state()).id==='launcher';i++)await delay(100);
         assert.equal((await state()).id,game);
         assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
@@ -582,8 +588,8 @@ async function main() {
             await key('F1','F1',112);
             const destination=entry.role==='diagnostic'?1:0;
             assert.equal((await state()).screen,destination);
-            assert.equal((await state()).audit.texturesCreated-(await state()).audit.texturesDeleted,destination===0?1:0,
-              'Only the launcher needs a texture; Settings uses rectangles');
+            assert.equal((await state()).audit.texturesCreated-(await state()).audit.texturesDeleted,1,
+              'Launcher and Settings share the same header mascot texture');
           }
           await page.eval('__platformProbe.runtime.onDirectorConnect=__connectDirector');
           await page.eval(`__platformProbe.runtime._web_console_launch(${catalog.games.findIndex(entry=>entry.id===game)})`);

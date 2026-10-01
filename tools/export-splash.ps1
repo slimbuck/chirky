@@ -10,7 +10,8 @@ foreach ($gameId in @('phosphor-run', 'rosey-chop')) {
     if ($LASTEXITCODE -ne 0) { throw "Splash export failed: $gameId" }
 }
 
-# The launcher uses a fixed 320x240 canvas.
+# Historical PCB artwork only. The current mascot and font are built by
+# python tools/build-launcher-art.py; this export is not loaded by the launcher.
 $launcherDirectory = Join-Path $projectRoot "assets/launcher"
 $launcherPng = Join-Path $launcherDirectory "splash.png"
 $launcherSize = & magick identify -format "%wx%h" $launcherPng

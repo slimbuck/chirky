@@ -38,6 +38,9 @@ node tools/serve-web.cjs
 
 Open <http://127.0.0.1:3031/> to play the exact standalone build. A different
 port can be supplied, for example `node tools/serve-web.cjs 3032`.
+To preview from another device over LAN or Tailscale, listen on all interfaces
+with `node tools/serve-web.cjs 3033 0.0.0.0`, then open this computer's LAN or
+Tailscale IP with port `3033` on that device.
 
 On Windows with Emscripten installed in WSL, build with
 `wsl make web NODE=node.exe`, then run the preview with Windows Node.js.
