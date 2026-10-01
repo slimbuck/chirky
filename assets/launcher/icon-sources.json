@@ -1,0 +1,8 @@
+{
+  "cell": [20, 20],
+  "icons": {
+    "assets/launcher/icons/phosphor-run.png": {"source": "games/phosphor-run/assets/artwork/splash.ppm", "crop": [82, 118, 102, 138], "subject": "The cyan and gold robot"},
+    "assets/launcher/icons/rosey-chop.png": {"source": "games/rosey-chop/assets/artwork/splash.png", "crop": [0, 137, 20, 157], "subject": "A red rose and its leaves"},
+    "assets/launcher/icons/bramble-hollow.png": {"source": "games/bramble-hollow/assets/player.pam", "crop": [10, 4, 30, 24], "subject": "The woodland fox's face"}
+  }
+}

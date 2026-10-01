@@ -3,6 +3,12 @@ test('launcher approved assets preserve native dimensions, palette, identity col
   const manifest=JSON.parse(fs.readFileSync('assets/launcher/manifest.json'));
   for(const [file,hash] of Object.entries(manifest.hashes))assert.equal(crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),hash,file);
   assert.deepEqual(manifest.cell,[64,64]);assert.equal(manifest.renderScale,1);
+  assert.deepEqual(manifest.icons.cell,[20,20]);
+  for(const [file,recipe] of Object.entries(manifest.icons.icons)) {
+    const bytes=fs.readFileSync(file);
+    assert.equal(bytes.readUInt32BE(16),20);assert.equal(bytes.readUInt32BE(20),20);
+    assert.equal(recipe.crop[2]-recipe.crop[0],20);assert.equal(recipe.crop[3]-recipe.crop[1],20);
+  }
   const ppm=fs.readFileSync('assets/launcher/mascot.ppm'),header=Buffer.from('P6\n64 64\n255\n');
   assert(ppm.subarray(0,header.length).equals(header));assert.equal(ppm.length,header.length+64*64*3);
   const palette=new Set(),rgb=[0,0,0];

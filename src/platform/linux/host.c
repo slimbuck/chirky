@@ -244,6 +244,7 @@ struct game_record {
     char module_path[512];
     char config_path[512];
     bool diagnostic;
+    int launcher_order;
 };
 
 struct host {
@@ -577,6 +578,7 @@ static void write_status(const struct host *host)
 
 static bool load_manifest(const char *directory, struct game_record *game)
 {
+    game->launcher_order=1000;
     bool valid=true;
     snprintf(game->config_path, sizeof(game->config_path), "games/%s/game.conf", directory);
     FILE *file = fopen(game->config_path, "r");
@@ -596,6 +598,11 @@ static bool load_manifest(const char *directory, struct game_record *game)
             copy_text(game->description, sizeof(game->description), value);
         else if (strcmp(key, "module") == 0)
             copy_text(game->module_path, sizeof(game->module_path), value);
+        else if (strcmp(key, "launcher_order") == 0) {
+            char *end;long order=strtol(value,&end,10);
+            if(!*value || *end || order<0 || order>1000000)valid=false;
+            else game->launcher_order=(int)order;
+        }
         else if (strcmp(key, "role") == 0) {
             if (strcmp(value,"game") && strcmp(value,"diagnostic")) valid=false;
             game->diagnostic = strcmp(value, "diagnostic") == 0;
@@ -609,6 +616,7 @@ static int compare_games(const void *left, const void *right)
 {
     const struct game_record *a=left,*b=right;
     if(a->diagnostic!=b->diagnostic)return a->diagnostic-b->diagnostic;
+    if(a->launcher_order!=b->launcher_order)return a->launcher_order-b->launcher_order;
     return strcmp(a->name,b->name);
 }
 

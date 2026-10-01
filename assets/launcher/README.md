@@ -30,6 +30,14 @@ Settings opens through its normal scrolling catalog entry.
 Mapping and button-test screens use the same header, typography and palette;
 the in-game pause overlay uses matching rounded cards and gold selection.
 
+Each game's `launcher_order` in `game.conf` supplies its default position;
+`launcher_icon` selects its 20x20 picture. The same build command above crops
+existing game art at native resolution according to `icon-sources.json`, writes
+the reviewed PNGs and compiles their pixels into `include/launcher_icons.h`.
+The icon registry is discovered from game manifests rather than a game list in
+the host. No game artwork is altered, resized or loaded into a second renderer.
+Icons move with their rows, retain 1:1 pixels and clip to the list bounds.
+
 The older `splash.png`/`splash.ppm` circuit-board backgrounds below are retained as
 historical source material; the launcher no longer loads or publishes them.
 

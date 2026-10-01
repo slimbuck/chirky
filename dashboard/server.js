@@ -122,6 +122,7 @@ function listGames() {
       const editors = loadEditors(entry.name).map(({ id, name, type, catalogKind, catalogId }) => ({ id, name, type, catalogKind, catalogId }));
       return { id: values.id || entry.name, name: values.name || entry.name,
         role: values.role || "game",
+        order: Number(values.launcher_order ?? 1000),
         description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors };
     }).filter(Boolean);
 }

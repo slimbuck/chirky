@@ -34,14 +34,22 @@ function gameCatalog(root = ROOT) {
       if (!new Set(["game", "diagnostic"]).has(role))
         throw new Error(`Unknown game role for ${entry.name}: ${role}`);
       const levelSetting = values.browser_level_setting || "";
+      const order = values.launcher_order === undefined ? 1000 : Number(values.launcher_order);
+      if (!/^\d+$/.test(values.launcher_order ?? "1000") || !Number.isSafeInteger(order) || order>1000000)
+        throw new Error(`Invalid launcher order for ${entry.name}`);
+      const icon = values.launcher_icon;
+      if (icon && (!/^assets\/launcher\/icons\/[a-z0-9-]+\.png$/.test(icon) || !fs.existsSync(path.join(root,icon))))
+        throw new Error(`Invalid launcher icon for ${entry.name}`);
       if (levelSetting && !/^[a-z][a-z0-9_]*$/.test(levelSetting))
         throw new Error(`Invalid browser level setting for ${entry.name}`);
-      return { id: values.id, name: values.name, description: values.description, role,
+      return { id: values.id, name: values.name, description: values.description, role, order,
+        ...(icon ? { icon } : {}),
         ...(levelSetting ? { levelSetting } : {}) };
     })
     .filter(Boolean);
   games.sort((left, right) =>
     (left.role === "diagnostic") - (right.role === "diagnostic") ||
+    left.order - right.order ||
     left.name.localeCompare(right.name));
   if (new Set(games.map(game => game.id)).size !== games.length)
     throw new Error("Game ids must be unique");

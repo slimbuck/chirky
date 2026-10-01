@@ -46,6 +46,12 @@ title to leave the full width below for content. Fredoka glyph masks, rounded
 cards and the cream/gold/navy palette are shared with mapping, button testing
 and the in-game pause overlay. See `assets/launcher/README.md` for the offline
 asset pipeline.
+Game manifests provide `launcher_order` (default 1000, with name as tie-breaker)
+for the native host, browser catalog and dashboard defaults. Existing complete
+Pi launcher configurations remain explicit overrides. `launcher_icon` refers
+to a reviewed 20x20 PNG, compiled into a manifest-discovered portable icon
+registry by the launcher artwork pipeline. Shared menu drawing clips the icon
+with its scrolling row; it never scales game art at runtime.
 
 Game-local persistent records use the optional ABI 13 `save_read` / `save_write`
 callbacks. Games own versioned record formats; hosts own storage. Names are

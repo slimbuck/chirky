@@ -102,7 +102,9 @@ static void launcher_paint(void *context,int x,int y,int w,int h,unsigned char r
 static void scrolling_launcher(void)
 {
     struct fixture f;init(&f,0);
-    const struct console_game games[]={{"one","Bramble Hollow",false},{"two","Phosphor Run",false},{"three","Rosey Chop",false}};
+    const struct console_game games[]={{"phosphor-run","Phosphor Run",false},{"rosey-chop","Rosey Chop",false},{"bramble-hollow","Bramble Hollow",false}};
+    for(int i=0;i<3;i++)assert(console_icon(games[i].id));
+    assert(!console_icon("settings") && !console_icon("unknown-game"));
     chirky_console_catalog(&f.console,games,3,0);
     tick(&f,CHIRKY_BUTTON_UP,true,false);
     assert(f.console.selected_game==0 && f.console.menu_offset==0);
@@ -138,7 +140,7 @@ static void scrolling_launcher(void)
     const char *labels[]={"First","Middle","Last"};
     for(int selected=0;selected<=2;selected+=2) {
         memset(launcher_pixels,0,sizeof(launcher_pixels));
-        console_scroll_list(&api,labels,3,selected,0,28,138);
+        console_scroll_list(&api,labels,NULL,3,selected,0,28,138);
         int y=selected==0?113:53;
         for(int x=12;x<276;x++)assert(!memcmp(launcher_pixels[y][x],(unsigned char[]){0,0,0},3));
     }

@@ -1,6 +1,6 @@
 "use strict";
 function defaults(games) {
-  return [...games.filter(g=>g.role!=="diagnostic").sort((a,b)=>a.name.localeCompare(b.name)).map(g=>({section:"root",id:g.id,label:g.name.slice(0,24),visible:true})),
+  return [...games.filter(g=>g.role!=="diagnostic").sort((a,b)=>(a.order??1000)-(b.order??1000)||a.name.localeCompare(b.name)).map(g=>({section:"root",id:g.id,label:g.name.slice(0,24),visible:true})),
     {section:"root",id:"settings",label:"Settings",visible:true},{section:"root",id:"power",label:"Power Down",visible:true},
     {section:"settings",id:"input",label:"Input Settings",visible:true},{section:"settings",id:"display",label:"Display Area",visible:true},{section:"settings",id:"hardware",label:"Hardware Test",visible:true}];
 }

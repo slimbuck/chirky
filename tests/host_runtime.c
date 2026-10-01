@@ -434,6 +434,12 @@ static void check_live_inputs(struct host *host,const char *output_dir)
 int main(int argc,char **argv)
 {
     assert(argc==2);
+    struct game_record ordered[3]={0};
+    assert(load_manifest("bramble-hollow",&ordered[0]));
+    assert(load_manifest("rosey-chop",&ordered[1]));
+    assert(load_manifest("phosphor-run",&ordered[2]));
+    qsort(ordered,3,sizeof(*ordered),compare_games);
+    assert(!strcmp(ordered[0].id,"phosphor-run") && !strcmp(ordered[1].id,"rosey-chop") && !strcmp(ordered[2].id,"bramble-hollow"));
     static const uint8_t expected_colon[7]={0,4,4,0,4,4,0};
     assert(!memcmp(glyph(':'),expected_colon,sizeof(expected_colon)));
     assert(memcmp(glyph(':'),glyph('?'),sizeof(expected_colon)));

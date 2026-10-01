@@ -205,7 +205,7 @@ void chirky_console_draw_display(const struct chirky_console *c,const struct chi
     int values[]={c->display.x,c->display.y,c->display.offset_x,c->display.offset_y};
     char rows[4][64];const char *labels[6];
     for(int i=0;i<4;i++){snprintf(rows[i],sizeof(rows[i]),"%s: %d",names[i],values[i]);labels[i]=rows[i];}labels[4]="Save";labels[5]="Back";
-    console_scroll_list(api,labels,6,c->display_option,c->menu_offset,45,h-78);
+    console_scroll_list(api,labels,NULL,6,c->display_option,c->menu_offset,45,h-78);
     console_menu_text(api,12,34,c->settings_message && *c->settings_message?c->settings_message:"Left/Right adjusts - keep edges visible",1,201,191,173);
     console_menu_footer(api,true);
 }

@@ -98,6 +98,11 @@ for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 
 ## Controls and behaviour
 
+Launcher order comes from each `game.conf`'s optional `launcher_order` integer
+(0–1000000, default 1000). Diagnostic games stay in Settings. Optional
+`launcher_icon` points to a native 20x20 picture built by
+`python tools/build-launcher-art.py`; see `assets/launcher/README.md`.
+
 - Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
 - The desktop keyboard guide uses chunky keycaps: an inverted-T movement cluster,
   coral Primary, turquoise Secondary, and cream Start/Menu keys. Labels follow

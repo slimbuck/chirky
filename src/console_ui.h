@@ -7,6 +7,7 @@
 #include "splash_art.h"
 #include "drawing.h"
 #include "launcher_font.h"
+#include "launcher_icons.h"
 
 static const char *const console_button_names[]={"Left","Right","Up","Down","Primary","Secondary","Start","Menu"};
 static inline int console_menu_move(int *selected,int count,int direction)
@@ -106,7 +107,25 @@ static inline void console_draw_loading(const struct chirky_host_api *api)
     launcher_round(api,x,y,w,19,console_card,0,api->screen_height);
     launcher_text(api,x+6,y+16,"Loading",0,launcher_cream,console_card,api->screen_width-5,0,api->screen_height);
 }
-static inline void console_scroll_list(const struct chirky_host_api *api,const char *const *labels,int count,int selected,float offset,int low,int high)
+static inline const struct launcher_icon *console_icon(const char *id)
+{
+    if(id)for(unsigned i=0;i<sizeof(launcher_icons)/sizeof(*launcher_icons);i++)
+        if(!strcmp(id,launcher_icons[i].id))return &launcher_icons[i];
+    return NULL;
+}
+static inline void console_draw_icon(const struct chirky_host_api *api,const struct launcher_icon *icon,int x,int y,int alpha,int low,int high)
+{
+    for(int row=0;row<20;row++)for(int col=0;col<20;) {
+        uint32_t pixel=icon->pixels[row*20+col];int end=col+1;
+        while(end<20 && icon->pixels[row*20+end]==pixel)end++;
+        if(pixel&255u) {
+            struct launcher_colour colour={(unsigned char)(pixel>>24),(unsigned char)(pixel>>16),(unsigned char)(pixel>>8)};
+            launcher_rect(api,x+col,y+19-row,end-col,1,launcher_mix(colour,launcher_navy,alpha),low,high);
+        }
+        col=end;
+    }
+}
+static inline void console_scroll_list(const struct chirky_host_api *api,const char *const *labels,const char *const *ids,int count,int selected,float offset,int low,int high)
 {
     int width=api->screen_width-24,centre=(low+high)/2,middle=(int)-offset;
     for(int pass=0;pass<2;pass++) {
@@ -124,10 +143,13 @@ static inline void console_scroll_list(const struct chirky_host_api *api,const c
             if(pass==0)launcher_round(api,12,y-13,width,26,card,low,high);
             else {
                 int curve=magnitude*magnitude/400;if(curve>5)curve=5;
+                int text_x=23+curve;
+                const struct launcher_icon *icon=console_icon(ids?ids[index]:NULL);
+                if(icon){console_draw_icon(api,icon,text_x,y-10,alpha,low,high);text_x+=26;}
                 struct launcher_colour ink=launcher_mix(launcher_cream,launcher_navy,alpha);
-                launcher_text(api,23+curve,y+8,labels[index],1,ink,card,api->screen_width-20,low,centre-13);
-                launcher_text(api,23+curve,y+8,labels[index],1,ink,card,api->screen_width-20,centre+13,high);
-                launcher_text(api,23+curve,y+8,labels[index],1,launcher_navy,launcher_gold,api->screen_width-20,centre-13,centre+13);
+                launcher_text(api,text_x,y+8,labels[index],1,ink,card,api->screen_width-20,low,centre-13);
+                launcher_text(api,text_x,y+8,labels[index],1,ink,card,api->screen_width-20,centre+13,high);
+                launcher_text(api,text_x,y+8,labels[index],1,launcher_navy,launcher_gold,api->screen_width-20,centre-13,centre+13);
             }
         }
     }
@@ -135,9 +157,9 @@ static inline void console_scroll_list(const struct chirky_host_api *api,const c
 static inline void console_draw_launcher(const struct chirky_host_api *api,const struct splash_art *art,const struct launcher_config *launcher,int selected,float offset)
 {
     console_page(api,art,NULL);
-    const char *labels[LAUNCHER_MAX];int count=launcher_count(launcher,false);
-    for(int i=0;i<count;i++)labels[i]=launcher_at(launcher,false,i)->label;
-    console_scroll_list(api,labels,count,selected,offset,28,api->screen_height-78);
+    const char *labels[LAUNCHER_MAX],*ids[LAUNCHER_MAX];int count=launcher_count(launcher,false);
+    for(int i=0;i<count;i++){const struct launcher_item *item=launcher_at(launcher,false,i);labels[i]=item->label;ids[i]=item->id;}
+    console_scroll_list(api,labels,ids,count,selected,offset,28,api->screen_height-78);
     console_menu_footer(api,false);
 }
 static inline void console_draw_settings_menu(const struct chirky_host_api *api,const struct launcher_config *launcher,int selected,float offset)
@@ -145,7 +167,7 @@ static inline void console_draw_settings_menu(const struct chirky_host_api *api,
     const char *labels[LAUNCHER_MAX+1];int count=launcher_count(launcher,true);
     for(int i=0;i<count;i++)labels[i]=launcher_at(launcher,true,i)->label;
     labels[count]="Back";
-    console_scroll_list(api,labels,count+1,selected,offset,28,api->screen_height-78);
+    console_scroll_list(api,labels,NULL,count+1,selected,offset,28,api->screen_height-78);
     console_menu_footer(api,true);
 }
 static inline void console_draw_live_inputs(const struct chirky_host_api *api,unsigned pad_mask,unsigned key_mask,const char *pad_line,const char *key_line)
@@ -183,7 +205,7 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
         const char *labels[]={"Map controller","Map keyboard","Test buttons","Back"};
-        console_scroll_list(api,labels,4,selected,offset,28,h-78);
+        console_scroll_list(api,labels,NULL,4,selected,offset,28,h-78);
         if(message && *message)launcher_text(api,12,h-65,message,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
         console_menu_footer(api,true);
     }

@@ -11,7 +11,9 @@ test("game manifests are the ordered browser catalog", () => {
   const catalog = gameCatalog();
   assert.equal(catalog.version, 1);
   assert.deepEqual(catalog.games.map(game => game.id),
-    ["bramble-hollow", "phosphor-run", "rosey-chop", "hardware-test"]);
+    ["phosphor-run", "rosey-chop", "bramble-hollow", "hardware-test"]);
+  assert.deepEqual(catalog.games.slice(0,3).map(game=>game.order),[10,20,30]);
+  assert(catalog.games.slice(0,3).every(game=>game.icon));
   assert.equal(catalog.games.at(-1).role, "diagnostic");
   assert.equal(catalog.games.find(game => game.id === "phosphor-run").levelSetting,
     "start_level");
@@ -25,4 +27,21 @@ test("catalog rejects a directory and manifest id mismatch", t => {
   fs.writeFileSync(path.join(root, "games", "wrong", "game.conf"),
     "id=other\nname=Other\ndescription=Test\nmodule=other.so\n");
   assert.throws(() => gameCatalog(root), /must match its directory/);
+});
+
+test("launcher metadata has safe defaults and rejects invalid order or icon paths", t => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),"chirky-order-"));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const directory=path.join(root,"games","example");fs.mkdirSync(directory,{recursive:true});
+  fs.writeFileSync(path.join(directory,"game.c"),"/* fixture */");
+  const base="id=example\nname=Example\ndescription=Test\nmodule=example.so\n";
+  const write=extra=>fs.writeFileSync(path.join(directory,"game.conf"),base+extra);
+  write("");assert.equal(gameCatalog(root).games[0].order,1000);
+  for(const order of ["-1","1.5","abc","1000001"]) {
+    write(`launcher_order=${order}\n`);assert.throws(()=>gameCatalog(root),/Invalid launcher order/);
+  }
+  write("launcher_order=0\n");assert.equal(gameCatalog(root).games[0].order,0);
+  for(const icon of ["../icon.png","assets/launcher/icons/missing.png"]) {
+    write(`launcher_icon=${icon}\n`);assert.throws(()=>gameCatalog(root),/Invalid launcher icon/);
+  }
 });
