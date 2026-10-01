@@ -26,7 +26,7 @@
       "Type":"AWS::CloudFront::CachePolicy",
       "Properties":{"CachePolicyConfig":{
         "Name":{"Fn::Sub":"${AWS::StackName}-releases"},
-        "Comment":"Immutable releases; entry HTML respects origin revalidation",
+        "Comment":"Immutable releases; entry HTML uses separate browser and edge TTLs",
         "MinTTL":0,"DefaultTTL":86400,"MaxTTL":31536000,
         "ParametersInCacheKeyAndForwardedToOrigin":{
           "EnableAcceptEncodingGzip":true,"EnableAcceptEncodingBrotli":true,

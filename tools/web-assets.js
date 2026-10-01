@@ -23,7 +23,13 @@ function configs(root=ROOT,files=assets(root)) {
 module.exports={assets,catalog,configs,games,ROOT};
 if(require.main===module) {
   const destination=path.join(ROOT,"build/web");fs.mkdirSync(destination,{recursive:true});
-  for(const name of ["index.html","player.js","style.css","favicon.svg","favicon.ico"])fs.copyFileSync(path.join(ROOT,"web",name),path.join(destination,name));
+  // Inline the small presentation bootstrap: a deferred network request must
+  // not leave the first paint at the default canvas size with touch controls.
+  const html=fs.readFileSync(path.join(ROOT,"web/index.html"),"utf8");
+  const shell=fs.readFileSync(path.join(ROOT,"web/shell.js"),"utf8");
+  if(!html.includes("<!-- CHIRKY_SHELL -->"))throw new Error("Missing shell bootstrap marker");
+  fs.writeFileSync(path.join(destination,"index.html"),html.replace("<!-- CHIRKY_SHELL -->",()=>`<script>${shell}</script>`));
+  for(const name of ["player.js","style.css","favicon.svg","favicon.ico"])fs.copyFileSync(path.join(ROOT,"web",name),path.join(destination,name));
   // Game JavaScript is only a generated descriptor. The persistent host owns
   // the one renderer, filesystem, asset store and runtime for every game.
   for(const id of games)fs.writeFileSync(path.join(destination,id+".js"),

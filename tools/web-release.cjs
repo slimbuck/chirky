@@ -3,7 +3,9 @@ const fs=require('node:fs');
 const path=require('node:path');
 const assert=require('node:assert/strict');
 const IMMUTABLE='public,max-age=31536000,immutable';
-const ENTRY_CACHE='public,max-age=0,must-revalidate';
+// Browsers check the entry on each visit; CloudFront serves it without an
+// origin round trip. Publishing invalidates it after the release is verified.
+const ENTRY_CACHE='public,max-age=0,s-maxage=3600,must-revalidate';
 function releasePrefix(bundle){return `releases/${bundle.identity}/`;}
 function releaseEntry(bundle){
   const html=fs.readFileSync(path.join(bundle.root,'index.html'),'utf8');

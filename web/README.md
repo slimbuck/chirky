@@ -101,6 +101,9 @@ preloads. The player fetches catalog, asset list and configurations concurrently
 with the module downloads, then initializes the shared console. Production HTML
 pins every file to one immutable release directory. CloudFront compresses and
 caches those files; the player honors HTTP caching instead of forcing downloads.
+The root HTML uses `max-age=0,s-maxage=3600,must-revalidate`: browsers check
+CloudFront on each visit, but the edge can serve it for an hour without checking
+S3. Publishing invalidates `/` and `/index.html` after switching releases.
 Local previews and the dashboard retain their no-store responses for iteration.
 `--check` previews the versioned layout used in production, including root game
 links, rather than relying only on the flat development layout.
@@ -185,7 +188,11 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   fullscreen, so map Menu to another key if desired. **Mute / Unmute** is also
   inside Settings. There are no external navigation/settings buttons.
   The 320x240 framebuffer uses whole physical screen pixels at browser/OS zoom
-  levels whenever space permits. Its size is set before WASM loading, and the
+  levels whenever space permits. `web/shell.js` is inlined into the generated
+  HTML by `tools/web-assets.js`, applying saved touch preferences, keyboard
+  labels and canvas sizing before the first paint, without another download.
+  The same layout function handles later resizing and fullscreen changes.
+  Its size is set before the player module or WASM loads, and the
   launcher and games share one persistent canvas, WebGL context, renderer and
   asset store. Switching
   games does not reload the page or leave fullscreen. No game sprite sizes change.

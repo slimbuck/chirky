@@ -53,7 +53,7 @@ The stack uses a private, versioned S3 bucket and CloudFront origin access
 control, HTTPS, and a publishing role restricted to this repository's main
 branch and these resources. Deleting the stack retains the bucket. Old object
 versions expire after 30 days. The release cache policy enables Brotli and gzip,
-with a zero minimum TTL so entry-page revalidation is respected. Immutable
+with a zero minimum TTL so origin cache directives are respected. Immutable
 release files can be cached by CloudFront and browsers for one year.
 
 The GitHub role trust uses this repository's immutable OIDC subject:
@@ -86,7 +86,10 @@ and artwork to the same complete release; game query links remain at the root.
 The root `build.json` is informational and is never used to choose runtime files.
 
 Release files use `public,max-age=31536000,immutable`; root HTML uses
-`public,max-age=0,must-revalidate`, and root build metadata uses `no-store`.
+`public,max-age=0,s-maxage=3600,must-revalidate`, and root build metadata uses
+`no-store`. Browsers revalidate the entry on each visit, while CloudFront can
+serve it for an hour without an S3 round trip, including to first-time visitors.
+The deployment invalidation makes the new entry available before that hour ends.
 Only `/`, `/index.html` and `/build.json` are invalidated. Existing releases and
 legacy root files are retained so already-open pages continue working. No
 bucket-wide deletion or arbitrary directory sync is performed. To roll back,

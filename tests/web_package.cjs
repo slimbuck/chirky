@@ -117,7 +117,8 @@ test('versioned entry pins every relative URL; only entry metadata can change in
   await assert.rejects(verifyPublished(next,base),/HTTP 404/,'Old entry must not pass verification for another release');
 });
 
-test('CloudFront enables both encodings and respects zero-TTL entry responses',()=>{
+test('CloudFront compresses releases and allows separate browser and edge entry lifetimes',()=>{
+  assert.equal(ENTRY_CACHE,'public,max-age=0,s-maxage=3600,must-revalidate');
   const template=JSON.parse(fs.readFileSync(path.join(__dirname,'../deploy/web-hosting.json')));
   const policy=template.Resources.ReleaseCachePolicy.Properties.CachePolicyConfig;
   assert.equal(policy.MinTTL,0);assert.equal(policy.MaxTTL,31536000);

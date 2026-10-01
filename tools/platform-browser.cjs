@@ -157,6 +157,9 @@ async function main() {
         await page.call('Page.navigate',{url:base.href});
         for(let i=0;i<150&&!heldScript;i++)await delay(100);assert(heldScript,'Player script must be held to inspect first paint');
         assert(await page.eval(`(()=>{const e=document.querySelector('#startup');return e && !e.hidden && getComputedStyle(e).display!=='none' && e.getBoundingClientRect().height>0 && document.querySelector('#startup-percent').textContent==='0%';})()`),'Progress must be visible before player JavaScript downloads');
+        const firstPaint=await page.eval(measure);
+        const firstShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+        fs.writeFileSync(path.join(out,`${label}-first-paint.png`),Buffer.from(firstShot.data,'base64'));
         await page.call('Fetch.enable',{patterns:[{urlPattern:'*.wasm'}]});
         const scriptRequest=heldScript;heldScript=null;await page.call('Fetch.continueRequest',{requestId:scriptRequest});
         if(width===1280 && density===1.25){
@@ -169,6 +172,7 @@ async function main() {
           await page.call('Page.reload',{ignoreCache:true});
         }
         const launcher=await checkLoading('Launcher');
+        assert.deepEqual(launcher,firstPaint,'First paint must already have the final launcher layout before player JavaScript downloads');
         await page.eval('document.querySelector("#screen").focus()');
         for(const [code,key,value] of [...catalog.games.filter(g=>g.role==='game').map(()=>['ArrowDown','ArrowDown',40]),['KeyX','x',88],['ArrowDown','ArrowDown',40],['KeyX','x',88]]){
           await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(100);

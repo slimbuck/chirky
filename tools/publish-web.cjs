@@ -24,6 +24,7 @@ async function verifyPublished(bundle,base,{versioned=true,entry=true,compressio
   if(versioned && entry){
     const response=await fetch(base,{cache:'no-store',signal:AbortSignal.timeout(30000)});
     assert.equal(response.status,200,'Entry page unavailable');
+    assert.equal(response.headers.get('cache-control'),ENTRY_CACHE,'Entry must allow edge caching while browsers revalidate');
     assert.equal(hash(Buffer.from(await response.arrayBuffer())),hash(releaseEntry(bundle)),'Entry page does not point to tested release');
   }
   console.log(`Verified ${names.length} published files against ${bundle.build.sourceCommit}.`);
