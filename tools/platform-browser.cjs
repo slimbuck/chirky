@@ -407,7 +407,7 @@ async function main() {
         console.log(`Checking ${label}`);
         await page.call('Storage.clearDataForOrigin',{origin:base.origin,storageTypes:'local_storage'});
         await page.call('Page.navigate',{url:new URL(`?game=${game}`,base).href});await ready();
-        report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?6:7);
+        report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?8:7);
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
         const title=await capture('title');assert.equal(title.touchVisible,mobile);
         if(mobile)await click('[data-button="4"]');else{await click('#screen');await key('KeyX','x',88);}
