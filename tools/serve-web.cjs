@@ -3,23 +3,27 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { readPackage } = require('./web-package.cjs');
+const {releasePrefix,releaseEntry,contentType,IMMUTABLE,ENTRY_CACHE}=require('./web-release.cjs');
 
-function createServer(directory) {
+function createServer(directory, {versioned=false}={}) {
   const bundle = readPackage(directory);
   const files = new Set(bundle.names);
-  const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
-    '.css':'text/css', '.json':'application/json', '.wasm':'application/wasm', '.wav':'audio/wav',
-    '.svg':'image/svg+xml', '.ico':'image/x-icon' };
+  const prefix=releasePrefix(bundle);
   return http.createServer((request, response) => {
     try {
-      const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1) || 'index.html';
+      let name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1) || 'index.html';
       if (!['GET', 'HEAD'].includes(request.method)) { response.writeHead(405).end(); return; }
+      const entry=versioned && name==='index.html',metadata=versioned && name==='build.json';
+      if(versioned && !entry && !metadata){
+        if(!name.startsWith(prefix)){response.writeHead(404).end('Not found');return;}
+        name=name.slice(prefix.length);
+      }
       // Match the website: game configuration travels in configs.json, not .conf URLs.
       if (!files.has(name) || name.endsWith('.conf')) { response.writeHead(404).end('Not found'); return; }
       const file = path.join(bundle.root, name);
-      response.writeHead(200, { 'Content-Type':types[path.extname(name)] || 'application/octet-stream',
-        'Cache-Control':'no-store' });
-      response.end(request.method === 'HEAD' ? undefined : fs.readFileSync(file));
+      response.writeHead(200, { 'Content-Type':contentType(name),
+        'Cache-Control':versioned?(entry?ENTRY_CACHE:metadata?'no-store':IMMUTABLE):'no-store' });
+      response.end(request.method === 'HEAD' ? undefined : entry?releaseEntry(bundle):fs.readFileSync(file));
     } catch { response.writeHead(400).end('Invalid request'); }
   });
 }

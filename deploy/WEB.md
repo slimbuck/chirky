@@ -52,9 +52,9 @@ Leave `HostedZoneId` empty for this setup; no Route 53 zone is needed.
 The stack uses a private, versioned S3 bucket and CloudFront origin access
 control, HTTPS, and a publishing role restricted to this repository's main
 branch and these resources. Deleting the stack retains the bucket. Old object
-versions expire after 30 days. The initial distribution disables edge caching
-to avoid mixing modules from different builds at the same URL; optimize with
-versioned release paths before enabling long-lived caches.
+versions expire after 30 days. The release cache policy enables Brotli and gzip,
+with a zero minimum TTL so entry-page revalidation is respected. Immutable
+release files can be cached by CloudFront and browsers for one year.
 
 The GitHub role trust uses this repository's immutable OIDC subject:
 `repo:slimbuck@11276292/chirky@1352099473:ref:refs/heads/main`. Preserve the
@@ -78,11 +78,25 @@ required for integration checks; set `CHROME` if it is not in the default path.
 
 Publication validates every local file hash, exercises every game through the
 launcher, and checks desktop/mobile input, audio, settings, fullscreen, and
-integer rendering. It uploads manifest-owned files only, explicitly sets WASM
-MIME, invalidates CloudFront, and compares published bytes with the tested build.
-No arbitrary directory sync or bucket-wide deletion is performed. Uploads are
-not an atomic release: an already-open browser may need to reload during a
-release. S3 object versions and Git history provide recovery copies.
+integer rendering against the versioned publication layout. It uploads public
+manifest-owned files to `releases/<SHA-256 of build.json>/`, explicitly sets WASM
+MIME, and compares all uploaded bytes with the tested build before switching
+the root HTML. A `<base>` in that HTML pins scripts, imports, preloads, fetches
+and artwork to the same complete release; game query links remain at the root.
+The root `build.json` is informational and is never used to choose runtime files.
+
+Release files use `public,max-age=31536000,immutable`; root HTML uses
+`public,max-age=0,must-revalidate`, and root build metadata uses `no-store`.
+Only `/`, `/index.html` and `/build.json` are invalidated. Existing releases and
+legacy root files are retained so already-open pages continue working. No
+bucket-wide deletion or arbitrary directory sync is performed. To roll back,
+restore the previous root `index.html` and `build.json` S3 object versions and
+invalidate those three paths; the prior release directory remains available.
+
+When upgrading the original hosting stack, apply `web-hosting.json` first using
+the existing certificate/zone parameters. The new cache policy also respects
+the legacy files' zero max-age, so it is safe before the first versioned publish.
+Publishing does not need administrator permissions or modify the distribution.
 
 To verify an existing release against the local build:
 

@@ -113,7 +113,9 @@ async function main() {
     const endpoint = `http://127.0.0.1:${port}`;
     const info = await (await fetch(`${endpoint}/json/version`)).json();
     browser = new CDP(info.webSocketDebuggerUrl); await browser.open;
-    const catalogResponse=await fetch(new URL('catalog.json',base));
+    const html=await (await fetch(base)).text();
+    const assetBase=new URL(html.match(/<base href="([^"]+)"/)?.[1] || '.',base);
+    const catalogResponse=await fetch(new URL('catalog.json',assetBase));
     assert.equal(catalogResponse.status,200);
     const catalog=await catalogResponse.json();
     assert.equal(catalog.version,1);assert(catalog.games.length>0);
@@ -125,13 +127,14 @@ async function main() {
       const label=`layout-${width}-${density}${touch?'-touch':''}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
       const page=new CDP(target.webSocketDebuggerUrl);await page.open;
       const report={label,checks:[],errors:[],warnings:[],failedRequests:[],passed:false};reports.push(report);
-      let held;
-      page.on('Fetch.requestPaused',p=>{held=p.requestId;});
+      let held,heldScript;
+      page.on('Fetch.requestPaused',p=>{if(p.request.url.endsWith('player.js'))heldScript=p.requestId;else held=p.requestId;});
       async function waitFor(expression){for(let i=0;i<150;i++){if(await page.eval(expression))return;await delay(100);}throw Error(`Timed out: ${expression}`);}
       const measure=`(()=>{const c=document.querySelector('#screen'),r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,density:devicePixelRatio,buffer:[c.width,c.height],overflow:document.documentElement.scrollWidth>innerWidth};})()`;
       async function checkLoading(name){
         for(let i=0;i<150&&!held;i++)await delay(100);assert(held,'WASM request must be held to test loading');
         if(name==='Launcher'){
+          await waitFor(`Number(document.querySelector('#startup-progress')?.getAttribute('aria-valuenow'))>0`);
           const startup=await page.eval(`(()=>{const e=document.querySelector('#startup'),r=e.getBoundingClientRect(),d=document.querySelector('#display').getBoundingClientRect();return {visible:!e.hidden && getComputedStyle(e).display!=='none',percent:Number(document.querySelector('#startup-progress').getAttribute('aria-valuenow')),inside:r.left>=d.left && r.right<=d.right && r.top>=d.top && r.bottom<=d.bottom};})()`);
           assert(startup.visible && startup.inside,'Startup progress must appear inside the display before WASM arrives');
           assert(startup.percent>0 && startup.percent<100,'Startup must not claim completion before WASM loads');
@@ -152,10 +155,10 @@ async function main() {
         await page.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:density,mobile:touch});
         await page.call('Emulation.setTouchEmulationEnabled',{enabled:touch,maxTouchPoints:5});
         await page.call('Page.navigate',{url:base.href});
-        for(let i=0;i<150&&!held;i++)await delay(100);assert(held,'Player script must be held to inspect first paint');
+        for(let i=0;i<150&&!heldScript;i++)await delay(100);assert(heldScript,'Player script must be held to inspect first paint');
         assert(await page.eval(`(()=>{const e=document.querySelector('#startup');return e && !e.hidden && getComputedStyle(e).display!=='none' && e.getBoundingClientRect().height>0 && document.querySelector('#startup-percent').textContent==='0%';})()`),'Progress must be visible before player JavaScript downloads');
         await page.call('Fetch.enable',{patterns:[{urlPattern:'*.wasm'}]});
-        const scriptRequest=held;held=null;await page.call('Fetch.continueRequest',{requestId:scriptRequest});
+        const scriptRequest=heldScript;heldScript=null;await page.call('Fetch.continueRequest',{requestId:scriptRequest});
         if(width===1280 && density===1.25){
           for(let i=0;i<150&&!held;i++)await delay(100);assert(held);
           const failedRequest=held;held=null;await page.call('Fetch.fulfillRequest',{requestId:failedRequest,responseCode:503,body:''});
@@ -304,7 +307,7 @@ async function main() {
         await press('KeyX','x',88);
         await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(game.name)} && new URL(location.href).searchParams.get('game')===${JSON.stringify(game.id)}`);
         assert.equal(await page.eval('document.querySelector("#status").textContent'),game.name);
-        for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,base).href),200);
+        for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,assetBase).href),200);
         await press('Enter','Enter',13);await delay(250);
         const size=await page.eval('(() => {const r=document.querySelector("#screen").getBoundingClientRect();return {width:r.width,height:r.height};})()');
         // DOMRects use floating-point bounds after the subpixel sampling bias.
@@ -323,7 +326,7 @@ async function main() {
       }
     }
     if(process.argv.includes('--catalog-only')){assert(reports.every(r=>r.passed && !r.errors.length && !r.failedRequests.length),'Catalog checks failed');return;}
-    const source = await (await fetch(new URL('player.js',base))).text();
+    const source = await (await fetch(new URL('player.js',assetBase))).text();
     const readyLine = source.split('\n').findIndex(line => /id=nextId;/.test(line));
     assert(readyLine>=0, 'Cannot locate initialization checkpoint');
     for (const game of ['phosphor-run','rosey-chop']) for (const mobile of [false,true]) {
@@ -352,7 +355,7 @@ async function main() {
       // Attach once per document: every game shares this persistent runtime.
       // Pausing again on a launcher key press can swallow its CDP key release.
       // A reload clears the probe and enables the checkpoint again.
-      await page.call('Debugger.setBreakpointByUrl', {url:new URL('player.js',base).href,lineNumber:readyLine,condition:'!globalThis.__platformProbe'});
+      await page.call('Debugger.setBreakpointByUrl', {url:new URL('player.js',assetBase).href,lineNumber:readyLine,condition:'!globalThis.__platformProbe'});
       await page.call('Page.addScriptToEvaluateOnNewDocument', {source:instrumentation});
       await page.call('Emulation.setDeviceMetricsOverride', {width:mobile?390:1280,height:mobile?844:1000,deviceScaleFactor:1,mobile});
       await page.call('Emulation.setTouchEmulationEnabled', {enabled:mobile,maxTouchPoints:5});

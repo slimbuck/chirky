@@ -7,6 +7,7 @@ const test = require('node:test');
 const { hash, readPackage, copyToWebsite } = require('../tools/web-package.cjs');
 const { createServer } = require('../tools/serve-web.cjs');
 const { verifyPublished } = require('../tools/publish-web.cjs');
+const {releasePrefix,releaseEntry,IMMUTABLE,ENTRY_CACHE}=require('../tools/web-release.cjs');
 const { catalog, configs, games } = require('../tools/web-assets.js');
 
 function fixture(t) {
@@ -21,7 +22,7 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(file), { recursive:true }); fs.writeFileSync(file, data);
   }
   const config = 'games/phosphor-run/game.conf', text = 'start_level=1\r\n';
-  const files = { 'index.html':'<html>Chirky</html>', 'player.js':'// player\r\n', 'style.css':'body{}',
+  const files = { 'index.html':'<html><head></head><body>Chirky</body></html>', 'player.js':'// player\r\n', 'style.css':'body{}',
     'favicon.svg':fs.readFileSync(path.join(__dirname,'../web/favicon.svg')),
     'favicon.ico':fs.readFileSync(path.join(__dirname,'../web/favicon.ico')),
     'assets.json':JSON.stringify([config]), 'configs.json':JSON.stringify({ [config]:text }),
@@ -76,7 +77,7 @@ test('standalone preview serves exact build with WASM MIME, but not .conf or arb
   t.after(() => new Promise(resolve => server.close(resolve)));
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}/`;
-  await verifyPublished(readPackage(f.source),new URL(base));
+  await verifyPublished(readPackage(f.source),new URL(base),{versioned:false});
   const response = await fetch(base+'phosphor-run.wasm');
   assert.equal(response.headers.get('content-type'), 'application/wasm');
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), fs.readFileSync(path.join(f.source, 'phosphor-run.wasm')));
@@ -88,4 +89,40 @@ test('standalone preview serves exact build with WASM MIME, but not .conf or arb
     assert.equal((await fetch(base+name)).status, 404);
   assert.equal((await fetch(base, { method:'POST' })).status, 405);
   assert.equal(await (await fetch(base, { method:'HEAD' })).text(), '');
+});
+
+test('versioned entry pins every relative URL; only entry metadata can change in place',async t=>{
+  const f=fixture(t),bundle=readPackage(f.source),prefix=releasePrefix(bundle);
+  const server=createServer(f.source,{versioned:true});
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  const base=new URL(`http://127.0.0.1:${server.address().port}/`);
+  await verifyPublished(bundle,base);
+  const response=await fetch(new URL('?game=phosphor-run&level=2',base)),html=await response.text();
+  assert.equal(response.headers.get('cache-control'),ENTRY_CACHE);
+  assert.equal(html,releaseEntry(bundle).toString());
+  const assetBase=new URL(html.match(/<base href="([^"]+)"/)[1],base);
+  assert.equal(assetBase.pathname,'/'+prefix);
+  for(const name of ['player.js','launcher.wasm','catalog.json','configs.json']){
+    const asset=await fetch(new URL(name,assetBase));
+    assert.equal(asset.status,200);assert.equal(asset.headers.get('cache-control'),IMMUTABLE);
+    assert.equal(hash(Buffer.from(await asset.arrayBuffer())),bundle.build.files[name]);
+    assert.equal((await fetch(new URL(name,base))).status,404,'Must not silently fall back to mutable files');
+  }
+  assert.equal((await fetch(new URL('runtime/'+f.config,assetBase))).status,404);
+  assert.equal((await fetch(new URL('build.json',base))).headers.get('cache-control'),'no-store');
+  f.write('player.js','// next release');f.build.files['player.js']=hash('// next release');f.manifest();
+  const next=readPackage(f.source);
+  assert.notEqual(releasePrefix(next),prefix,'Every changed build must receive a different URL');
+  await assert.rejects(verifyPublished(next,base),/HTTP 404/,'Old entry must not pass verification for another release');
+});
+
+test('CloudFront enables both encodings and respects zero-TTL entry responses',()=>{
+  const template=JSON.parse(fs.readFileSync(path.join(__dirname,'../deploy/web-hosting.json')));
+  const policy=template.Resources.ReleaseCachePolicy.Properties.CachePolicyConfig;
+  assert.equal(policy.MinTTL,0);assert.equal(policy.MaxTTL,31536000);
+  assert.equal(policy.ParametersInCacheKeyAndForwardedToOrigin.EnableAcceptEncodingBrotli,true);
+  assert.equal(policy.ParametersInCacheKeyAndForwardedToOrigin.EnableAcceptEncodingGzip,true);
+  const behavior=template.Resources.Distribution.Properties.DistributionConfig.DefaultCacheBehavior;
+  assert.equal(behavior.Compress,true);assert.equal(behavior.CachePolicyId.Ref,'ReleaseCachePolicy');
 });

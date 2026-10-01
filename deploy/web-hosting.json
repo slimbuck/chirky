@@ -22,12 +22,26 @@
       "Type":"AWS::CloudFront::OriginAccessControl",
       "Properties":{"OriginAccessControlConfig":{"Name":{"Fn::Sub":"${AWS::StackName}-origin"},"OriginAccessControlOriginType":"s3","SigningBehavior":"always","SigningProtocol":"sigv4"}}
     },
+    "ReleaseCachePolicy": {
+      "Type":"AWS::CloudFront::CachePolicy",
+      "Properties":{"CachePolicyConfig":{
+        "Name":{"Fn::Sub":"${AWS::StackName}-releases"},
+        "Comment":"Immutable releases; entry HTML respects origin revalidation",
+        "MinTTL":0,"DefaultTTL":86400,"MaxTTL":31536000,
+        "ParametersInCacheKeyAndForwardedToOrigin":{
+          "EnableAcceptEncodingGzip":true,"EnableAcceptEncodingBrotli":true,
+          "CookiesConfig":{"CookieBehavior":"none"},
+          "HeadersConfig":{"HeaderBehavior":"none"},
+          "QueryStringsConfig":{"QueryStringBehavior":"none"}
+        }
+      }}
+    },
     "Distribution": {
       "Type":"AWS::CloudFront::Distribution",
       "Properties":{"DistributionConfig":{
         "Enabled":true,"Comment":"Chirky.org browser console","Aliases":["chirky.org"],"DefaultRootObject":"index.html","HttpVersion":"http2and3","IPV6Enabled":true,"PriceClass":"PriceClass_100",
         "Origins":[{"Id":"ChirkyS3","DomainName":{"Fn::GetAtt":["SiteBucket","RegionalDomainName"]},"OriginAccessControlId":{"Fn::GetAtt":["OriginAccess","Id"]},"S3OriginConfig":{"OriginAccessIdentity":""}}],
-        "DefaultCacheBehavior":{"TargetOriginId":"ChirkyS3","ViewerProtocolPolicy":"redirect-to-https","AllowedMethods":["GET","HEAD","OPTIONS"],"CachedMethods":["GET","HEAD"],"Compress":true,"CachePolicyId":"4135ea2d-6df8-44a3-9df3-4b5a84be39ad"},
+        "DefaultCacheBehavior":{"TargetOriginId":"ChirkyS3","ViewerProtocolPolicy":"redirect-to-https","AllowedMethods":["GET","HEAD","OPTIONS"],"CachedMethods":["GET","HEAD"],"Compress":true,"CachePolicyId":{"Ref":"ReleaseCachePolicy"}},
         "ViewerCertificate":{"AcmCertificateArn":{"Ref":"CertificateArn"},"SslSupportMethod":"sni-only","MinimumProtocolVersion":"TLSv1.2_2021"}
       }}
     },

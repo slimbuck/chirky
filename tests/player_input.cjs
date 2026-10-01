@@ -17,7 +17,7 @@ function player(saved){
   const context=vm.createContext({document,window,localStorage,location:{search:''},URLSearchParams,console,
     navigator:{getGamepads:()=>[]},fetch:()=>new Promise(()=>{}),URL,TextEncoder,atob,btoa,AudioContext:class{resume(){return Promise.resolve();}}});
   const run=code=>vm.runInContext(code,context);
-  run(fs.readFileSync(require.resolve('../web/player.js'),'utf8'));
+  run(fs.readFileSync(require.resolve('../web/player.js'),'utf8').replace('start().catch(startupFailed);',''));
   return {run,element,touch,events,storage,document,localStorage};
 }
 test('cancelled browser loads cannot activate after a newer request, and errors return to the console',async()=>{

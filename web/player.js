@@ -433,9 +433,17 @@ function frame(now){
   runtime._web_render();
   last=now;requestAnimationFrame(frame);
 }
-async function checked(url){const response=await fetch(url,{cache:"no-store"});if(!response.ok)throw new Error(`Unable to load ${url} (${response.status})`);return response;}
+// Published URLs belong to one immutable release; development servers send no-store.
+async function checked(url){const response=await fetch(url);if(!response.ok)throw new Error(`Unable to load ${url} (${response.status})`);return response;}
 async function start(){
-  const catalogDocument=await (await checked("catalog.json")).json();
+  startupProgress(5);
+  // All independent downloads start together. HTML preloads the large module
+  // and launcher artwork before this script has even finished downloading.
+  const [catalogDocument,assetFiles,gameConfigs,launcher,wasmBinary]=await Promise.all([
+    checked("catalog.json").then(response=>response.json()),
+    checked("assets.json").then(response=>response.json()),
+    checked("configs.json").then(response=>response.json()),
+    import("./launcher.js"),startupBinary("launcher.wasm")]);
   startupProgress(5);
   if(catalogDocument?.version!==1 || !Array.isArray(catalogDocument.games))throw new Error("Invalid game catalog");
   catalog=catalogDocument.games;
@@ -444,12 +452,11 @@ async function start(){
   ids=catalog.map(game=>game.id);
   if(new Set(ids).size!==ids.length)throw new Error("Invalid game catalog");
   titles={launcher:"Launcher",...Object.fromEntries(catalog.map(game=>[game.id,game.name]))};
-  files=await (await checked("assets.json")).json();
-  configs=await (await checked("configs.json")).json();
+  files=assetFiles;configs=gameConfigs;
   startupProgress(10);
   displayContext=canvas.getContext("webgl",{alpha:false,depth:false,stencil:false,antialias:false});
   if(!displayContext)throw new Error("WebGL is unavailable");
-  shell=await createModule("launcher");runtime=shell;
+  shell=await createModule(launcher,wasmBinary);runtime=shell;
   startupProgress(85);
   await loadFiles(shell,"launcher",()=>true,fraction=>startupProgress(85+10*fraction));
   startupProgress(95);await startupPaint();
@@ -462,10 +469,7 @@ async function start(){
   requestAnimationFrame(frame);
   if(id!=="launcher")await switchGame(id,false,params.get("level"));
 }
-async function createModule(gameId){
-  const {default:create}=await import(`./${gameId}.js`);
-  startupProgress(20);
-  const wasmBinary=await startupBinary(`${gameId}.wasm`);
+async function createModule({default:create},wasmBinary){
   await startupPaint();
   return create({canvas,wasmBinary,preinitializedWebGLContext:displayContext,
     onSound:playSound,onAssetReady:prepareAssetSound,onAssetSound:playAssetSound,

@@ -33,7 +33,7 @@ function player() {
     },
   });
   const run = code => vm.runInContext(code, context);
-  run(fs.readFileSync(path.join(__dirname, '../web/player.js'), 'utf8'));
+  run(fs.readFileSync(path.join(__dirname, '../web/player.js'), 'utf8').replace('start().catch(startupFailed);',''));
   run('audio=fakeAudio; for(let i=1;i<=10;i++)assetSounds.set(i,{});');
   return { run, created, elements };
 }

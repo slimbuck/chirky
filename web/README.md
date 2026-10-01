@@ -96,6 +96,28 @@ checks gameplay, input, audio and lifecycle behavior. Reports and screenshots
 are saved in `build/publish-checks/`. See [AWS publishing](../deploy/WEB.md)
 for initial hosting setup, GitHub Actions, publishing, and deployed-byte checks.
 
+Cold startup begins launcher JavaScript, WASM and mascot downloads from HTML
+preloads. The player fetches catalog, asset list and configurations concurrently
+with the module downloads, then initializes the shared console. Production HTML
+pins every file to one immutable release directory. CloudFront compresses and
+caches those files; the player honors HTTP caching instead of forcing downloads.
+Local previews and the dashboard retain their no-store responses for iteration.
+`--check` previews the versioned layout used in production, including root game
+links, rather than relying only on the flat development layout.
+
+For repeatable cold/warm measurements in three fresh Chrome profiles:
+
+```sh
+node tools/profile-web.cjs https://chirky.org/ build/load-profile
+node tools/profile-web.cjs https://chirky.org/ build/load-mobile --mobile
+```
+
+The optional throttle models 1.6 Mbps down, 750 Kbps up, 85 ms latency and 4x
+CPU slowdown on the test computer; it is not a physical phone benchmark. Reports
+include request waterfalls, transfer bytes, startup/compilation timings, a CPU
+profile and launcher screenshot. Browser caches start empty; CDN caches are
+left intact, as they would be for a new visitor.
+
 ## Controls and behaviour
 
 Launcher order comes from each `game.conf`'s optional `launcher_order` integer
