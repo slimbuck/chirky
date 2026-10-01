@@ -156,6 +156,10 @@ async function main() {
         await page.call('Emulation.setTouchEmulationEnabled',{enabled:touch,maxTouchPoints:5});
         await page.call('Page.navigate',{url:base.href});
         for(let i=0;i<150&&!heldScript;i++)await delay(100);assert(heldScript,'Player script must be held to inspect first paint');
+        // Chrome's preload scanner can request the deferred player before the
+        // stylesheet and inline shell have parsed. Keep that download blocked,
+        // but wait for the HTML bootstrap before inspecting its painted layout.
+        await waitFor(`!!window.ChirkyShell`);
         assert(await page.eval(`(()=>{const e=document.querySelector('#startup');return e && !e.hidden && getComputedStyle(e).display!=='none' && e.getBoundingClientRect().height>0 && document.querySelector('#startup-percent').textContent==='0%';})()`),'Progress must be visible before player JavaScript downloads');
         const firstPaint=await page.eval(measure);
         const firstShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
