@@ -3,9 +3,10 @@
 ## Upgrading an existing installation
 
 The Chirky rename changes the host binary to `chirky-host`, the service to
-`chirky.service`, and the C module entry point to `chirky_game_entry` (ABI 7).
-Rebuild the host and all game modules together. The dashboard's **Install project
-on Pi** action installs into `/home/retro/chirky`, first copying the previous
+`chirky.service`, and the C module entry point to `chirky_game_entry` (introduced
+in ABI 7; the current ABI is 13). Rebuild the host and all game modules together.
+The dashboard's **Install project on Pi** action installs into
+`/home/retro/chirky`, first copying the previous
 installation when present to preserve calibration, configuration and remote assets.
 The service installer disables the previous service before starting Chirky.
 Old-name references in migration code are intentional.

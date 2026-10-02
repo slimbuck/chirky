@@ -29,7 +29,7 @@ rendering, audio playback, and one frame of input state. `make` automatically
 builds every `games/*/game.c` into a matching shared module; no central source
 list needs editing.
 
-Platform API 12 exposes eight Chirky inputs: Left, Right, Up, Down, Primary,
+Platform API 13 exposes eight Chirky inputs: Left, Right, Up, Down, Primary,
 Secondary, Start and Menu. `input->buttons[CHIRKY_BUTTON_PRIMARY]` is held
 Primary; `input->button_pressed[CHIRKY_BUTTON_SECONDARY]` is a new Secondary
 press. Use `button_label` for the host's current label. Games must not read raw

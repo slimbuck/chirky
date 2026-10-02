@@ -1,6 +1,6 @@
 # Phosphor Run
 
-A 320×240, 60 Hz platformer for the Chirky CRT host.
+A 320×240, 60 Hz platformer for the Chirky Pi and browser hosts.
 
 ## Playing
 

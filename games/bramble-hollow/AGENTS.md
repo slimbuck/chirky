@@ -78,7 +78,7 @@ while sprite pixels remain native-size.
 
 ## Living-World Director
 
-Static defaults live in `assets/director.conf`. API11 hosts communicate with the
+Static defaults live in `assets/director.conf`. Hosts with director callbacks communicate with the
 standalone Node service in `director/server.mjs` through the configured HTTP
 URL. The legacy `runtime/director.conf` hot-load remains only as a fallback for
 hosts without director callbacks. Before claiming the LLM is active, verify the

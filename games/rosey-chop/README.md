@@ -1,21 +1,22 @@
 # Rosey Chop
 
-A top-down, native-pixel garden game for the Chirky CRT host. One complete
+A top-down, native-pixel garden game for the Chirky Pi and browser hosts. One complete
 level: **The Rose Garden**, with 18 dead black roses among 78 living crimson,
 pink, apricot and cream roses. Chop every black rose before the 75-second storm
 timer expires. A wasp sting immediately ends the run.
 
 - D-pad: run in all four directions.
-- B: chop. Hold to
+- Primary: chop. Hold to
   repeat a circular sweep; nearby black roses are cut, healthy roses are safe.
-- Y: jump.
+- Secondary: jump.
   The middle of the jump clears a wasp; takeoff and landing are vulnerable.
-- B on the title or result screen: begin or replay the same first level.
-- Select: pause; choose Continue Game or Return to Launcher.
+- Primary on the title or result screen: begin or replay the same first level.
+- Menu: pause; choose Continue Game or Return to Launcher.
 
-The game code reads SNES B and Y directly. The host maps controller and keyboard
-inputs to SNES buttons; default keyboard keys are X for B, Z for Y, arrow keys
-for the D-pad and Escape for Select. Game prompts always show SNES names.
+The game reads logical Chirky inputs and uses host-provided button labels.
+Default keyboard keys are X for Primary, Z for Secondary, arrow keys for the
+D-pad and Escape for Menu. The Pi's default SNES bindings use B, Y and Select
+for Primary, Secondary and Menu; mappings belong to the host.
 
 Wasps first announce themselves after eight seconds, give a 1.5-second warning,
 then pursue for six seconds. Keep moving or jump to dodge. Chopping does not kill

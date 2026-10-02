@@ -1,7 +1,7 @@
-# Platform API 12
+# Platform API 13
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 12`. Native games export
+game report `CHIRKY_ABI_VERSION == 13`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a WASM side module loaded by the persistent Emscripten host.
 `src/runtime.c` owns the same lifecycle on both platforms; `src/console.c` owns
@@ -97,11 +97,28 @@ reference counts. Handles encode a generation so a released slot cannot silently
 become a different asset under its old handle.
 
 `asset_store_retain` is an internal host/store operation for acquiring another
-reference, including native sound pins. It is not a game-facing API11 callback.
+reference, including native sound pins. It is not a game-facing callback.
+
+## Local persistent records
+
+ABI 13 adds optional `save_read(context, game, key, data, capacity)` and
+`save_write(context, game, key, data, size)` callbacks. Games own versioned
+record formats and check whether the callbacks exist. Game and key identifiers
+contain only letters, digits, hyphens or underscores, up to 95 bytes each.
+Records contain 1 to 65,536 bytes. Reads return the byte count, or zero for a
+missing, invalid, unavailable or oversized record. Writes return success/failure
+and replace a record atomically; games must handle failure explicitly.
+
+Linux stores `saves/<game>/<key>` with a flushed temporary file and rename.
+The browser stores the same bytes under `chirky.save.v1.<game>.<key>` in
+localStorage. Phosphor Run uses this for per-level high scores. These records
+are local to the installation or browser origin, with no player authentication,
+cloud synchronization or global ranking. Game/key names organize trusted game
+records; they are not a sandbox for third-party executable game modules.
 
 ## World director transport
 
-API11 includes the optional, eventually-consistent transport for bounded external
+Introduced in ABI 11, the optional, eventually-consistent transport supplies bounded external
 world direction. Games call `director_connect` with an HTTP base URL, game id,
 and world id. A successful return means the host accepted the configuration,
 not that the service is currently online. The native host performs network I/O
@@ -202,8 +219,9 @@ compatibility fallback for hosts lacking that callback.
 ## Browser loading and playback
 
 `web/player.js` fetches the asset manifest and selected game's files
-asynchronously, then writes the downloaded bytes into Emscripten MEMFS. It calls
-`web_init` only after those fetches finish. The browser asset-store implementation
+asynchronously, then writes the downloaded bytes into Emscripten MEMFS. The
+persistent console is initialized once through `web_init`; each game starts
+through `web_load` after its downloads finish. The browser asset-store implementation
 then performs prefetch, reads, and PPM/WAV decoding synchronously against MEMFS
 on the browser main thread. There is no browser asset worker. Game init/parsing
 and WebGL texture uploads also run on that thread, with uploads lazy as above.
@@ -222,5 +240,5 @@ bytes and `decodeAudioData` instead.
 Page teardown stops WebAudio sources before calling `web_destroy` for an
 initialized game. The C teardown releases game assets, textures, the asset store,
 and WebGL resources; JavaScript closes the audio context. Games use the same
-API11 handles and callbacks in both hosts; native mixer/store lifecycle functions
+asset handles and callbacks in both hosts; native mixer/store lifecycle functions
 and the JavaScript bridge remain platform internals.

@@ -9,12 +9,19 @@ games -> include/chirky.h -> src runtime/render/assets
                   platform/linux -+- platform/web
 ```
 
+The Pi/Linux and desktop/mobile browser console are equally supported targets.
+The local dashboard is a development and Pi administration tool, separate from
+the public static browser site. Bramble's director is an optional service,
+not the console host. See [platform evolution](platform-evolution.md) for
+proposed content identity, online scores, submissions and multiplayer; those
+features are not part of the implemented ABI described here.
+
 ## Portable code
 
 - `include/chirky.h` is the complete game-facing ABI. It contains no operating
   system or browser types. Games receive logical console buttons, a logical
-  viewport, rendering and asset callbacks, audio, and the optional director
-  transport.
+  viewport, rendering and asset callbacks, audio, optional local saves and the
+  optional director transport.
 - `src/runtime.c` owns game ABI validation and the init, update, render, and
   shutdown lifecycle used by both hosts.
 - `src/console.c` owns console state and transitions: catalog menu construction,

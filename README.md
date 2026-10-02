@@ -1,21 +1,55 @@
 # Chirky
 
-**Chirky** (or **Chirky Box** can't decide) is a simple, low-latency games console written in c.
+**Chirky** is a small, low-latency games console written in C for Raspberry Pi
+and desktop/mobile browsers. Both are first-class targets, sharing the same
+games, console menus and portable runtime.
 
 After visiting family in France and playing the original Mario on NES, I was amazed how smooth and instant the experience was. I wondered whether it was possible to recreate that old-school feeling on today's hardware.
 
 So I made Chirky Box. I run it on a Raspberry Pi 3b+ connected to CRT monitor via scart HAT. I soldered a SNES controller to a Raspberry Pi Pico and connect that as USB joystick.
 
-And it works great! I have a dashboard webapp for controlling the Raspberry PIs (which are connected via static IP over lan). I can edit games, levels and sprites.
+The local dashboard controls a configured Raspberry Pi over the LAN and edits
+game settings, levels and sprites. It can copy source and assets over SSH/SCP,
+build them on the Pi, and launch games. Installed Pis run independently of the
+dashboard. The current dashboard selects one Pi through its configuration;
+it is not a fleet-management or multiplayer server.
 
-All the games here are unfinished and very much a work in progress. I will hopefully improve them slowly over time as I get some myself.
+There are three unfinished games: Phosphor Run, Rosey Chop and Bramble Hollow.
+Hardware Test is an additional diagnostic module. Each playable game has
+dashboard settings editing; level and sprite editors are available where the
+game supplies an editor description. Bramble currently has settings editing,
+without a registered level/sprite editor.
 
-The text below is the internal thought process of an AI agent or two.
+The browser console runs the same C games as WebAssembly, with keyboard,
+gamepad and touch controls. Mobile support is the browser player, including
+Home Screen launch, rather than a separate native app. The public static site
+is published to [chirky.org](https://chirky.org/), the domain configured in this
+repository. The public site does not include the dashboard or Pi control API.
 
----
+Phosphor Run already saves local high scores on the Pi and in the browser.
+Bramble Hollow optionally connects to a separate world-director service.
+There are no global leaderboards, public content submissions or real-time
+multiplayer sessions yet. See the [platform evolution plan](docs/platform-evolution.md)
+for the proposed groundwork and implementation order.
 
-The dashboard is the browser-based editing portal; the launcher is the menu
-running on the Pi. Both use the Chirky name.
+The **dashboard** is the local development/editing portal. The **console** is
+the player experience on both platforms; its **launcher** selects games and
+settings. The code is organized as follows:
+
+| Location | Responsibility |
+| --- | --- |
+| `include/`, files directly under `src/` | Portable game ABI, console, lifecycle, rendering and assets |
+| `src/platform/linux/` | Pi/Linux devices, native loading, networking and storage |
+| `src/platform/web/`, `web/` | Emscripten bridge and browser input, presentation and services |
+| `games/` | Game code, manifests, settings and editable assets |
+| `dashboard/` | Local editing, browser playtesting and Pi administration |
+| `director/` | Optional Bramble world service |
+| `deploy/`, `provision/`, `tools/` | Publication, Pi installation and build/verification tools |
+
+See [architecture](docs/architecture.md) for ownership and
+[game folders](games/README.md) for adding games and editors.
+
+## Native display
 
 The persistent host opens the active DRM/KMS connector directly, creates a
 GBM/EGL OpenGL ES surface at the connector's native resolution, and presents
@@ -240,8 +274,8 @@ from the game list and activates it with Primary.
 ## Included games
 
 The shared native/browser interface is documented in
-[Platform API 12](docs/platform-api.md): retained assets, sprites, rectangles,
-text, input, sound, timing scopes, and asynchronous world direction. See the
+[Platform API 13](docs/platform-api.md): retained assets, sprites, rectangles,
+text, input, sound, local saves, timing scopes, and asynchronous world direction. See the
 [Pi platform measurements](docs/performance-platform-pi3.md) for before/after
 results and the asynchronous audio-startup follow-up.
 
@@ -251,6 +285,8 @@ results and the asynchronous audio-startup follow-up.
 - `phosphor-run`: a scrolling CRT-native platformer with wall-jumps, air dash,
   checkpoints, hazards, particles, collectible signal shards, and a complete
   win/death loop
+- `bramble-hollow`: a woodland adventure proof of concept with gardening,
+  dialogue, cycling and optional networked world direction
 
 ## Start automatically on the Pi
 

@@ -1,5 +1,48 @@
 # Chirky Agent Guide
 
+## Project Context
+
+Chirky is a small C games console with equally supported Raspberry Pi/Linux
+and desktop/mobile browser targets. The Pi uses native shared game modules;
+the browser uses WebAssembly side modules. Both share the portable console,
+runtime, game code and game-facing ABI. Mobile currently means the browser
+player, including Home Screen launch, not a separate native app.
+
+There are three unfinished games (Phosphor Run, Rosey Chop and Bramble Hollow)
+plus Hardware Test, a platform diagnostic. `games/*/game.conf` remains the
+authoritative catalog; this overview is not a runtime registration list.
+
+The local Node dashboard edits working-tree game data and controls one
+configured Pi at a time over SSH/SCP, normally at a static LAN address. It
+copies source/assets and invokes the Pi build. The installed console runs
+without the dashboard. The public browser build is a separate static site;
+the checked-in publishing target is chirky.org. Do not expose the development
+dashboard or its Pi administration routes as a public player service.
+
+Phosphor Run stores device-local scores through the host save callbacks.
+Bramble's optional director supplies eventually-consistent world state; it is
+not a multiplayer session service. Global scores, public content submissions
+and real-time multiplayer are future work, not existing platform features.
+
+Read `README.md` for operation, `docs/architecture.md` for code ownership,
+`docs/platform-api.md` for the current ABI, and `docs/platform-evolution.md`
+for the proposed sequence for online services, local content and multiplayer.
+Keep implemented behavior distinct from proposals when updating these files.
+
+## Future Platform Work
+
+- Preserve standalone single-player operation. Optional online services must
+  not block game frames or make the dashboard necessary for normal play.
+- Design new game-facing services for both native and browser hosts. Keep
+  transport, credentials and device identity outside game code; use explicit
+  capabilities and unavailable states where support differs.
+- Keep official content, local drafts and submitted content distinguishable.
+  Before adding shared scores or sessions, define rules/content compatibility;
+  a level name or client-reported hash alone does not prove a legitimate run.
+- Add concrete service contracts when implementing their first consumer.
+  Do not expand the ABI with unused networking callbacks or repurpose the
+  world-director protocol for real-time player input.
+
 ## Rendering Contract
 
 - Chirky targets a native 320x240 framebuffer. The host reserves and centers a

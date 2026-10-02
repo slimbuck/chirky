@@ -1,4 +1,4 @@
-# Chirky Box in the browser
+# Chirky in the browser
 
 The existing C games compile to WebAssembly using Emscripten. `src/platform/web/host.c`
 implements the host API with WebGL, reusing `src/rect_renderer.c`, the pixel
@@ -226,7 +226,16 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   action buttons; the display's deliberate double-tap fullscreen shortcut remains.
 - Games still render into the normal CRT-safe logical viewport. Simulation
   runs at 60 ticks/second with bounded catch-up after slow frames.
-- No progress/save-state persistence is added; restarting starts a fresh game.
+- Restarting starts a fresh run; there is no general resume/save-state feature.
+  Game-owned persistent records are supported through ABI 13. Phosphor Run's
+  high scores survive reloads in localStorage, isolated to this browser origin.
+  They are not global scores or synchronized with a Pi. Browser mappings and
+  preferences also persist locally.
+
+The public build currently provides play, not a public editor or submission
+service. Dashboard editing changes the developer's working tree. Personal
+content drafts, shared leaderboards and multiplayer are planned separately;
+see [platform evolution](../docs/platform-evolution.md).
 
 See [architecture](../docs/architecture.md) for code ownership and module lifetime.
 
