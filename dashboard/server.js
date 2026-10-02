@@ -123,7 +123,7 @@ function listGames() {
       return { id: values.id || entry.name, name: values.name || entry.name,
         role: values.role || "game",
         order: Number(values.launcher_order ?? 1000),
-        description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors };
+        description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors, robotPreview: fs.existsSync(path.join(assetsPath,"models","robot.conf")) };
     }).filter(Boolean);
 }
 
@@ -346,6 +346,14 @@ async function handle(request, response) {
         return json(response,404,{error:"not found"});
       return sendFile(response,path.join(ROOT,"build","web",relative));
     }
+    if(url.pathname==="/api/robot-preview") {
+      const preview=require("./robot-preview");
+      if(request.method==="GET")return json(response,200,preview.read());
+      if(request.method==="PUT")return json(response,200,preview.save(await requestBody(request)));
+      return json(response,405,{error:"Method not allowed"});
+    }
+    if(request.method==="GET" && /^\/robot-preview\/(preview\.js|preview\.wasm)$/.test(url.pathname))
+      return sendFile(response,path.join(ROOT,"build","robot-preview",path.basename(url.pathname)));
     if (request.method === "GET" && url.pathname === "/api/launcher") return json(response,200,await readLauncher());
     if (request.method === "PUT" && url.pathname === "/api/launcher") return await saveLauncher(request,response);
     if (request.method === "GET" && url.pathname === "/api/status") return routes.status(request, response);

@@ -100,7 +100,7 @@ test: $(GAME_TARGETS)
 	/tmp/gpu-timing-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/director_client.c src/platform/linux/director_client.c -pthread -o /tmp/director-client-test
 	/tmp/director-client-test
-	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js dashboard/play.test.js tests/architecture.test.cjs tests/director_server.test.mjs tests/game_catalog.test.cjs tests/player_audio.cjs tests/player_input.cjs tests/web_package.cjs
+	$(NODE) --test dashboard/editors.test.js dashboard/ppm.test.js dashboard/launcher.test.js dashboard/play.test.js dashboard/robot-preview.test.js tests/architecture.test.cjs tests/director_server.test.mjs tests/game_catalog.test.cjs tests/player_audio.cjs tests/player_input.cjs tests/web_package.cjs
 	sh tests/service_install.sh
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/splash_runtime.c -o /tmp/splash-runtime-test
@@ -117,3 +117,16 @@ test: $(GAME_TARGETS)
 	/tmp/rosey-runtime-test
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/bramble_runtime.c games/bramble-hollow/*.c src/asset_store.c src/platform/linux/asset_platform.c -pthread -lm -o /tmp/bramble-runtime-test
 	/tmp/bramble-runtime-test
+
+# Local development tool: same robot evaluator and renderer, outside the public package.
+.PHONY: robot-preview
+robot-preview: build/robot-preview/preview.js
+build/robot-preview/preview.js: tools/phosphor-preview.c games/phosphor-run/robot.c games/phosphor-run/robot.h src/rect_renderer.c $(WEB_HEADERS) .emscripten-version | check-web-toolchain
+	mkdir -p $(@D)
+	$(EMCC) $(WEB_FLAGS) tools/phosphor-preview.c games/phosphor-run/robot.c src/rect_renderer.c -o $@
+
+.PHONY: robot-review
+robot-review:
+	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tools/robot-review.c games/phosphor-run/robot.c src/rect_renderer.c -Wl,--gc-sections -l:libEGL.so.1 -l:libGLESv2.so.2 -lm -o build/robot-review
+	./build/robot-review build/robot-gpu-review.ppm

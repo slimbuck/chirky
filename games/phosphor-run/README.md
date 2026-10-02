@@ -17,8 +17,10 @@ Z for Secondary, Enter for Start and Escape for Menu.
 Collect every shard in the current level to unlock its portal. A run starts with
 three lives and ends when all three are lost. Lives carry between campaign levels.
 Each level starts with fresh shards, checkpoint, dash, particles, camera state and
-a 60 Hz timer. Its opening card shows the articulated player at 2× size running
-in place before control begins. A qualifying completion enters the top ten for
+a 60 Hz timer. Its opening camera holds a 5× view of the actual robot in the level for
+1.5 seconds, then zooms the whole scene out over two-thirds of a second with a
+cubic ease-in/out: gentle departure, a brisk middle, and a soft arrival before
+control and the run timer begin. The HUD stays at native size. A qualifying completion enters the top ten for
 that level. Use Up/Down to edit an initial, Primary (touch A) to advance and
 submit the final letter, and Secondary (touch B) to go back for corrections.
 Left/Right are ignored so sliding the touch D-pad cannot change the active
@@ -151,3 +153,54 @@ require the CRT or change the running Pi session.
 
 `assets/artwork/splash.png` is the editable 288x216 image used by the dashboard;
 `splash.ppm` is its runtime export. See [artwork exports and generation prompt](../ARTWORK.md).
+
+## Robot studio and GPU model
+
+Run `make robot-preview` (`wsl make robot-preview NODE=node.exe` on Windows),
+restart the dashboard after server changes, and open **Edit → Phosphor Run →
+Robot studio**. Choose any of the six clips, face either direction, pause, step,
+scrub, slow playback, or change robot size from 1× to 10×. This is the same C
+pose evaluator and GPU renderer used in play, with an independent preview camera.
+Jump poses stay camera-centred for comparison; gameplay collision is unchanged.
+
+Lighting, brightness, jump head lead/body delay, idle glance and blinking update
+live. **Save to game** writes `assets/models/robot.conf` with validation and stale
+file protection. Refresh the browser player to load saved settings, or deploy
+the project to use them on Pi. **Reset changes** restores saved values. **Reload
+model** rereads an exported `player.robot` without rebuilding the viewer.
+
+The robot's authored source is `assets/models/phosphor-robot.blend`. Export with:
+
+```sh
+blender --background games/phosphor-run/assets/models/phosphor-robot.blend --python tools/blender/export_phosphor_robot.py
+```
+
+`model-info.json` describes the PRB1 mesh, six clips, rigid bone order and eye
+material. Runtime keeps the helmet, visor, twin phosphor eyes, antenna and
+rolling ball; adjustable fill light makes the dark teal surfaces more legible.
+Idle adds a slow head glance and a short eyelid-like compression of the luminous
+eye geometry. Jump extends the head first and offsets the rolling body briefly
+behind it; simulation/collision and jump responsiveness stay unchanged.
+On falling, the body leads instead: the head briefly hangs back, its downward
+pitch follows four ticks later, and the neck suspension settles during descent.
+
+The CPU interpolates 3 rigid bones and transforms 654 vertices; 1,224 triangles
+are submitted in one mesh call. The GPU handles lighting, depth and coverage at
+the requested camera size. It never enlarges a tiny software-rendered robot image.
+At the normal camera, the robot retains its previous world size. Pixel scenery
+uses rounded shared edges during the temporary zoom and returns to 1:1 pixels.
+
+Validation: `make test`, `make web`, and `sh tools/texture-tests.sh` (GLES headers
+required for the last command). The mesh tests cover deterministic poses, all
+clips/facings, blink, magnification and bounded submission; GLES checks cover
+depth, safe viewport clipping, 2D ordering and state restoration. Visual review
+must include the large preview and the live 1× game, not just mesh structure.
+
+`make robot-review` builds an offscreen review tool and writes
+`build/robot-gpu-review.ppm`: six clips, four poses, both facings, 1× and 4×.
+It uses the real GLES renderer and also reports a bounded timing measurement
+including GPU completion; this is an offscreen workload, not a live FPS claim.
+The reviewed sheet is retained as `tests/references/phosphor-robot-gpu.png`.
+Use the sheet together with the Blender portrait and live studio when changing
+geometry, materials, or motion. Different GPUs may differ at triangle edges;
+reference review must distinguish those edges from changes to identity or pose.

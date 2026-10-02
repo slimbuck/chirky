@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "chirky.h"
 #define RECT_BATCH_CAPACITY 4096
 #define TEXTURE_BATCH_CAPACITY 256
 struct rect_vertex { float x,y; uint8_t r,g,b,a; };
@@ -21,12 +22,16 @@ struct rect_renderer {
     struct texture_vertex *texture_vertices;
     size_t texture_count;
     unsigned int sprites;
+    unsigned int mesh_program,mesh_buffer;
+    int mesh_view,mesh_ambient;
 };
 bool rect_renderer_init(struct rect_renderer *r,int width,int height);
 void rect_renderer_destroy(struct rect_renderer *r);
 void rect_renderer_begin(struct rect_renderer *r);
 void rect_renderer_rect(struct rect_renderer *r,int x,int y,int w,int h,uint8_t red,uint8_t green,uint8_t blue);
 void rect_renderer_flush(struct rect_renderer *r);
+bool rect_renderer_mesh(struct rect_renderer *r,const struct chirky_mesh_vertex *vertices,
+                        size_t count,float ambient,int offset_x,int offset_y,int width,int height);
 /* A current GLES2/WebGL1 context is required for create/delete/flush.
    Input is tightly packed, top-down, straight-alpha RGBA8. An empty t stays empty
    on failure; a live t is rejected unchanged. size may exceed width*height*4. */

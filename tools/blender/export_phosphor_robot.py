@@ -69,7 +69,10 @@ def export_robot(root):
             file.write(struct.pack("<"+"f"*len(frame), *frame))
     stats = {"vertices": len(vertices), "triangles": len(triangles), "bones": len(bones),
              "clips": [clip[0] for clip in clips], "pose_frames": len(frames),
-             "runtime_bytes": (out/"player.robot").stat().st_size}
+             "runtime_bytes": (out/"player.robot").stat().st_size,
+             "format": "PRB1", "bone_order": names, "eye_material": 6,
+             "eye_center_z": 1.55, "pixels_per_unit": 8, "tuning": "robot.conf",
+             "renderer": "ABI 14 GPU triangle list"}
     (out/"model-info.json").write_text(json.dumps(stats, indent=2)+"\n")
     return stats
 

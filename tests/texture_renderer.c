@@ -171,6 +171,24 @@ static void tests(void)
     compare("delete flushes queued uses, upload preserves pending batch",0);
     rect_renderer_texture_delete(&renderer,&t);
     rect_renderer_texture_delete(&renderer,&overlay);rect_renderer_texture_delete(&renderer,&art);
+    /* Opaque mesh: nearest triangle wins independent of submission order;
+       host offset/scissor, then rectangle/sprite order remain intact. */
+    begin();
+    struct chirky_mesh_vertex mesh[6]={
+        {0,0,.5f,0,0,1,255,0,0,255},{80,0,.5f,0,0,1,255,0,0,255},{0,80,.5f,0,0,1,255,0,0,255},
+        {0,0,-.5f,0,0,1,0,0,255,255},{80,0,-.5f,0,0,1,0,0,255,255},{0,80,-.5f,0,0,1,0,0,255,255}};
+    assert(rect_renderer_mesh(&renderer,mesh,6,1,16,12,32,32));
+    assert(!rect_renderer_mesh(&renderer,mesh,4,1,16,12,32,32));
+    rect_renderer_rect(&renderer,20,16,4,4,0,255,0);rect_renderer_flush(&renderer);
+    glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,actual);
+    assert(actual[25][25][0]==255 && !actual[25][25][2]);
+    assert(actual[17][21][1]==255 && !actual[17][21][0]);
+    assert(!actual[10][20][3] && !actual[45][20][3] && !actual[20][49][3]);
+    /* Every draw owns an isolated depth layer and restores the 2D GL state. */
+    assert(rect_renderer_mesh(&renderer,mesh+3,3,1,16,12,32,32));
+    glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,actual);assert(actual[25][25][2]==255);
+    assert(!glIsEnabled(GL_DEPTH_TEST) && !glIsEnabled(GL_SCISSOR_TEST));
+    assert(glGetError()==GL_NO_ERROR);puts("PASS mesh depth, clipping, offset, ordering and state restoration");
     rect_renderer_destroy(&renderer);rect_renderer_destroy(&renderer);
     assert(glGetError()==GL_NO_ERROR);
 }
@@ -179,7 +197,7 @@ int main(void)
 {
 #ifdef __EMSCRIPTEN__
     EmscriptenWebGLContextAttributes attrs;emscripten_webgl_init_context_attributes(&attrs);
-    attrs.alpha=true;attrs.antialias=false;attrs.premultipliedAlpha=false;attrs.majorVersion=1;
+    attrs.depth=true;attrs.alpha=true;attrs.antialias=false;attrs.premultipliedAlpha=false;attrs.majorVersion=1;
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context=emscripten_webgl_create_context("#canvas",&attrs);
     assert(context>0 && emscripten_webgl_make_context_current(context)==EMSCRIPTEN_RESULT_SUCCESS);
 #else
@@ -188,7 +206,7 @@ int main(void)
     EGLDisplay display=get_display(EGL_PLATFORM_SURFACELESS_MESA,EGL_DEFAULT_DISPLAY,NULL);
     EGLint major,minor;assert(eglInitialize(display,&major,&minor));assert(eglBindAPI(EGL_OPENGL_ES_API));
     const EGLint attributes[]={EGL_SURFACE_TYPE,EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,EGL_OPENGL_ES2_BIT,
-        EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_NONE};
+        EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_DEPTH_SIZE,16,EGL_NONE};
     EGLConfig config;EGLint count;assert(eglChooseConfig(display,attributes,&config,1,&count) && count);
     const EGLint context_attributes[]={EGL_CONTEXT_CLIENT_VERSION,2,EGL_NONE};
     EGLContext context=eglCreateContext(display,config,EGL_NO_CONTEXT,context_attributes);assert(context!=EGL_NO_CONTEXT);

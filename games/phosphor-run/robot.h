@@ -2,6 +2,9 @@
 #define PHOSPHOR_ROBOT_H
 #include "chirky.h"
 #include <stdbool.h>
+struct robot_tuning { float ambient,brightness,head_lead,body_lag,idle_look,blink; };
+extern struct robot_tuning robot_style;
+
 enum robot_clip { ROBOT_IDLE, ROBOT_RUN, ROBOT_JUMP, ROBOT_FALL, ROBOT_DASH, ROBOT_DEATH };
 struct robot_motion {
     float roll, roll_speed, lean, lean_speed;
@@ -19,4 +22,6 @@ bool robot_draw(const struct chirky_host_api *api, int center_x, int floor_y,
                 int facing, enum robot_clip clip, float tick);
 bool robot_draw_scaled(const struct chirky_host_api *api, int center_x, int floor_y,
                        int facing, enum robot_clip clip, float tick, int scale);
+bool robot_draw_view(const struct chirky_host_api *api,int center_x,int floor_y,int facing,
+                     enum robot_clip clip,float tick,const struct robot_motion *motion,float scale);
 #endif

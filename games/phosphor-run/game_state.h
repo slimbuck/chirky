@@ -14,7 +14,9 @@
 #define PLAYER_HEIGHT 14
 #define STARTING_LIVES 3
 #define HIGH_SCORE_COUNT 10
-#define LEVEL_INTRO_TICKS 90
+#define LEVEL_INTRO_HOLD_TICKS 90
+#define LEVEL_INTRO_ZOOM_TICKS 40
+#define LEVEL_INTRO_TICKS (LEVEL_INTRO_HOLD_TICKS+LEVEL_INTRO_ZOOM_TICKS)
 
 enum phase {
     PHASE_TITLE,
@@ -91,6 +93,7 @@ bool load_settings(const char *path);
 char tile_at(int x, int y);
 void render_title(void);
 void render_game(void);
+float level_intro_zoom(void);
 void title_art_load(const char *config);
 void title_art_free(void);
 void scores_load(void);

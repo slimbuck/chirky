@@ -206,6 +206,18 @@ int main(void)
     settings.start_level=1;
     press(api,&input,CHIRKY_BUTTON_PRIMARY);
     assert(current_level==1 && phase==PHASE_LEVEL_INTRO && lives==STARTING_LIVES);
+    phase=PHASE_LEVEL_INTRO;level_intro_timer=LEVEL_INTRO_TICKS;
+    assert(level_intro_zoom()==5);float last_zoom=5;
+    level_intro_timer=LEVEL_INTRO_ZOOM_TICKS;
+    assert(level_intro_zoom()==5); /* The full hold leaves the camera still. */
+    level_intro_timer=LEVEL_INTRO_ZOOM_TICKS*3/4;
+    assert(level_intro_zoom()>4.5f); /* Slower departure than a linear tween. */
+    level_intro_timer=LEVEL_INTRO_ZOOM_TICKS/4;
+    assert(level_intro_zoom()<1.5f); /* Most travel completes before settling. */
+    for(int i=LEVEL_INTRO_TICKS;i>=0;i--) {
+        level_intro_timer=i;float z=level_intro_zoom();assert(z>=1 && z<=last_zoom);last_zoom=z;
+    }
+    assert(last_zoom==1);phase=PHASE_PLAY;assert(level_intro_zoom()==1);
     /* All UI remains inside the safe viewport; the world uses its own camera. */
     const int sizes[][2]={{288,216},{256,192}};
     for(int i=0;i<2;i++) {

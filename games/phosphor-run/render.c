@@ -2,6 +2,7 @@
 #include "splash_art.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 static struct splash_art title_art;
 void title_art_load(const char *config) { splash_load_api(&title_art,host,config); }
@@ -19,9 +20,27 @@ static struct colour sprite_colour(char value)
     return settings.background;
 }
 
+/* Camera operates on the scene, including the mesh; HUD remains screen-space. */
+static bool scene_view;
+static float zoom=1,shift_x,shift_y;
+float level_intro_zoom(void)
+{
+    if(phase!=PHASE_LEVEL_INTRO)return 1;
+    float t=clampf((LEVEL_INTRO_TICKS-level_intro_timer-LEVEL_INTRO_HOLD_TICKS)/
+                   (float)LEVEL_INTRO_ZOOM_TICKS,0,1);
+    /* Cubic ease-in/out: linger at the close-up, move briskly through the
+       middle, then settle into the gameplay camera without a velocity snap. */
+    float remaining=1-t;
+    float eased=t<.5f?4*t*t*t:1-4*remaining*remaining*remaining;
+    return 1+4*(1-eased);
+}
+static int view_x(int x) { return scene_view?(int)lroundf(x*zoom+shift_x):x; }
+static int view_y(int y) { return scene_view?(int)lroundf(y*zoom+shift_y):y; }
+
 static void rectangle(int x, int y, int width, int height, struct colour colour)
 {
-    host->fill_rect(host->context,x,y,width,height,colour.r,colour.g,colour.b);
+    int right=view_x(x+width),top=view_y(y+height);x=view_x(x);y=view_y(y);
+    if(right>x && top>y)host->fill_rect(host->context,x,y,right-x,top-y,colour.r,colour.g,colour.b);
 }
 
 static void text(int x, int y, const char *value, int scale, struct colour colour)
@@ -52,10 +71,9 @@ static void draw_sprite(const char *id, int x, int y, bool flip, int tick,
                         const struct colour *tint)
 {
     const struct grid *frame=animation_frame(content_animation(&content,id),tick);
-    if (!frame || x>=host->screen_width || y>=host->screen_height ||
-        x+frame->width<=0 || y+frame->height<=0) return;
-    /* The host clears a scissored rectangle per call. Merge repeated rows and
-       colour runs so solid scenery does not issue thousands of GL clears. */
+    if (!frame || view_x(x)>=host->screen_width || view_y(y)>=host->screen_height ||
+        view_x(x+frame->width)<=0 || view_y(y+frame->height)<=0) return;
+    /* Merge identical texel runs; the shared renderer batches these as GPU triangles. */
     for (int row=0;row<frame->height;) {
         int height=1;
         while (row+height<frame->height &&
@@ -92,7 +110,8 @@ static void draw_scenery(const char *id,int x,int y,int world_x,int world_y)
 
 static void render_background(void)
 {
-    rectangle(0,0,host->screen_width,host->screen_height,settings.background);
+    host->fill_rect(host->context,0,0,host->screen_width,host->screen_height,
+                    settings.background.r,settings.background.g,settings.background.b);
     int slow = (int)(camera_x*.18f);
     for (int index = -1; index < 8; ++index) {
         int x = index*52-(slow%52);
@@ -153,7 +172,8 @@ static void render_player(void)
         !on_ground?(velocity_y>0?"player-jump":"player-fall"):
         absolute(velocity_x)>.3f?"player-run":"player-idle";
     if (dash_timer>0) draw_sprite("dash-trail",x-facing*7,y+4,facing<0,frame_number,NULL);
-    if(!robot_draw_weighted(host,x+PLAYER_WIDTH/2,y,facing,player_robot_clip(),(float)player_animation_tick,&player_motion))
+    if(!robot_draw_view(host,view_x(x+PLAYER_WIDTH/2),view_y(y),facing,
+        phase==PHASE_LEVEL_INTRO?ROBOT_IDLE:player_robot_clip(),(float)player_animation_tick,&player_motion,zoom))
         draw_sprite(id,x,y,facing<0,frame_number,NULL);
 }
 
@@ -207,12 +227,12 @@ static void render_hud(void)
     if (dash_available) rectangle(8,top-12,8,3,settings.edge);
 }
 
-static void render_level_intro(int middle)
+static void render_level_intro(void)
 {
     char name[64],line[96];
     level_name(name,sizeof(name));
     snprintf(line,sizeof(line),"LEVEL %d - %s",current_level+1,name);
-    centered_outlined_text(middle-26,line,
+    centered_outlined_text(28,line,
         (int)strlen(line)*12<=host->screen_width-24?2:1,settings.paper);
 }
 
@@ -281,20 +301,25 @@ void render_title(void)
 
 void render_game(void)
 {
+    zoom=level_intro_zoom();
+    float blend=(zoom-1)/4;
+    float anchor_x=(int)(player_x-camera_x)+PLAYER_WIDTH/2;
+    float anchor_y=(int)(player_y-camera_y)+9;
+    shift_x=blend*(host->screen_width*.5f-anchor_x)-anchor_x*(zoom-1);
+    shift_y=blend*(host->screen_height*.53f-anchor_y)-anchor_y*(zoom-1);
+    scene_view=true;
     chirky_scope(host,"background",true);render_background();chirky_scope(host,"background",false);
     chirky_scope(host,"world",true);render_world();chirky_scope(host,"world",false);
     chirky_scope(host,"particles",true);render_particles();chirky_scope(host,"particles",false);
     chirky_scope(host,"player",true);
     int middle=host->screen_height/2;
-    if (phase==PHASE_LEVEL_INTRO && robot_ready())
-        robot_draw_scaled(host,host->screen_width/2,middle+14,1,ROBOT_RUN,
-                          (float)player_animation_tick,2);
-    else if (robot_ready() || (phase!=PHASE_DEAD && phase!=PHASE_GAME_OVER) || (death_timer&3)<2)
+    if (robot_ready() || (phase!=PHASE_DEAD && phase!=PHASE_GAME_OVER) || (death_timer&3)<2)
         render_player();
     chirky_scope(host,"player",false);
+    scene_view=false;
     chirky_scope(host,"hud",true);render_hud();chirky_scope(host,"hud",false);
     if (phase==PHASE_LEVEL_INTRO) {
-        render_level_intro(middle);
+        render_level_intro();
     } else if (phase==PHASE_DEAD) {
         rectangle((host->screen_width-170)/2,middle-16,170,32,settings.background);
         centered_text(middle+5,"SIGNAL LOST",2,settings.hazard);

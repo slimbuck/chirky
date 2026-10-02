@@ -386,7 +386,7 @@ async function start(){
   titles={launcher:"Launcher",...Object.fromEntries(catalog.map(game=>[game.id,game.name]))};
   files=assetFiles;configs=gameConfigs;
   startupProgress(10);
-  displayContext=canvas.getContext("webgl",{alpha:false,depth:false,stencil:false,antialias:false});
+  displayContext=canvas.getContext("webgl",{alpha:false,depth:true,stencil:false,antialias:false});
   if(!displayContext)throw new Error("WebGL is unavailable");
   shell=await createModule(launcher,wasmBinary);runtime=shell;
   startupProgress(85);

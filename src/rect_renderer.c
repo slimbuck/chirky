@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 /* GLES2 runtime ABI, matching the host's offline/no-development-headers build. */
 extern unsigned int glCreateShader(unsigned int type);
@@ -42,6 +43,13 @@ extern unsigned int glGetError(void);
 extern int glGetUniformLocation(unsigned int program,const char *name);
 extern void glUniform1i(int location,int value);
 extern void glUniform2f(int location,float x,float y);
+extern void glUniform4f(int location,float x,float y,float z,float w);
+extern void glUniform1f(int location,float value);
+extern void glScissor(int x,int y,int width,int height);
+extern void glClear(unsigned int mask);
+extern void glClearDepthf(float depth);
+extern void glDepthMask(unsigned char flag);
+extern void glDepthFunc(unsigned int func);
 extern void glGetShaderPrecisionFormat(unsigned int type,unsigned int precision_type,int *range,int *precision);
 
 static unsigned int shader(unsigned int type,const char *source)
@@ -80,12 +88,63 @@ bool rect_renderer_init(struct rect_renderer *r,int width,int height)
 
 void rect_renderer_destroy(struct rect_renderer *r)
 {
+    if (r->mesh_buffer) glDeleteBuffers(1,&r->mesh_buffer);
+    if (r->mesh_program) glDeleteProgram(r->mesh_program);
     if (r->texture_buffer) glDeleteBuffers(1,&r->texture_buffer);
     if (r->texture_program) glDeleteProgram(r->texture_program);
     free(r->texture_vertices);
     if (r->buffer) glDeleteBuffers(1,&r->buffer);
     if (r->program) glDeleteProgram(r->program);
     free(r->vertices);memset(r,0,sizeof(*r));
+}
+
+static bool mesh_init(struct rect_renderer *r)
+{
+    if(r->mesh_program)return true;
+    unsigned int v=shader(0x8b31,
+        "attribute vec3 position; attribute vec3 normal; attribute vec4 colour;"
+        "uniform vec4 view; uniform float ambient; varying lowp vec3 tint;"
+        "void main(){gl_Position=vec4((position.xy+view.xy)*view.zw-1.0,-position.z,1.0);"
+        "vec3 n=normalize(normal); if(n.z<0.0)n=-n;"
+        "float light=ambient+(1.0-ambient)*max(0.0,dot(n,normalize(vec3(-0.35,0.60,0.72))));"
+        "tint=colour.rgb*mix(light,1.0,colour.a);}");
+    unsigned int f=shader(0x8b30,"precision mediump float; varying lowp vec3 tint; void main(){gl_FragColor=vec4(tint,1.0);}");
+    if(!v || !f){if(v)glDeleteShader(v);if(f)glDeleteShader(f);return false;}
+    unsigned int p=glCreateProgram();glAttachShader(p,v);glAttachShader(p,f);
+    glBindAttribLocation(p,0,"position");glBindAttribLocation(p,1,"colour");glBindAttribLocation(p,2,"normal");
+    glLinkProgram(p);glDeleteShader(v);glDeleteShader(f);
+    int ok=0;glGetProgramiv(p,0x8b82,&ok);
+    if(!ok){glDeleteProgram(p);return false;}
+    glGenBuffers(1,&r->mesh_buffer);
+    if(!r->mesh_buffer){glDeleteProgram(p);return false;}
+    r->mesh_program=p;r->mesh_view=glGetUniformLocation(p,"view");r->mesh_ambient=glGetUniformLocation(p,"ambient");
+    return true;
+}
+
+bool rect_renderer_mesh(struct rect_renderer *r,const struct chirky_mesh_vertex *v,
+                        size_t count,float ambient,int ox,int oy,int width,int height)
+{
+    if(!r || !r->program || !v || !count || count>12288 || count%3 ||
+       !isfinite(ambient) || ambient<0 || ambient>1 || width<=0 || height<=0)return false;
+    for(size_t i=0;i<count;i++)if(!isfinite(v[i].x) || !isfinite(v[i].y) ||
+        !isfinite(v[i].z) || fabsf(v[i].z)>1 || !isfinite(v[i].nx) ||
+        !isfinite(v[i].ny) || !isfinite(v[i].nz))return false;
+    if(!mesh_init(r))return false;
+    rect_renderer_flush(r);
+    glEnable(0x0c11);glScissor(ox,oy,width,height);
+    glEnable(0x0b71);glDepthMask(1);glDepthFunc(0x0203);glClearDepthf(1);glClear(0x00000100);
+    glDisable(0x0be2);glDisable(0x0b44);
+    glUseProgram(r->mesh_program);glBindBuffer(0x8892,r->mesh_buffer);
+    glUniform4f(r->mesh_view,(float)ox,(float)oy,2.f/r->width,2.f/r->height);
+    glUniform1f(r->mesh_ambient,ambient);
+    glBufferData(0x8892,(ptrdiff_t)(count*sizeof(*v)),v,0x88e0);
+    glEnableVertexAttribArray(0);glEnableVertexAttribArray(1);glEnableVertexAttribArray(2);
+    glVertexAttribPointer(0,3,0x1406,0,sizeof(*v),(void *)offsetof(struct chirky_mesh_vertex,x));
+    glVertexAttribPointer(1,4,0x1401,1,sizeof(*v),(void *)offsetof(struct chirky_mesh_vertex,r));
+    glVertexAttribPointer(2,3,0x1406,0,sizeof(*v),(void *)offsetof(struct chirky_mesh_vertex,nx));
+    glDrawArrays(0x0004,0,(int)count);
+    glDisableVertexAttribArray(2);glDisable(0x0b71);glDisable(0x0c11);r->batches++;
+    return true;
 }
 
 void rect_renderer_begin(struct rect_renderer *r)

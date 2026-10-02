@@ -10,44 +10,50 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static unsigned char pixels[64][64][3];
+static struct chirky_mesh_vertex vertices[12288];
+static size_t vertex_count;
 static unsigned draws;
-static bool expect_scaled;
 static struct trace_capture capture;
 static void scope(void *context,const char *name,bool begin)
+{ (void)context;trace_scope(&capture,name,begin,draws); }
+static bool mesh(void *context,const struct chirky_mesh_vertex *v,size_t count,float ambient)
 {
-    (void)context;trace_scope(&capture,name,begin,draws);
-}
-static void fill(void *context,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
-{
-    (void)context;draws++;
-    assert(w>0 && h>0);
-    if(expect_scaled)assert(!(w&1) && h==2);
-    for(int yy=y;yy<y+h;yy++)for(int xx=x;xx<x+w;xx++)if(xx>=0 && xx<64 && yy>=0 && yy<64) {
-        pixels[yy][xx][0]=r;pixels[yy][xx][1]=g;pixels[yy][xx][2]=b;
-    }
+    (void)context;draws++;assert(count && count%3==0 && count<=12288 && ambient>=0 && ambient<=1);
+    for(size_t i=0;i<count;i++)assert(isfinite(v[i].x) && isfinite(v[i].y) && isfinite(v[i].z) && fabsf(v[i].z)<=1);
+    memcpy(vertices,v,count*sizeof(*v));vertex_count=count;return true;
 }
 static uint64_t hash(void)
 {
     uint64_t result=1469598103934665603ull;
-    for(size_t i=0;i<sizeof(pixels);i++)result=(result^((unsigned char *)pixels)[i])*1099511628211ull;
+    for(size_t i=0;i<vertex_count*sizeof(*vertices);i++)result=(result^((unsigned char *)vertices)[i])*1099511628211ull;
     return result;
+}
+static void eye_center(float *x,float *y)
+{
+    unsigned count=0;*x=*y=0;
+    for(size_t i=0;i<vertex_count;i++) {
+        const struct chirky_mesh_vertex *v=&vertices[i];
+        if(v->emissive && v->g>v->r && v->g>v->b+30) {
+            *x+=v->x;*y+=v->y;count++;
+        }
+    }
+    assert(count);*x/=count;*y/=count;
 }
 static double seconds(void) { struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec*1e-9; }
 int main(void)
 {
-    struct chirky_host_api api={.screen_width=64,.screen_height=64,.fill_rect=fill};
+    struct chirky_host_api api={.screen_width=64,.screen_height=64,.draw_mesh=mesh};
     const char *config="games/phosphor-run/game.conf";
     assert(robot_load(config) && robot_ready());
     assert(trace_arm(&capture,1,16667));capture.recording=true;api.profile_scope=scope;
     assert(robot_draw(&api,32,4,1,ROBOT_RUN,0));
-    assert(!capture.invalid && !capture.depth && capture.count==7);
+    assert(!capture.invalid && !capture.depth && capture.count==5);
     uint64_t profiled_hash=hash();
-    api.profile_scope=NULL;memset(pixels,0,sizeof(pixels));
+    api.profile_scope=NULL;memset(vertices,0,sizeof(vertices));
     assert(robot_draw(&api,32,4,1,ROBOT_RUN,0));assert(hash()==profiled_hash);
-    memset(pixels,0,sizeof(pixels));draws=0;expect_scaled=true;
+    memset(vertices,0,sizeof(vertices));draws=0;
     assert(robot_draw_scaled(&api,32,4,1,ROBOT_RUN,0,2));
-    assert(draws>40 && draws<500);expect_scaled=false;
+    assert(draws==1);
     assert(!robot_draw_scaled(&api,32,4,1,ROBOT_RUN,0,0));
     free(capture.spans);capture=(struct trace_capture){0};
     struct robot_motion motion={0},mirror={0};
@@ -68,27 +74,42 @@ int main(void)
         assert(!memcmp(&motion,&saved,sizeof(motion)));
     }
     fclose(trace);assert(fabsf(motion.lean)<.001f && motion.roll_speed==0);
-    static unsigned char sheet[512][768][3];
     for(int clip=0;clip<6;clip++) {
         uint64_t frames[4];
         for(int frame=0;frame<4;frame++) {
-            memset(pixels,0,sizeof(pixels));draws=0;
-            assert(robot_draw(&api,32,4,frame==3?-1:1,(enum robot_clip)clip,(float)(frame*5)));
-            assert(draws>40 && draws<500);frames[frame]=hash();
-            unsigned char copy[sizeof(pixels)];memcpy(copy,pixels,sizeof(pixels));
+            draws=0;assert(robot_draw(&api,32,4,frame==3?-1:1,(enum robot_clip)clip,(float)(frame*5)));
+            assert(draws==1);frames[frame]=hash();
             robot_draw(&api,32,4,frame==3?-1:1,(enum robot_clip)clip,(float)(frame*5));
-            assert(!memcmp(copy,pixels,sizeof(pixels)));
-            for(int y=0;y<32;y++)for(int x=0;x<32;x++)for(int yy=0;yy<4;yy++)for(int xx=0;xx<4;xx++)
-                memcpy(sheet[frame*128+(31-y)*4+yy][clip*128+x*4+xx],pixels[y][x+16],3);
+            assert(hash()==frames[frame]);
         }
         assert(frames[0]!=frames[3]);
         if(clip==ROBOT_RUN || clip==ROBOT_JUMP || clip==ROBOT_DEATH)assert(frames[0]!=frames[2]);
     }
-    FILE *image=fopen("build/robot-poses.ppm","wb");assert(image);
-    fprintf(image,"P6\n768 512\n255\n");fwrite(sheet,1,sizeof(sheet),image);fclose(image);
+    /* Falling moves the body immediately, with a delayed head and a bounded
+       suspension stretch that settles rather than hanging above it forever. */
+    for(int facing=-1;facing<=1;facing+=2) {
+        float x0,y0,x4,y4,x36,y36,x120,y120;
+        assert(robot_draw(&api,32,40,facing,ROBOT_FALL,0));eye_center(&x0,&y0);
+        assert(robot_draw(&api,32,32,facing,ROBOT_FALL,4));eye_center(&x4,&y4);
+        assert(fabsf(x4-x0)<.001f); /* Head pitch is still held at frame zero. */
+        assert(y4>y0-7 && y4<y0-5); /* Body fell 8 px; head initially falls less. */
+        assert(robot_draw(&api,32,32,facing,ROBOT_FALL,36));eye_center(&x36,&y36);
+        assert(robot_draw(&api,32,32,facing,ROBOT_FALL,120));eye_center(&x120,&y120);
+        assert(fabsf(x36-x120)<.001f && fabsf(y36-y120)<.05f);
+    }
+    /* Camera magnification changes geometry, never a pre-rasterized pixel grid. */
+    robot_draw(&api,32,4,1,ROBOT_IDLE,0);float x=vertices[0].x,y=vertices[0].y;
+    robot_draw_view(&api,32,4,1,ROBOT_IDLE,0,NULL,5);
+    assert(fabsf(vertices[0].x-(32+(x-32)*5))<.001f);
+    assert(fabsf(vertices[0].y-(4+(y-4)*5))<.001f);
+    robot_draw(&api,32,4,1,ROBOT_IDLE,112);uint64_t blinking=hash();
+    robot_style.blink=0;robot_draw(&api,32,4,1,ROBOT_IDLE,112);assert(hash()!=blinking);
+    robot_style.blink=1;
+    struct chirky_host_api unsupported=api;unsupported.draw_mesh=NULL;
+    assert(!robot_draw(&unsupported,32,4,1,ROBOT_IDLE,0));
     double start=seconds();
     for(int i=0;i<1000;i++)robot_draw(&api,32,4,1,ROBOT_RUN,(float)i);
-    printf("Robot: 1000 animated mesh frames, %.3f ms/frame on this machine (includes pixel callback).\n",(seconds()-start));
+    printf("Robot: 1000 animated mesh frames, %.3f ms/frame on this machine (pose + one mesh callback).\n",(seconds()-start));
     /* Offscreen and partially clipped draws remain bounded. */
     draws=0;assert(robot_draw(&api,-1000,4,1,ROBOT_IDLE,0));assert(!draws);
     assert(robot_draw(&api,0,-3,-1,ROBOT_DASH,4));

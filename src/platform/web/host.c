@@ -102,6 +102,11 @@ static size_t director_state_api(void *unused,uint32_t after_revision,char *text
     if(capacity>UINT32_MAX)return 0;
     return read_director_state(after_revision,text,(unsigned)capacity,revision);
 }
+static bool mesh(void *unused,const struct chirky_mesh_vertex *v,size_t count,float ambient)
+{
+    (void)unused;return rect_renderer_mesh(&renderer,v,count,ambient,CHIRKY_SAFE_X,CHIRKY_SAFE_Y,
+                                         api.screen_width,api.screen_height);
+}
 static void fill(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)unused;
@@ -123,7 +128,7 @@ static void label(void *unused,enum chirky_button button,char *out,size_t size)
 EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
 {
     EmscriptenWebGLContextAttributes attrs;emscripten_webgl_init_context_attributes(&attrs);
-    attrs.alpha=0;attrs.depth=0;attrs.stencil=0;attrs.antialias=0;
+    attrs.alpha=0;attrs.depth=1;attrs.stencil=0;attrs.antialias=0;
     context=emscripten_webgl_create_context("#screen",&attrs);
     if(context<=0 || emscripten_webgl_make_context_current(context)!=EMSCRIPTEN_RESULT_SUCCESS)goto failed;
     if(!rect_renderer_init(&renderer,CHIRKY_FRAMEBUFFER_WIDTH,CHIRKY_FRAMEBUFFER_HEIGHT))goto failed;
@@ -132,7 +137,7 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .screen_width=CHIRKY_VIEWPORT_WIDTH,.screen_height=CHIRKY_VIEWPORT_HEIGHT,
         .fill_rect=fill,.play_sound=play,.draw_text=text,.button_label=label,
         .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=sprite,.sound_play=sound_play,
+        .draw_sprite=sprite,.sound_play=sound_play,.draw_mesh=mesh,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_read_api,.save_write=save_write_api};
     (void)config;splash_load_file_api(&art,&api,"assets/launcher/mascot.ppm");console_init();return 1;

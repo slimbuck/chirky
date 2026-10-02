@@ -514,6 +514,13 @@ static void button_label(void *context, enum chirky_button button,
     copy_text(text,capacity,button>=0 && button<CHIRKY_BUTTON_COUNT ? button_names[button] : "UNBOUND");
 }
 
+static bool draw_mesh(void *context,const struct chirky_mesh_vertex *v,size_t count,float ambient)
+{
+    struct host *h=context;
+    return rect_renderer_mesh(&h->renderer,v,count,ambient,h->safe_x+h->safe_offset_x,
+        h->safe_y+h->safe_offset_y,h->api.screen_width,h->api.screen_height);
+}
+
 static void fill_rect(void *context, int x, int y, int width, int height,
                       unsigned char red, unsigned char green, unsigned char blue)
 {
@@ -1167,7 +1174,7 @@ static bool init_graphics(struct host *host)
         !eglBindAPI(EGL_OPENGL_ES_API)) return false;
     const EGLint attributes[] = {EGL_SURFACE_TYPE,EGL_WINDOW_BIT,
         EGL_RENDERABLE_TYPE,EGL_OPENGL_ES2_BIT,EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,
-        EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,0,EGL_NONE};
+        EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,0,0x3025,16,EGL_NONE};
     EGLConfig config = NULL;
     EGLint count = 0;
     if (!eglChooseConfig(host->egl_display, attributes, &config, 1, &count) || count != 1)
@@ -1766,7 +1773,7 @@ int main(void)
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
         .draw_text=draw_text,.button_label=button_label,.asset_request=request_asset,
         .asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=draw_sprite,.sound_play=sound_play,
+        .draw_sprite=draw_sprite,.sound_play=sound_play,.draw_mesh=draw_mesh,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_store_read,.save_write=save_store_write};
     host.assets=asset_store_create();

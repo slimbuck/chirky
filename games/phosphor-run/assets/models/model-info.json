@@ -11,5 +11,16 @@
     "death"
   ],
   "pose_frames": 68,
-  "runtime_bytes": 30208
+  "runtime_bytes": 30208,
+  "format": "PRB1",
+  "bone_order": [
+    "root",
+    "body",
+    "head"
+  ],
+  "eye_material": 6,
+  "eye_center_z": 1.55,
+  "pixels_per_unit": 8,
+  "tuning": "robot.conf",
+  "renderer": "ABI 14 GPU triangle list"
 }

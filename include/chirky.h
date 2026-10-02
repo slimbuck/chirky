@@ -5,7 +5,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 13
+#define CHIRKY_ABI_VERSION 14
+
+/* Unindexed triangle list in logical pixels; z is [-1,1], larger is nearer.
+   Normals are in screen axes (+x right, +y up, +z toward viewer).
+   Emissive is 0 or 255. Opaque triangles are depth-tested within one call. */
+struct chirky_mesh_vertex {
+    float x,y,z,nx,ny,nz;
+    uint8_t r,g,b,emissive;
+};
 
 typedef uint32_t chirky_asset;
 enum chirky_asset_type { CHIRKY_ASSET_BLOB, CHIRKY_ASSET_IMAGE, CHIRKY_ASSET_SOUND };
@@ -90,6 +98,11 @@ struct chirky_host_api {
        Write replaces one record atomically and reports whether it was saved. */
     size_t (*save_read)(void *context,const char *game,const char *key,void *data,size_t capacity);
     bool (*save_write)(void *context,const char *game,const char *key,const void *data,size_t size);
+    /* Optional GPU mesh service. count is a multiple of 3, at most 12288.
+       Consumes vertices synchronously; does not retain the pointer. Calls are
+       composited in submission order with sprites/rectangles. ambient: [0,1].
+       Returns false when unsupported/invalid; no software rasterizer fallback. */
+    bool (*draw_mesh)(void *context,const struct chirky_mesh_vertex *vertices,size_t count,float ambient);
 };
 
 static inline void chirky_scope(const struct chirky_host_api *api,const char *name,bool begin)

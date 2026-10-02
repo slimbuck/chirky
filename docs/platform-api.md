@@ -1,7 +1,7 @@
-# Platform API 13
+# Platform API 14
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 13`. Native games export
+game report `CHIRKY_ABI_VERSION == 14`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a WASM side module loaded by the persistent Emscripten host.
 `src/runtime.c` owns the same lifecycle on both platforms; `src/console.c` owns
@@ -242,3 +242,21 @@ initialized game. The C teardown releases game assets, textures, the asset store
 and WebGL resources; JavaScript closes the audio context. Games use the same
 asset handles and callbacks in both hosts; native mixer/store lifecycle functions
 and the JavaScript bridge remain platform internals.
+
+## GPU meshes (ABI 14)
+
+`draw_mesh(context, vertices, count, ambient)` renders an opaque, unindexed
+triangle list. Both Linux GLES2 and browser WebGL1 support it. A vertex contains
+logical pixel x/y, depth z in [-1,1] (larger is nearer), a screen-space normal,
+RGB bytes and an emissive byte (0 or 255). Count must be a multiple of three,
+from 3 through 12,288; ambient is a finite value in [0,1]. Inputs are consumed
+synchronously. The host applies calibrated offsets and the logical viewport
+scissor, so games must not add them. The GPU applies a shared directional light,
+depth-tests triangles within the call, and composites the call in drawing order
+with 2D content. Separate calls have independent depth layers. Rectangles and
+sprites after a mesh cover it normally. The callback returns false if unavailable
+or invalid; hosts do not rasterize triangles in software.
+
+Phosphor Run evaluates its small rigid skeleton on the CPU and submits the actor
+once. Lighting, triangle coverage and depth resolution run on the GPU. All hosts
+and game modules must be rebuilt together for ABI 14.

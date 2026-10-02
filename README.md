@@ -212,7 +212,7 @@ these offsets to the existing margins, with no scaling or additional render pass
 bindings migrate to Primary/Secondary/Menu; earlier action mappings still migrate.
 Explicit new names take precedence. Conflicting new defaults are left unbound.
 Retired A/X/L/R bindings are removed when saving. Host and all games must be
-rebuilt together for ABI 13. `safe_x` and `safe_y` retain display margins.
+rebuilt together for ABI 14. `safe_x` and `safe_y` retain display margins.
 
 The program uses `/dev/dri/card0` and reads Linux evdev keyboard devices under
 `/dev/input`. The `retro` user is already a member of the `video`, `render`,
@@ -274,7 +274,7 @@ from the game list and activates it with Primary.
 ## Included games
 
 The shared native/browser interface is documented in
-[Platform API 13](docs/platform-api.md): retained assets, sprites, rectangles,
+[Platform API 14](docs/platform-api.md): retained assets, sprites, rectangles,
 text, input, sound, local saves, timing scopes, and asynchronous world direction. See the
 [Pi platform measurements](docs/performance-platform-pi3.md) for before/after
 results and the asynchronous audio-startup follow-up.

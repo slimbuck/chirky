@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phosphor Run · Robot studio</title><link rel="stylesheet" href="/style.css">
+<style>
+body{background:#10191e;color:#e9eee7;margin:0;font-family:system-ui,sans-serif}main{max-width:1320px;margin:auto;padding:24px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}header a{color:#a6d9c9}h1{font-size:27px;margin:8px 0}p{color:#9db2b4}
+.studio{display:grid;grid-template-columns:minmax(340px,1fr) 300px;gap:24px}.stage{display:grid;place-items:center;min-height:500px;background:#060e12;border:1px solid #284047;border-radius:12px;overflow:auto}
+canvas{image-rendering:pixelated;display:block}aside{padding:20px;background:#18282e;border-radius:12px}label{display:block;margin:15px 0 5px;font-size:14px}input[type=range]{width:100%}output{float:right;color:#bfe39b}select,button{padding:9px;background:#243c44;color:#f0f4ec;border:1px solid #4b676e;border-radius:6px;cursor:pointer}button:disabled{opacity:.5}select{width:100%}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}#status{min-height:2.5em;font-size:13px}.error{color:#ffb4a4}small{color:#a9bbba}fieldset{border:0;padding:0;margin:20px 0}legend{font-weight:600;color:#d9eabd}hr{border:0;border-top:1px solid #355057;margin:20px 0}
+@media(max-width:850px){.studio{grid-template-columns:1fr}.stage{min-height:260px}.studio>section{position:sticky;top:0;z-index:2;background:#10191e}.studio>section>small{display:none}.studio>section p{margin:4px 0}header{display:block}}
+</style></head><body><main>
+<header><div><small>PHOSPHOR RUN / CHARACTER WORKSHOP</small><h1>Robot studio</h1><p>Inspect the actual game model. Light, animate, and tweak it live.</p></div><a href="/#edit/phosphor-run">← Game editor</a></header>
+<div class="studio"><section><div class="stage"><div id="preview-display"><canvas id="screen" width="320" height="240" aria-label="Live robot animation preview"></canvas></div></div><p id="status" role="status">Loading GPU preview…</p><small>Same model, C animation and GPU renderer as the game. Grid spacing: 16 screen pixels. Jump preview holds the camera on the robot so you can inspect the spring motion.</small></section>
+<aside><label for="clip">Animation</label><select id="clip"><option value="0">Idle · glances and blink</option><option value="1">Run · rolling ball</option><option value="2">Jump · head leads body</option><option value="3">Fall</option><option value="4">Dash</option><option value="5">Death</option></select>
+<div class="buttons"><button id="play">Pause</button><button id="step">Step</button><button id="restart">Restart</button><button id="facing">Face left</button></div>
+<label for="tick">Frame <output id="tick-value">0</output></label><input id="tick" type="range" min="0" max="359" step="1" value="0">
+<label for="scale">Robot size <output id="scale-value">7×</output></label><input id="scale" type="range" min="1" max="10" step="1" value="7">
+<label for="speed">Playback speed</label><select id="speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Normal · 60 fps</option></select>
+<hr><fieldset id="tuning"><legend>Live tweaks</legend></fieldset>
+<div class="buttons"><button id="save" disabled>Save to game</button><button id="reset" disabled>Reset changes</button><button id="reload" disabled>Reload model</button></div><small>Save writes local game settings. Reload reads your latest exported model. Refresh the browser game to try saved settings; install on Pi to deploy them.</small></aside></div>
+</main><script type="module" src="/robot-preview.js"></script></body></html>

@@ -116,19 +116,20 @@ logical buttons, menus, mapping workflow, game runtime and rendering are shared.
 Controller mappings are saved per browser-reported device identity. Unrecognized
 USB adapters use the same mapping wizard as standard controllers.
 
-## Rendering roadmap
+## GPU rendering
 
-Polygon and mesh rendering must move to the GPU. The software triangle path in
-Phosphor Run's articulated robot is temporary: it currently transforms and
-rasterizes polygons on the CPU, resolves them to pixels, and submits those pixels
-as rectangles.
+Rectangles, textures and opaque meshes share `src/rect_renderer.c` on GLES2 and
+WebGL1. The ABI 14 mesh callback preserves logical viewport ownership and drawing
+order. Host contexts provide a depth buffer; each mesh draw clears its own depth
+layer and restores 2D rendering state. Phosphor Run's robot evaluates rigid poses
+on the CPU, then submits one triangle list. Lighting and rasterization are GPU
+work; there is no CPU triangle rasterizer or conversion into pixel rectangles.
 
-Replace that path with a platform-neutral rendering capability exposed through
-the Chirky ABI or shared renderer. The Linux implementation must use GLES and the
-browser implementation must use WebGL. Do not add another CPU polygon rasterizer
-or expand polygon output into per-pixel rectangle commands. Preserve Chirky's
-320x240 logical coordinate system and identical game-facing behavior across both
-platforms while allowing each GPU backend to own its native setup and submission.
+The Phosphor development viewer is a separate `make robot-preview` target in
+`tools/phosphor-preview.c`, sharing the game's evaluator and production renderer.
+Its dashboard page and setting writes are local development tools, outside the
+public browser package. Game camera transforms belong in the game; the host
+continues to apply only the calibrated logical viewport offset.
 
 ## Game catalog
 
