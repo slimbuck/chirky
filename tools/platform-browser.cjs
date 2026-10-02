@@ -420,13 +420,17 @@ async function main() {
         const title=await capture('title');assert.equal(title.touchVisible,mobile);
         if(mobile)await click('[data-button="4"]');else{await click('#screen');await key('KeyX','x',88);}
         if(game==='phosphor-run') {
-          // The level introduction lasts 90 simulation ticks and consumes input.
+          // The level introduction lasts 130 simulation ticks and consumes input.
           // Allow it to finish and the player to land before testing jump/dash audio.
-          const targetTicks=(await state()).ticks+120;
+          const targetTicks=(await state()).ticks+160;
           for(let i=0;i<150 && (await state()).ticks<targetTicks;i++)await delay(100);
           assert((await state()).ticks>=targetTicks,'Level introduction did not advance');
         }
         await delay(250);const playing=await capture('playing');assert.notEqual(playing.hash,title.hash);
+        assert.equal(report.initial.audit.programsCreated,2,'The renderer starts with rectangle and sprite programs');
+        const playingPrograms=(await state()).audit.programsCreated;
+        assert.equal(playingPrograms,game==='phosphor-run'?3:2,
+          'The robot lazily creates exactly one mesh program on its first draw');
         if(mobile){await click('[data-button="1"]',350);await click('[data-button="4"]');await click('[data-button="5"]');}
         else{await key('ArrowRight','ArrowRight',39,350);await key('KeyZ','z',90);await key('KeyX','x',88);}
         await delay(200);await capture('input');report.afterInput=await state();
@@ -565,8 +569,7 @@ async function main() {
         report.checks.push('shared keyboard/USB mapping wizard, duplicate rejection, cancel, controller navigation, fullscreen setting, mute');
         // A fresh module in the same page has its title/audio/assets restored.
         assert.equal((await state()).assetSounds,report.initial.assetSounds);
-        assert.equal(report.initial.audit.programsCreated,2,'The renderer has rectangle and sprite programs');
-        assert.equal((await state()).audit.programsCreated,report.initial.audit.programsCreated,'The renderer must be initialized only once');
+        assert.equal((await state()).audit.programsCreated,playingPrograms,'Game switches must reuse every initialized renderer program');
         assert.equal((await state()).audit.programsDeleted,0,'Game switches must preserve the renderer');
         if(game==='phosphor-run' && !mobile) {
           const pendingGame=catalog.games.find(entry=>entry.role==='game' && entry.id!==game);
@@ -591,7 +594,7 @@ async function main() {
             await page.eval(`__platformProbe.runtime._web_console_launch(${catalog.games.indexOf(entry)})`);
             for(let i=0;i<150 && ((await state()).loading || (await state()).id!==entry.id);i++)await delay(100);
             assert.equal((await state()).id,entry.id);
-            assert.equal((await state()).audit.programsCreated,report.initial.audit.programsCreated);
+            assert.equal((await state()).audit.programsCreated,playingPrograms);
             assert.equal((await state()).audit.programsDeleted,0);
             assert(await page.eval('__platformProbe.runtime===__platformProbe.shell && document.querySelector("#screen")===__originalCanvas'));
             await capture(`switch-${cycle}-${entry.id}`);
