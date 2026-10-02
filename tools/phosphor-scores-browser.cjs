@@ -31,7 +31,10 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
       await page.eval('globalThis.__previousScorePage=true');
       await page.call('Page.navigate',{url:new URL('?game=phosphor-run',base).href});
       await wait(`!globalThis.__previousScorePage && document.querySelector('#status')?.textContent==='Phosphor Run' && document.querySelector('#startup').hidden`);
-      await delay(250);await key('KeyX','x',88);await delay(1900);await key('ArrowRight','ArrowRight',39,500);
+      await delay(250);await key('KeyX','x',88);
+      // The close-up hold and zoom consume 130 ticks (2.17 seconds at 60 Hz).
+      // Finish that introduction before walking the tiny test level.
+      await delay(2700);await key('ArrowRight','ArrowRight',39,500);
     }
     await launch();await shot('initials');
     await page.eval('__scoreSounds.length=0');
