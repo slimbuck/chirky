@@ -19,6 +19,8 @@ struct asset_store_metrics {
    after the host has populated its virtual filesystem.
    No game callbacks, game state, audio devices or GPU objects are accessed. */
 struct asset_store *asset_store_create(void);
+chirky_asset asset_store_image_create(struct asset_store *store,unsigned width,unsigned height,
+                                      const void *rgba,size_t size);
 void asset_store_destroy(struct asset_store *store);
 
 /* Cache keys are exact path strings plus type; relative paths use the process

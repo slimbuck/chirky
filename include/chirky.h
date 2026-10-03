@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 14
+#define CHIRKY_ABI_VERSION 15
 
 /* Unindexed triangle list in logical pixels; z is [-1,1], larger is nearer.
    Normals are in screen axes (+x right, +y up, +z toward viewer).
@@ -103,6 +103,20 @@ struct chirky_host_api {
        composited in submission order with sprites/rectangles. ambient: [0,1].
        Returns false when unsupported/invalid; no software rasterizer fallback. */
     bool (*draw_mesh)(void *context,const struct chirky_mesh_vertex *vertices,size_t count,float ambient);
+    /* Copy a tightly packed top-down RGBA8 image into a READY, immutable asset.
+       Intended for load-time atlases, not per-frame uploads. Returns 0 on invalid
+       input or exhaustion. Release through asset_release; normal IMAGE lifetime. */
+    chirky_asset (*image_create)(void *context,unsigned width,unsigned height,const void *rgba,size_t size);
+    /* Same 5x7 font/advance as draw_text, with a black one-logical-pixel outline
+       independent of scale. Optional; callers may compose the outline otherwise. */
+    void (*draw_text_outlined)(void *context,int x,int y,const char *text,int scale,
+                              unsigned char r,unsigned char g,unsigned char b);
+    /* Camera-scaled sprite: each texel edge is rounded after x/y + edge*scale.
+       Finite logical coordinates, uniform scale [0.25,16]; source/tint/flip as
+       draw_sprite. Host applies its viewport offset, never the game. */
+    void (*draw_sprite_projected)(void *context,chirky_asset image,float x,float y,float scale,
+                                 int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,
+                                 unsigned char b,unsigned char a,bool flip_x);
 };
 
 static inline void chirky_scope(const struct chirky_host_api *api,const char *name,bool begin)

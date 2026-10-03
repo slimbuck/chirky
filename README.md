@@ -56,10 +56,11 @@ GBM/EGL OpenGL ES surface at the connector's native resolution, and presents
 each frame with a KMS page flip. It does not use X11, Wayland, SDL, or a
 desktop compositor.
 
-Rectangles and font pixels are batched as coloured triangles in their original
-drawing order. A batch holds 4,096 rectangles; most scenes use one GPU draw.
-The previous per-rectangle scissor/clear path remains only as a test/benchmark
-reference. No changes to game artwork or the game ABI are needed for batching.
+Solid rectangles are batched as coloured triangles in drawing order, up to
+4,096 per batch. The built-in 5×7 font and Phosphor Run scenery use texture
+atlases: one quad per glyph or sprite, with nearest sampling and transparent
+gutters. Both hosts share the renderer. Original rectangle paths remain pixel
+oracles for tests; full-frame comparisons also cover fractional camera zoom.
 
 ## Browser player
 
@@ -212,7 +213,7 @@ these offsets to the existing margins, with no scaling or additional render pass
 bindings migrate to Primary/Secondary/Menu; earlier action mappings still migrate.
 Explicit new names take precedence. Conflicting new defaults are left unbound.
 Retired A/X/L/R bindings are removed when saving. Host and all games must be
-rebuilt together for ABI 14. `safe_x` and `safe_y` retain display margins.
+rebuilt together for ABI 15. `safe_x` and `safe_y` retain display margins.
 
 The program uses `/dev/dri/card0` and reads Linux evdev keyboard devices under
 `/dev/input`. The `retro` user is already a member of the `video`, `render`,
@@ -274,7 +275,7 @@ from the game list and activates it with Primary.
 ## Included games
 
 The shared native/browser interface is documented in
-[Platform API 14](docs/platform-api.md): retained assets, sprites, rectangles,
+[Platform API 15](docs/platform-api.md): retained assets, sprites, rectangles,
 text, input, sound, local saves, timing scopes, and asynchronous world direction. See the
 [Pi platform measurements](docs/performance-platform-pi3.md) for before/after
 results and the asynchronous audio-startup follow-up.

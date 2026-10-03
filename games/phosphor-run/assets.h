@@ -8,7 +8,7 @@
 #define FRAME_LIMIT 64
 
 /* Text grids are stored top-to-bottom; world coordinates increase upwards. */
-struct grid { int width, height; char *pixels; };
+struct grid { int width, height; char *pixels; unsigned atlas_page; int atlas_x,atlas_y; };
 struct animation { int count, ticks; struct grid frames[FRAME_LIMIT]; };
 struct content_entry { char id[64], path[512]; struct animation animation; struct grid level; };
 struct content {

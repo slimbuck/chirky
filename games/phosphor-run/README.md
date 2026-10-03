@@ -124,8 +124,8 @@ both the renderer and dashboard.
 - `assets.h` / `assets.c`: catalog, strict grid/animation loaders, frame sampling
   and memory ownership. Independent of input, gameplay and graphics APIs.
 - `render.c`: read-only drawing passes for background, world, particles, player
-  and HUD. Repeated rows and colour runs are merged into rectangles for the Pi's
-  batched rectangle renderer.
+  and HUD. Scenery uses load-time texture atlases on both hosts; the original
+  merged-rectangle path remains a headless fallback and pixel-comparison oracle.
 
 Keep future enemies/projectiles in their own modules with explicit entity state
 and update functions called by `game.c`. Resolve their animation IDs through the
@@ -234,7 +234,7 @@ The face uses a head-local origin and orthonormal U (right), V (up), and normal
 its own tag, so blinking cannot flatten the mouth. The evaluator applies gaze,
 expression and eyelid opening in UV, projects back onto the curved CRT surface,
 then applies the head bone and suspension. All triangles still share one GPU
-mesh submission. The host ABI stays at 14.
+mesh submission. The mesh service is unchanged; the current host ABI is 15.
 
 PRB2 is little-endian: `PRB2`, six uint32 counts (vertices, triangles, bones,
 materials, clips, frames), then 21 float32 rig values: body radius, head pivot Z,
@@ -278,3 +278,25 @@ visor and jaw vent with a rounded cabinet, a thin rim, genuinely convex glass,
 rounded phosphor eyes and a small smile. `crt-manifest.json` records cabinet
 dimensions, corner radii and glass curvature. Render them with the same portrait
 command above; the same static-study limitations apply.
+
+### Scenery atlas rendering
+
+The authored `assets/sprites/*.sprite` grids and configured palette remain the
+source of truth. `scenery_atlas_load` packs them once at game initialization,
+without resizing, into 512×512 RGBA8 pages (maximum 16). A colour cell and a white
+silhouette cell share each frame's dimensions and one-texel transparent gutters.
+Particles use the silhouette with their original colour override. All animation
+frames preserve the text grid's top-down order, size and baseline. The manifest
+is `assets/scenery-atlas.json`; there is no separately edited runtime atlas.
+Build with `make web` / `make` as usual; dashboard sprite edits take effect on
+reloading the game. Both hosts copy and upload each page once, release game
+images on unload, and batch one textured quad per visible frame.
+
+`draw_sprite_projected` preserves the camera's rounded texel edges throughout
+fractional zoom; nearest filtering, texel-centre sampling, no mipmaps and gutters
+prevent blur or neighbouring-cell bleed. HUD glyphs use cached font atlases with
+one-pixel outlines at every supported font size. `sh tools/texture-tests.sh`
+compares complete game frames, clipped sprites, and plain/outlined text against
+the original rectangle renderer with zero pixel tolerance. The same GLES tests
+also compile to WebGL (`--web`); run `node tools/texture-browser.cjs` on the
+compiled directory. Authored grid files themselves retain the approved pixels.

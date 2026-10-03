@@ -404,6 +404,7 @@ static void update_initials(const struct chirky_input *input)
 
 static void game_shutdown(void)
 {
+    scenery_atlas_free();
     if(host && host->asset_release)for(int i=0;i<SOUND_COUNT;i++)host->asset_release(host->context,sound_assets[i]);
     memset(sound_assets,0,sizeof(sound_assets));
     robot_free();
@@ -430,6 +431,7 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
         }
     }
     if (settings.start_level<0 || settings.start_level>=content.level_count) settings.start_level=0;
+    if(!scenery_atlas_load()){game_shutdown();return false;}
     current_level=settings.start_level;
     if (!load_level(content.levels[current_level].path)) { game_shutdown(); return false; }
     title_art_load(config_path);

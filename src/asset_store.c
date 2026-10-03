@@ -545,6 +545,28 @@ enum chirky_asset_state asset_store_state(struct asset_store *s, chirky_asset ha
     return state;
 }
 
+chirky_asset asset_store_image_create(struct asset_store *s,unsigned width,unsigned height,
+                                      const void *rgba,size_t size)
+{
+    if(!s || !rgba || !width || !height || width>2048 || height>2048 ||
+       size!=(size_t)width*height*4)return 0;
+    lock_store(s);
+    struct asset_slot *slot=NULL;
+    if(size<=ASSET_STORE_MAX_BYTES-s->allocated)
+        for(unsigned i=0;i<ASSET_STORE_SLOTS;i++)
+            if(!s->slots[i].path && s->slots[i].generation<ASSET_GENERATION_MAX){slot=&s->slots[i];break;}
+    void *copy=slot?malloc(size):NULL;
+    char *path=copy?strdup(""):NULL; /* Empty paths cannot collide with file requests. */
+    if(!copy || !path){free(copy);free(path);unlock_store(s);return 0;}
+    memcpy(copy,rgba,size);
+    *slot=(struct asset_slot){.path=path,.generation=slot->generation+1,.refs=1,
+        .type=CHIRKY_ASSET_IMAGE,.state=CHIRKY_ASSET_READY,.allocation=size,
+        .view={.data=copy,.size=size,.width=width,.height=height}};
+    s->allocated+=size;s->resident+=size;
+    chirky_asset handle=slot_handle(s,slot);
+    unlock_store(s);return handle;
+}
+
 struct chirky_asset_view asset_store_view(struct asset_store *s, chirky_asset handle)
 {
     struct chirky_asset_view view = {0};

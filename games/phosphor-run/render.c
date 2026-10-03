@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 
 static struct splash_art title_art;
 void title_art_load(const char *config) { splash_load_api(&title_art,host,config); }
@@ -18,6 +19,54 @@ static struct colour sprite_colour(char value)
     if (value == 'w') return settings.paper;
     if (value == 'r') return settings.hazard;
     return settings.background;
+}
+
+enum { SCENERY_ATLAS_SIZE=512, SCENERY_ATLAS_PAGES=16 };
+static chirky_asset scenery_atlas[SCENERY_ATLAS_PAGES];
+static unsigned scenery_pages;
+void scenery_atlas_free(void)
+{
+    for(unsigned i=0;i<scenery_pages;i++)if(host && host->asset_release)
+        host->asset_release(host->context,scenery_atlas[i]);
+    memset(scenery_atlas,0,sizeof(scenery_atlas));scenery_pages=0;
+}
+bool scenery_atlas_load(void)
+{
+    scenery_atlas_free();
+    if(!host->image_create || !host->draw_sprite || !host->asset_release)return true;
+    const size_t bytes=(size_t)SCENERY_ATLAS_SIZE*SCENERY_ATLAS_SIZE*4;
+    unsigned char *rgba=calloc(1,bytes);if(!rgba)return false;
+    int x=0,y=0,row=0;bool ok=true;
+    /* Pack the editable text grids once, at their authored resolution. Each
+       frame has colour + white silhouette cells, each with a one-texel gutter.
+       The silhouette preserves the old particle colour-override semantics. */
+    for(int i=0;ok && i<content.sprite_count;i++)for(int f=0;ok && f<content.sprites[i].animation.count;f++) {
+        struct grid *g=&content.sprites[i].animation.frames[f];
+        int w=2*(g->width+2),h=g->height+2;
+        if(x+w>SCENERY_ATLAS_SIZE){x=0;y+=row;row=0;}
+        if(y+h>SCENERY_ATLAS_SIZE) {
+            chirky_asset image=host->image_create(host->context,SCENERY_ATLAS_SIZE,SCENERY_ATLAS_SIZE,rgba,bytes);
+            if(!image){ok=false;break;}
+            scenery_atlas[scenery_pages++]=image;
+            if(scenery_pages==SCENERY_ATLAS_PAGES){ok=false;break;}
+            memset(rgba,0,bytes);x=y=row=0;
+        }
+        g->atlas_page=scenery_pages;g->atlas_x=x+1;g->atlas_y=y+1;
+        for(int yy=0;yy<g->height;yy++)for(int xx=0;xx<g->width;xx++) {
+            char pixel=g->pixels[(size_t)yy*g->width+xx];if(pixel=='.')continue;
+            struct colour c=sprite_colour(pixel);
+            size_t index=((size_t)(y+1+yy)*SCENERY_ATLAS_SIZE+x+1+xx)*4;
+            rgba[index]=c.r;rgba[index+1]=c.g;rgba[index+2]=c.b;rgba[index+3]=255;
+            index+=(g->width+2)*4;
+            memset(rgba+index,255,4);
+        }
+        x+=w;if(h>row)row=h;
+    }
+    if(ok) {
+        chirky_asset image=host->image_create(host->context,SCENERY_ATLAS_SIZE,SCENERY_ATLAS_SIZE,rgba,bytes);
+        if(image)scenery_atlas[scenery_pages++]=image;else ok=false;
+    }
+    free(rgba);if(!ok)scenery_atlas_free();return ok;
 }
 
 /* Camera operates on the scene, including the mesh; HUD remains screen-space. */
@@ -50,6 +99,9 @@ static void text(int x, int y, const char *value, int scale, struct colour colou
 
 static void outlined_text(int x, int y, const char *value, int scale, struct colour colour)
 {
+    if(host->draw_text_outlined) {
+        host->draw_text_outlined(host->context,x,y,value,scale,colour.r,colour.g,colour.b);return;
+    }
     static const struct colour black={0,0,0};
     for (int offset_y=-1;offset_y<=1;offset_y++)
         for (int offset_x=-1;offset_x<=1;offset_x++)
@@ -73,6 +125,19 @@ static void draw_sprite(const char *id, int x, int y, bool flip, int tick,
     const struct grid *frame=animation_frame(content_animation(&content,id),tick);
     if (!frame || view_x(x)>=host->screen_width || view_y(y)>=host->screen_height ||
         view_x(x+frame->width)<=0 || view_y(y+frame->height)<=0) return;
+    if(scenery_pages) {
+        int left=view_x(x),bottom=view_y(y),w=view_x(x+frame->width)-left,h=view_y(y+frame->height)-bottom;
+        struct colour c=tint?*tint:(struct colour){255,255,255};
+        if(scene_view && host->draw_sprite_projected) {
+            host->draw_sprite_projected(host->context,scenery_atlas[frame->atlas_page],x*zoom+shift_x,y*zoom+shift_y,zoom,
+                frame->atlas_x+(tint?frame->width+2:0),frame->atlas_y,frame->width,frame->height,
+                c.r,c.g,c.b,255,flip);return;
+        }
+        host->draw_sprite(host->context,scenery_atlas[frame->atlas_page],left,bottom,w,h,
+            frame->atlas_x+(tint?frame->width+2:0),frame->atlas_y,frame->width,frame->height,
+            c.r,c.g,c.b,255,flip);
+        return;
+    }
     /* Merge identical texel runs; the shared renderer batches these as GPU triangles. */
     for (int row=0;row<frame->height;) {
         int height=1;

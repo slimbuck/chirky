@@ -7,7 +7,7 @@
 #define RECT_BATCH_CAPACITY 4096
 #define TEXTURE_BATCH_CAPACITY 256
 struct rect_vertex { float x,y; uint8_t r,g,b,a; };
-struct texture_vertex { float x,y,u,v; uint8_t r,g,b,a; }; /* u/v are source texels */
+struct texture_vertex { float x,y,u,v; uint8_t r,g,b,a; float source_x,source_y; }; /* u/v are source texels */
 /* Zero-initialize. Owned by the caller; delete before destroying the renderer.
    Do not copy a live texture or use it with a different GL context. */
 struct rect_renderer_texture { unsigned int id; int width,height; };
@@ -24,12 +24,19 @@ struct rect_renderer {
     unsigned int sprites;
     unsigned int mesh_program,mesh_buffer;
     int mesh_view,mesh_ambient;
+    struct rect_renderer_texture fonts[8];
 };
 bool rect_renderer_init(struct rect_renderer *r,int width,int height);
 void rect_renderer_destroy(struct rect_renderer *r);
 void rect_renderer_begin(struct rect_renderer *r);
 void rect_renderer_rect(struct rect_renderer *r,int x,int y,int w,int h,uint8_t red,uint8_t green,uint8_t blue);
 void rect_renderer_flush(struct rect_renderer *r);
+bool rect_renderer_text(struct rect_renderer *r,int x,int y,const char *text,int scale,
+                        uint8_t red,uint8_t green,uint8_t blue,bool outline,
+                        int clip_x,int clip_y,int clip_w,int clip_h);
+void rect_renderer_sprite_projected(struct rect_renderer *r,const struct rect_renderer_texture *t,
+    float x,float y,float scale,int sx,int sy,int sw,int sh,uint8_t red,uint8_t green,uint8_t blue,uint8_t alpha,
+    bool flip,int offset_x,int offset_y,int clip_w,int clip_h);
 bool rect_renderer_mesh(struct rect_renderer *r,const struct chirky_mesh_vertex *vertices,
                         size_t count,float ambient,int offset_x,int offset_y,int width,int height);
 /* A current GLES2/WebGL1 context is required for create/delete/flush.

@@ -12,7 +12,7 @@ static inline bool chirky_clip_rect(const struct chirky_host_api *api,int *x,int
     return *w>0 && *h>0;
 }
 
-static inline void chirky_draw_text(const struct chirky_host_api *api,int x,int y,
+static inline void chirky_draw_text_pixels(const struct chirky_host_api *api,int x,int y,
     const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
     for(;*value;value++,x+=6*scale) {
@@ -20,5 +20,11 @@ static inline void chirky_draw_text(const struct chirky_host_api *api,int x,int 
         for(int row=0;row<7;row++)for(int col=0;col<5;col++)
             if(rows[row]&(1<<(4-col)))api->fill_rect(api->context,x+col*scale,y-row*scale,scale,scale,r,g,b);
     }
+}
+static inline void chirky_draw_text(const struct chirky_host_api *api,int x,int y,
+    const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
+{
+    if(api->draw_text)api->draw_text(api->context,x,y,value,scale,r,g,b);
+    else chirky_draw_text_pixels(api,x,y,value,scale,r,g,b);
 }
 #endif

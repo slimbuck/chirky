@@ -172,8 +172,20 @@ sudo python3 tools/run-performance.py mixed-finish 2 1808312 32 1 0 120
 ```
 
 Modes: 0 current, 1 pipeline, 2 explicit finish. Scenes: 0 synthetic shader,
-1 launcher, 2 Phosphor title, 3 stationary Phosphor gameplay. Shader iterations
+1 launcher, 2 game title, 3 stationary gameplay, 4 gameplay with neutral-input
+updates (including idle animation). Gameplay cases wait through the real level
+intro before measurement. Shader iterations
 range from 0 to 128. CPU loops are fixed work, not milliseconds.
+
+After the frame count, pass `assets phosphor-run` for current production
+rendering. Pass `rectangles phosphor-run` for a matched comparison using the
+original text/scenery rectangle paths while keeping asset loading and the GPU
+robot mesh enabled. The older `legacy` mode omits asset and mesh services and
+is not a fair baseline for atlas changes. Audio remains disabled in all cases.
+For example, `sudo python3 tools/run-performance.py atlas-play 0 0 0 0 3 300
+assets phosphor-run` captures 300 stationary frames. Set
+`CHIRKY_BENCH_SNAPSHOT=1` in the supervisor's environment to save a real Pi
+framebuffer snapshot before warmup; snapshot readback is excluded from timings.
 
 Each output directory contains:
 
@@ -209,3 +221,40 @@ component-on/component-off captures. Without native GPU timer queries, the
 current trace measures whole GPU jobs; it cannot honestly assign a GPU duration
 to each arbitrary draw call. The stationary gameplay result alone is not enough
 to decide whether to remove or rewrite the robot renderer.
+
+## Text and scenery atlas deployment — 3 October 2026
+
+The ABI 15 atlas renderer was deployed through the dashboard and measured on
+the same Pi at 320×240/60Hz, with its calibrated 298×222 viewport. The updated
+benchmark keeps the GPU robot mesh and asset services enabled for both paths.
+The comparison switches only text/scenery between their original rectangle
+paths and the new atlases. Gameplay now waits through the level intro before
+measurement; the old benchmark's phase value 1 had become INTRO rather than PLAY.
+
+| Case | Mean CPU/frame | Mean traced GPU/frame | Presented FPS | Missed refreshes |
+|---|---:|---:|---:|---:|
+| Rectangle gameplay, two captures | 3.45ms | 1.92ms | 60.02 | 0 / 600 |
+| Atlas gameplay, two captures | 3.15ms | 0.87ms | 60.02 | 0 / 600 |
+| Atlas gameplay with neutral-input updates and idle animation | 4.06ms | 0.90ms | 60.02 | 0 / 300 |
+| Atlas title screen | 0.72ms | 0.38ms | 60.02 | 0 / 300 |
+
+Each capture excludes 12 warmup frames and measures 300 frames. GPU time fell
+about 55% and average CPU time about 9% in the paired stationary scene. CPU
+clock scaling remained enabled, so the CPU result is less stable: individual
+atlas means were 2.98ms and 3.32ms versus 3.49ms and 3.42ms for rectangles.
+The animated case's p95 was 4.23ms CPU and 0.93ms GPU. These short captures
+exclude audio and player movement; they do not establish worst-case performance
+throughout a level. The trace-derived GPU duration is the approximation described
+above, not a hardware timer query.
+
+All six captures passed attribution/completion validation without trace overruns.
+The real Pi screenshots of the paired stationary scene were pixel-identical,
+and were inspected at 1× and 3× nearest-neighbour scale. All 49 checked renderer
+sources and Phosphor runtime assets matched local SHA-256 hashes. The normal
+service was restored with Phosphor Run loaded; final status reported 60Hz and
+56.9°C, with no active throttling bits (`0x80000` is historical).
+
+Raw CSV, kernel traces, metadata, validation and screenshots are retained under
+`build/pi-atlas-results/atlas-20261003-{rect,current,rect-repeat,current-repeat,
+animated,title}` locally and the matching `build/performance/` directories on
+the Pi. Build output is intentionally untracked.

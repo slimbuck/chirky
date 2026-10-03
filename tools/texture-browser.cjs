@@ -7,20 +7,22 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 async function main() {
+  const pageName=process.env.TEXTURE_TEST_PAGE || 'texture-renderer';
+  assert(['texture-renderer','phosphor-atlas'].includes(pageName));
   const root = path.resolve(process.argv[2] || 'build/texture-tests');
   const browser = process.argv[3] || process.env.CHROME || (process.platform === 'win32'
     ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : 'chromium');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'texture-browser-'));
   const server = http.createServer((req, res) => {
     const name = req.url.slice(1);
-    if (!/^texture-renderer\.(html|js|wasm)$/.test(name)) { res.writeHead(404).end(); return; }
+    if (!/^(texture-renderer|phosphor-atlas)\.(html|js|wasm|data)$/.test(name)) { res.writeHead(404).end(); return; }
     const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
-    res.setHeader('Content-Type', types[path.extname(name)]);
+    res.setHeader('Content-Type', types[path.extname(name)] || 'application/octet-stream');
     fs.createReadStream(path.join(root, name)).on('error', () => res.destroy()).pipe(res);
   });
   try {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    const url = `http://127.0.0.1:${server.address().port}/texture-renderer.html`;
+    const url = `http://127.0.0.1:${server.address().port}/${pageName}.html`;
     const result = await new Promise((resolve, reject) => {
       const child = spawn(browser, ['--headless', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
         '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage',

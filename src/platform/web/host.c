@@ -64,6 +64,8 @@ static struct chirky_asset_view data_asset(void *unused,chirky_asset asset)
 { (void)unused;return asset_store_view(assets,asset); }
 static void release_asset(void *unused,chirky_asset asset)
 { (void)unused;asset_store_release(assets,asset); }
+static chirky_asset create_image(void *unused,unsigned w,unsigned h,const void *rgba,size_t size)
+{ (void)unused;return asset_store_image_create(assets,w,h,rgba,size); }
 static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
     int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
 {
@@ -72,6 +74,13 @@ static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
 }
 static void sound_play(void *unused,chirky_asset asset)
 { (void)unused;play_asset_sound(asset); }
+static void projected_sprite(void *unused,chirky_asset image,float x,float y,float scale,int sx,int sy,int sw,int sh,
+    unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
+{
+    (void)unused;const struct rect_renderer_texture *t=image_cache_get(&images,&renderer,&api,image);
+    if(t)rect_renderer_sprite_projected(&renderer,t,x,y,scale,sx,sy,sw,sh,r,g,b,a,flip,
+        CHIRKY_SAFE_X,CHIRKY_SAFE_Y,api.screen_width,api.screen_height);
+}
 EM_JS(unsigned,read_save,(const char *game,const char *key,void *data,unsigned capacity),{
     const bytes=Module.onSaveRead(UTF8ToString(game),UTF8ToString(key));
     if(!bytes || bytes.length>capacity)return 0;
@@ -114,7 +123,18 @@ static void fill(void *unused,int x,int y,int w,int h,unsigned char r,unsigned c
 }
 static void text(void *unused,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
-    (void)unused;chirky_draw_text(&api,x,y,value,scale,r,g,b);
+    (void)unused;
+    if(!rect_renderer_text(&renderer,x+CHIRKY_SAFE_X,y+CHIRKY_SAFE_Y,value,scale,r,g,b,false,
+                          CHIRKY_SAFE_X,CHIRKY_SAFE_Y,api.screen_width,api.screen_height))
+        chirky_draw_text_pixels(&api,x,y,value,scale,r,g,b);
+}
+static void outlined(void *unused,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
+{
+    (void)unused;
+    if(rect_renderer_text(&renderer,x+CHIRKY_SAFE_X,y+CHIRKY_SAFE_Y,value,scale,r,g,b,true,
+                         CHIRKY_SAFE_X,CHIRKY_SAFE_Y,api.screen_width,api.screen_height))return;
+    for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++)if(dx || dy)text(NULL,x+dx,y+dy,value,scale,0,0,0);
+    text(NULL,x,y,value,scale,r,g,b);
 }
 static void play(void *unused,const char *device,const char *path)
 { (void)unused;(void)device;sound(path); }
@@ -137,7 +157,8 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .screen_width=CHIRKY_VIEWPORT_WIDTH,.screen_height=CHIRKY_VIEWPORT_HEIGHT,
         .fill_rect=fill,.play_sound=play,.draw_text=text,.button_label=label,
         .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=sprite,.sound_play=sound_play,.draw_mesh=mesh,
+        .draw_sprite=sprite,.sound_play=sound_play,.draw_mesh=mesh,.image_create=create_image,.draw_text_outlined=outlined,
+        .draw_sprite_projected=projected_sprite,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_read_api,.save_write=save_write_api};
     (void)config;splash_load_file_api(&art,&api,"assets/launcher/mascot.ppm");console_init();return 1;

@@ -312,6 +312,8 @@ static struct chirky_asset_view data_asset(void *context,chirky_asset asset)
 { return asset_store_view(((struct host *)context)->assets,asset); }
 static void release_asset(void *context,chirky_asset asset)
 { asset_store_release(((struct host *)context)->assets,asset); }
+static chirky_asset create_image(void *context,unsigned w,unsigned h,const void *rgba,size_t size)
+{ return asset_store_image_create(((struct host *)context)->assets,w,h,rgba,size); }
 static void draw_sprite(void *context,chirky_asset image,int x,int y,int w,int h,
     int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
 {
@@ -989,7 +991,26 @@ static void draw_text(void *context,int x,int y,const char *value,int scale,unsi
 {
     struct host *host=context;
     struct chirky_host_api api=host->api;api.context=host;api.fill_rect=fill_rect;
-    chirky_draw_text(&api,x,y,value,scale,r,g,b);
+    int ox=host->safe_x+host->safe_offset_x,oy=host->safe_y+host->safe_offset_y;
+    if(!rect_renderer_text(&host->renderer,x+ox,y+oy,value,scale,r,g,b,false,ox,oy,api.screen_width,api.screen_height))
+        chirky_draw_text_pixels(&api,x,y,value,scale,r,g,b);
+}
+static void projected_sprite(void *context,chirky_asset image,float x,float y,float scale,int sx,int sy,int sw,int sh,
+    unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
+{
+    struct host *host=context;
+    const struct rect_renderer_texture *t=image_cache_get(&host->images,&host->renderer,&host->api,image);
+    if(t)rect_renderer_sprite_projected(&host->renderer,t,x,y,scale,sx,sy,sw,sh,r,g,b,a,flip,
+        host->safe_x+host->safe_offset_x,host->safe_y+host->safe_offset_y,host->api.screen_width,host->api.screen_height);
+}
+static void draw_text_outlined(void *context,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
+{
+    struct host *host=context;
+    int ox=host->safe_x+host->safe_offset_x,oy=host->safe_y+host->safe_offset_y;
+    if(rect_renderer_text(&host->renderer,x+ox,y+oy,value,scale,r,g,b,true,
+                         ox,oy,host->api.screen_width,host->api.screen_height))return;
+    for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++)if(dx || dy)draw_text(context,x+dx,y+dy,value,scale,0,0,0);
+    draw_text(context,x,y,value,scale,r,g,b);
 }
 
 static void clear_screen(void)
@@ -1773,7 +1794,8 @@ int main(void)
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
         .draw_text=draw_text,.button_label=button_label,.asset_request=request_asset,
         .asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=draw_sprite,.sound_play=sound_play,.draw_mesh=draw_mesh,
+        .draw_sprite=draw_sprite,.sound_play=sound_play,.draw_mesh=draw_mesh,.image_create=create_image,.draw_text_outlined=draw_text_outlined,
+        .draw_sprite_projected=projected_sprite,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_store_read,.save_write=save_store_write};
     host.assets=asset_store_create();

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../src/drawing.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -76,6 +77,34 @@ static void pattern(unsigned char *pixels,int width,int height)
         unsigned char *p=pixels+(y*width+x)*4;
         p[0]=(unsigned char)(x*37+y*13);p[1]=(unsigned char)(y*53+x*7);
         p[2]=(unsigned char)(x*11+y*19);p[3]=255;
+    }
+}
+
+static void font_rect(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
+{
+    const struct chirky_host_api *api=ctx;
+    if(chirky_clip_rect(api,&x,&y,&w,&h))rect(x+13,y+11,w,h,r,g,b);
+}
+static void font_tests(void)
+{
+    struct chirky_host_api api={.screen_width=288,.screen_height=216,.fill_rect=font_rect};api.context=&api;
+    const char *lines[]={"ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", "0123456789 -/.:?@"};
+    for(int scale=1;scale<=8;scale++)for(int outline=0;outline<2;outline++) {
+        begin();
+        for(int line=0;line<3;line++) {
+            int x=line==0?-3:line==1?270:4,y=line==0?3:line==1?213:125;
+            if(outline)for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++)if(dx || dy)
+                chirky_draw_text_pixels(&api,x+dx,y+dy,lines[line],scale,0,0,0);
+            chirky_draw_text_pixels(&api,x,y,lines[line],scale,197,227,143);
+        }
+        /* Keep the CPU oracle, discard its GPU rectangle commands. */
+        rect_renderer_flush(&renderer);glClear(GL_COLOR_BUFFER_BIT);rect_renderer_begin(&renderer);
+        for(int line=0;line<3;line++) {
+            int x=line==0?-3:line==1?270:4,y=line==0?3:line==1?213:125;
+            assert(rect_renderer_text(&renderer,x+13,y+11,lines[line],scale,197,227,143,outline,13,11,288,216));
+        }
+        assert(!renderer.rectangles && renderer.sprites<=68);
+        compare(outline?"outlined glyph atlas matches all original pixels and clipping":"plain glyph atlas matches all original pixels and clipping",0);
     }
 }
 
@@ -189,6 +218,7 @@ static void tests(void)
     glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,actual);assert(actual[25][25][2]==255);
     assert(!glIsEnabled(GL_DEPTH_TEST) && !glIsEnabled(GL_SCISSOR_TEST));
     assert(glGetError()==GL_NO_ERROR);puts("PASS mesh depth, clipping, offset, ordering and state restoration");
+    font_tests();
     rect_renderer_destroy(&renderer);rect_renderer_destroy(&renderer);
     assert(glGetError()==GL_NO_ERROR);
 }
@@ -216,6 +246,9 @@ int main(void)
 #endif
     glViewport(0,0,W,H);glDisable(GL_DITHER);
     tests();puts("TEXTURE_TESTS_PASSED");
+#ifdef CHIRKY_TEST_EXTRA
+    CHIRKY_TEST_EXTRA();
+#endif
 #ifdef __EMSCRIPTEN__
     emscripten_run_script("document.body.dataset.textureTests='passed';");
     emscripten_webgl_destroy_context(context);

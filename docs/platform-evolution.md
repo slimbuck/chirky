@@ -1,7 +1,7 @@
 # Platform evolution
 
 Status: design direction, not an implemented API or a commitment to a backend
-or transport. The current ABI is 14. This plan preserves equally supported
+or transport. The current ABI is 15. This plan preserves equally supported
 Pi/Linux and desktop/mobile browser consoles while making room for personal
 content, global scores and multiplayer.
 

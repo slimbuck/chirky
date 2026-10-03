@@ -1,6 +1,6 @@
 /* On-device, real-scanout benchmark. Run through run-performance.py, which
    stops/restores the normal host and captures an isolated VC4 kernel trace.
-   Custom: OUTPUT MODE LOOPS SHADER LAYERS SCENE [FRAMES [legacy|assets [GAME]]]
+   Custom: OUTPUT MODE LOOPS SHADER LAYERS SCENE [FRAMES [legacy|assets|rectangles [GAME]]]
    GAME defaults to phosphor-run; rosey-chop is also supported. */
 #include "../src/platform/linux/audio_mixer.h"
 /* Host activation normally starts audio even with a quiet sound callback.
@@ -25,10 +25,13 @@ static int marker=-1;
 static unsigned normal_program,work_program;
 static volatile uint32_t checksum;
 static bool asset_mode;
+static bool rectangle_mode;
 static const char *benchmark_game="phosphor-run";
 static int benchmark_game_index=-1;
 static void quiet_sound(void *ctx,const char *device,const char *path) {(void)ctx;(void)device;(void)path;}
 static void quiet_sound_handle(void *ctx,chirky_asset sound) {(void)ctx;(void)sound;}
+static void pixel_text(void *context,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
+{ chirky_draw_text_pixels(&((struct host *)context)->api,x,y,value,scale,r,g,b); }
 enum {START,WORK,DRAW,FINISH,PREWAIT,SWAP,LOCK,FB,SUBMIT,POINTS};
 struct record {
     unsigned id,stage,index,sequence,missed;
@@ -126,6 +129,12 @@ static bool setup(void)
         h.api.asset_request=request_asset;h.api.asset_status=status_asset;
         h.api.asset_data=data_asset;h.api.asset_release=release_asset;
         h.api.draw_sprite=draw_sprite;h.api.sound_play=quiet_sound_handle;
+        h.api.draw_mesh=draw_mesh;
+        if(rectangle_mode)h.api.draw_text=pixel_text;
+        else {
+            h.api.image_create=create_image;h.api.draw_text_outlined=draw_text_outlined;
+            h.api.draw_sprite_projected=projected_sprite;
+        }
     }
     update_safe_area(&h);
     splash_load_file_api(&h.launcher_art,&h.api,"assets/launcher/splash.ppm");
@@ -146,13 +155,19 @@ static bool freeze_gameplay(void)
     input.buttons[CHIRKY_BUTTON_PRIMARY]=input.button_pressed[CHIRKY_BUTTON_PRIMARY]=true;
     chirky_runtime_update(&h.runtime,&input);memset(&input,0,sizeof(input));
     chirky_runtime_update(&h.runtime,&input);chirky_runtime_update(&h.runtime,&input);
-    /* Both module enums use TITLE=0, PLAY=1; garden starts with its phase.
+    /* Phosphor has TITLE=0, INTRO=1, PLAY=2; Rosey has TITLE=0, PLAY=1.
+       Wait through the real intro instead of mistaking it for gameplay.
+       Garden starts with its phase.
        Copy the native enum representation without aliasing it through int*. */
     const char *name=!strcmp(benchmark_game,"rosey-chop")?"garden":"phase";
     dlerror();void *state=dlsym(h.game_library,name);const char *error=dlerror();
     if(error || !state) {fprintf(stderr,"Cannot verify frozen gameplay: %s\n",error?error:name);return false;}
+    int expected=!strcmp(benchmark_game,"rosey-chop")?1:2;
     int phase=0;memcpy(&phase,state,sizeof(phase));
-    if(phase!=1) {fprintf(stderr,"Benchmark game %s did not enter PLAY (phase=%d)\n",benchmark_game,phase);return false;}
+    for(int i=0;i<600 && phase!=expected;i++) {
+        chirky_runtime_update(&h.runtime,&input);memcpy(&phase,state,sizeof(phase));
+    }
+    if(phase!=expected) {fprintf(stderr,"Benchmark game %s did not enter PLAY (phase=%d)\n",benchmark_game,phase);return false;}
     printf("Frozen gameplay verified: game=%s phase=PLAY\n",benchmark_game);
     return true;
 }
@@ -164,13 +179,19 @@ static bool run(struct stage s,unsigned stage,int frames)
             fprintf(stderr,"Benchmark game activation failed: %s\n",benchmark_game);return false;
         }
     }
-    if(s.scene==3 && !freeze_gameplay())return false;
+    if(s.scene>=3 && !freeze_gameplay())return false;
+    if(getenv("CHIRKY_BENCH_SNAPSHOT")) {
+        render(s.shader,s.layers,s.scene);save_snapshot(&h);
+    }
     printf("STAGE %u %s mode=%d loops=%llu shader=%d layers=%d\n",stage,s.name,s.mode,(unsigned long long)s.loops,s.shader,s.layers);fflush(stdout);
     for(int i=0;i<frames+12 && !stop_requested;i++) {
         assert(used<sizeof(records)/sizeof(records[0]));struct record *r=&records[used++];
         r->id=used;r->stage=stage;r->index=(unsigned)i;
         mark(r->id,"start");point(r,START);
         work(s.loops);if(s.sleep)usleep((useconds_t)s.sleep);
+        if(s.scene==4) {
+            struct chirky_input input={0};chirky_runtime_update(&h.runtime,&input);
+        }
         point(r,WORK);mark(r->id,"draw");
         render(s.shader,s.layers,s.scene);point(r,DRAW);
         if(s.mode==2)glFinish();
@@ -194,12 +215,13 @@ int main(int argc,char **argv)
 {
     assert(argc>=2);const char *marker_env=getenv("CHIRKY_BENCH_MARKER_FD");if(marker_env)marker=atoi(marker_env);
     if(argc>=9) {
-        assert(!strcmp(argv[8],"legacy") || !strcmp(argv[8],"assets"));
-        asset_mode=!strcmp(argv[8],"assets");
+        assert(!strcmp(argv[8],"legacy") || !strcmp(argv[8],"assets") || !strcmp(argv[8],"rectangles"));
+        rectangle_mode=!strcmp(argv[8],"rectangles");
+        asset_mode=rectangle_mode || !strcmp(argv[8],"assets");
     }
     if(argc>=10)benchmark_game=argv[9];
     assert(!strcmp(benchmark_game,"phosphor-run") || !strcmp(benchmark_game,"rosey-chop"));
-    printf("Benchmark assets=%s game=%s audio=disabled\n",asset_mode?"enabled":"legacy",benchmark_game);
+    printf("Benchmark assets=%s game=%s audio=disabled\n",rectangle_mode?"rectangle comparison":asset_mode?"enabled":"legacy",benchmark_game);
     struct timespec resolution;clock_getres(CLOCK_MONOTONIC,&resolution);
     printf("CLOCK_MONOTONIC resolution %ld ns\n",resolution.tv_nsec);
     clock_getres(CLOCK_THREAD_CPUTIME_ID,&resolution);printf("CLOCK_THREAD_CPUTIME_ID resolution %ld ns\n",resolution.tv_nsec);
@@ -211,7 +233,7 @@ int main(int argc,char **argv)
     if(argc>=7) {
         stages[n++]=(struct stage){.name="custom",.mode=atoi(argv[2]),.loops=strtoull(argv[3],NULL,10),.shader=atoi(argv[4]),.layers=atoi(argv[5]),.scene=atoi(argv[6])};
         assert(stages[0].mode>=0 && stages[0].mode<=2 && stages[0].shader>=0 && stages[0].shader<=128);
-        assert(stages[0].layers>=0 && stages[0].layers<=64 && stages[0].scene>=0 && stages[0].scene<=3);
+        assert(stages[0].layers>=0 && stages[0].layers<=64 && stages[0].scene>=0 && stages[0].scene<=4);
     } else {
         stages[n++]=(struct stage){.name="baseline",.layers=1};
         stages[n++]=(struct stage){.name="sleep_10ms",.layers=1,.sleep=10000};

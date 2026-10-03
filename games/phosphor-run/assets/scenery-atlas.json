@@ -1,0 +1,15 @@
+{
+  "source": "content.conf sprite entries and configured palette",
+  "builder": "render.c:scenery_atlas_load",
+  "build_command": "make web",
+  "packing": "shelf, content order then animation frame order",
+  "page_size": [512, 512],
+  "max_pages": 16,
+  "cell_size": "original frame width and height, unchanged",
+  "gutter_texels": 1,
+  "cells_per_frame": ["configured colour", "white silhouette for tint override"],
+  "pixels": "top-down RGBA8, binary alpha",
+  "alignment": "original grid baseline; destination 1:1 except scene camera zoom",
+  "sampling": "nearest, explicit texel centres, no mipmaps, clamp-to-edge",
+  "verification": "sh tools/texture-tests.sh"
+}

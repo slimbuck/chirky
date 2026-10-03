@@ -61,8 +61,9 @@ From the repository root under Linux/WSL with EGL/GLES development libraries:
 
 ```sh
 sh tools/texture-tests.sh
-TEXTURE_TEST_DIR=build/texture-tests sh tools/texture-tests.sh --web
+make texture-tests-web
 node tools/texture-browser.cjs build/texture-tests /path/to/chrome
+TEXTURE_TEST_PAGE=phosphor-atlas node tools/texture-browser.cjs build/texture-tests /path/to/chrome
 ```
 
 The browser executable is optional on Windows with standard Chrome installation;
@@ -75,3 +76,25 @@ Tests do not touch DRM, input devices, or a live host.
 The existing host runtime test and `tools/render_benchmark.c` were also run
 locally. The latter reported zero different channels for both its game frame
 and rectangle overflow/clipping regression.
+
+## Camera sampling and glyph atlases
+
+`rect_renderer_sprite_projected` receives unrounded logical coordinates and a
+uniform scale, plus the host offset and clip size separately. It rounds texel
+edges after projection. UVs stay relative to the source cell until the fragment
+shader floors them, then adds the integer atlas origin. This avoids losing the
+half-pixel tie correction when interpolating large absolute atlas coordinates.
+Ordinary integer-destination sprites retain their original sampling convention.
+
+`rect_renderer_text` caches plain/outlined 5×7 glyph atlases at scales 1–8. Glyphs
+are expanded exactly at load time, with a one-pixel black outline and transparent
+gutters, so source and destination dimensions match. Foreground tint multiplies
+white glyph pixels and leaves black outlines black. Font textures belong to the
+renderer and persist across game switches; renderer destruction releases them.
+
+The glyph oracle checks all supported characters, scales and clipped edges with
+zero tolerance. The Phosphor oracle compares 48 complete frames including every
+zoom-out tick, both facings, scenery animation phases, normal view and camera
+clipping. It validates every generated colour/mask cell and transparent gutter,
+and asserts no image uploads during steady rendering. Both run in Mesa GLES2 and
+Chrome WebGL1; publication CI runs the same checks before uploading a release.

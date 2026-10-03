@@ -1,7 +1,7 @@
-# Platform API 14
+# Platform API 15
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 14`. Native games export
+game report `CHIRKY_ABI_VERSION == 15`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a WASM side module loaded by the persistent Emscripten host.
 `src/runtime.c` owns the same lifecycle on both platforms; `src/console.c` owns
@@ -76,10 +76,12 @@ Relative paths resolve from the repository root in the normal host setup.
 | Host callback | Behavior |
 | --- | --- |
 | `asset_request(context, path, type)` | Acquires a caller reference and returns a handle, or zero when the request cannot be accepted. An accepted request can still fail to load. |
+| `image_create(context, width, height, rgba, size)` | Copies a load-time RGBA8 image into a READY immutable handle. Zero on invalid input or exhaustion; release normally. |
 | `asset_status(context, handle)` | Returns `CHIRKY_ASSET_LOADING`, `CHIRKY_ASSET_READY`, or `CHIRKY_ASSET_FAILED`. Invalid/stale handles report failed. |
 | `asset_data(context, handle)` | Returns an immutable borrowed `struct chirky_asset_view`; the view is empty unless ready. |
 | `asset_release(context, handle)` | Releases one caller reference. Balance each successful request, even when multiple requests return the same handle. |
 | `draw_sprite(context, image, x, y, width, height, sx, sy, sw, sh, r, g, b, a, flip_x)` | Draws an IMAGE source rectangle with tint, alpha, horizontal flip, scaling, and viewport clipping. An unready image is skipped. |
+| `draw_sprite_projected(context, image, x, y, scale, sx, sy, sw, sh, r, g, b, a, flip_x)` | Draws with rounded camera-projected texel edges; retains fractional camera coordinates until sampling. |
 | `sound_play(context, sound)` | Plays a preloaded SOUND handle. There is no device/path argument or playback-completion result. Unavailable sound may be skipped. |
 
 The asset view contains `const void *data`, byte count `size`, and unsigned
@@ -243,7 +245,7 @@ and WebGL resources; JavaScript closes the audio context. Games use the same
 asset handles and callbacks in both hosts; native mixer/store lifecycle functions
 and the JavaScript bridge remain platform internals.
 
-## GPU meshes (ABI 14)
+## GPU meshes (introduced in ABI 14)
 
 `draw_mesh(context, vertices, count, ambient)` renders an opaque, unindexed
 triangle list. Both Linux GLES2 and browser WebGL1 support it. A vertex contains
@@ -259,4 +261,30 @@ or invalid; hosts do not rasterize triangles in software.
 
 Phosphor Run evaluates its small rigid skeleton on the CPU and submits the actor
 once. Lighting, triangle coverage and depth resolution run on the GPU. All hosts
-and game modules must be rebuilt together for ABI 14.
+and game modules must be rebuilt together for ABI 15.
+
+## Load-time images and atlas text (ABI 15)
+
+`image_create(context, width, height, rgba, size)` copies tightly packed top-down
+straight-alpha RGBA8 into a READY, immutable IMAGE handle. Dimensions must be
+1–2048 and size must equal width × height × 4. Invalid input, exhausted handles
+or the shared 64 MiB asset budget return zero. The source buffer can be freed
+immediately. These assets support the normal status/data/release callbacks,
+are invalidated on game unload, and upload lazily once through the image cache.
+Use this for load-time atlas construction, not streaming pixels every frame.
+
+`draw_text_outlined` uses the same 5×7 font and advance as `draw_text`, with a
+black one-logical-pixel outline independent of font scale. Both hosts cache
+plain/outlined glyph atlases in the shared renderer for scales 1–8. Each visible
+character is one textured quad; foreground tint leaves the black outline black.
+Unsupported larger scales retain the pixel helper. Fonts persist across game
+switches and are released when the renderer/context is destroyed.
+
+`draw_sprite_projected` accepts finite logical x/y and a uniform scale from
+0.25 to 16, plus the same source rectangle, tint and horizontal flip as
+`draw_sprite`. Each source texel boundary is rounded after the camera transform;
+it does not stretch a pre-rounded destination. The host adds calibrated offsets
+and clips coverage while preserving the original UV mapping. This preserves
+Phosphor Run's fractional level-start zoom. Ordinary integer sprites continue
+to use `draw_sprite` unchanged. Textures use nearest filtering, explicit texel
+centres, no mipmaps, clamp-to-edge and transparent atlas gutters on both hosts.

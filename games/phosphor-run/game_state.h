@@ -96,6 +96,8 @@ char tile_at(int x, int y);
 void render_title(void);
 void render_game(void);
 float level_intro_zoom(void);
+bool scenery_atlas_load(void);
+void scenery_atlas_free(void);
 void title_art_load(const char *config);
 void title_art_free(void);
 void scores_load(void);

@@ -152,3 +152,10 @@ catalog generation, dashboard serving, and package validation. `make web`
 builds one web host and a side module for each `games/*/game.c`, then generates the
 catalog and asset package. Browser checks and a real Pi deployment remain
 required for platform rendering, DRM, input-device, and audio behavior.
+
+ABI 15 adds load-time RGBA image creation and camera-projected sprite drawing.
+The asset store owns immutable CPU images; the host image cache owns their GPU
+textures. Phosphor Run packs its editable text grids and configured palette once
+at game init. Both hosts use the same renderer-owned glyph atlases for 5×7 text
+and one-pixel outlines. Font atlases survive game switches; game scenery atlases
+do not. The original rectangle paths remain pixel oracles and headless fallbacks.

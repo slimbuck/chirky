@@ -8,6 +8,15 @@ const { spawn } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// Renderer-owned font atlases survive game unload, one allocation per size.
+function persistentTextureCount(audit) {
+  const fonts=audit.uploads.filter(({width,height})=>
+    Array.from({length:8},(_,i)=>i+1).some(s=>width===(5*s+4)*16 && height===(7*s+4)*12));
+  const sizes=new Set(fonts.map(({width,height})=>`${width}x${height}`));
+  assert.equal(fonts.length,sizes.size,'Each font size uploads once per renderer lifetime');
+  return 1+sizes.size; // Launcher mascot plus renderer font cache.
+}
+
 // Decode a screenshot scanline to check the actual rasterized pixel widths.
 function pngRow(png, y, column) {
   const width=png.readUInt32BE(16), channels=png[25]===2?3:4, chunks=[];
@@ -460,7 +469,7 @@ async function main() {
         await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);await delay(250);
         assert.equal((await state()).screen,0);assert.equal((await state()).id,'launcher');
         const unloaded=await state();
-        assert.equal(unloaded.audit.texturesCreated-unloaded.audit.texturesDeleted,1,'Only the persistent launcher texture should remain');
+        assert.equal(unloaded.audit.texturesCreated-unloaded.audit.texturesDeleted,persistentTextureCount(unloaded.audit),'Only launcher and cached font textures should remain');
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
         assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
         report.checks.push('in-console return keeps canvas, WebGL context and fullscreen alive');
@@ -602,8 +611,8 @@ async function main() {
             await key('F1','F1',112);
             const destination=entry.role==='diagnostic'?1:0;
             assert.equal((await state()).screen,destination);
-            assert.equal((await state()).audit.texturesCreated-(await state()).audit.texturesDeleted,1,
-              'Launcher and Settings share the same header mascot texture');
+            assert.equal((await state()).audit.texturesCreated-(await state()).audit.texturesDeleted,persistentTextureCount((await state()).audit),
+              'Game textures are released; launcher and cached fonts remain');
           }
           await page.eval('__platformProbe.runtime.onDirectorConnect=__connectDirector');
           await page.eval(`__platformProbe.runtime._web_console_launch(${catalog.games.findIndex(entry=>entry.id===game)})`);

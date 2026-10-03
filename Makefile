@@ -4,7 +4,7 @@ NODE ?= node
 
 CPPFLAGS += -D_GNU_SOURCE -Iinclude -Isrc -Isrc/platform/linux
 CFLAGS += -std=c11 -O2 -Wall -Wextra -Wpedantic
-LDLIBS += -pthread -ldl -Wl,--no-as-needed -l:libdrm.so.2 -l:libgbm.so.1 -l:libEGL.so.1 -l:libGLESv2.so.2
+LDLIBS += -pthread -ldl -Wl,--no-as-needed -l:libdrm.so.2 -l:libgbm.so.1 -l:libEGL.so.1 -l:libGLESv2.so.2 -lm
 
 TARGET := build/chirky-host
 CORE_SOURCES := src/asset_store.c src/runtime.c src/console.c
@@ -26,6 +26,10 @@ WEB_TARGETS = $(patsubst games/%/game.c,build/web/%.wasm,$(wildcard games/*/game
 
 web: build/web/launcher.js $(WEB_TARGETS)
 	$(NODE) tools/web-assets.js
+
+.PHONY: texture-tests-web
+texture-tests-web: check-web-toolchain
+	EMCC="$(EMCC)" TEXTURE_TEST_DIR=build/texture-tests sh tools/texture-tests.sh --web
 
 .PHONY: check-web-toolchain
 check-web-toolchain:
