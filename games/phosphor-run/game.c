@@ -438,6 +438,7 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
         sound_assets[i]=host->asset_request(host->context,sound_path(i),CHIRKY_ASSET_SOUND);
     player_animation_tick=0;
     robot_face_init(&player_face);
+    player_face.expression=ROBOT_FACE_AUTO;
     begin_level();
     memset(high_scores,0,sizeof(high_scores));
     scores_load();score_save_failed=false;initials_blink=0;
@@ -488,6 +489,7 @@ static void game_render(void)
 
 static void game_update(const struct chirky_input *input)
 {
+    player_face.idle=phase==PHASE_LEVEL_INTRO || (phase==PHASE_PLAY && player_robot_clip()==ROBOT_IDLE);
     robot_face_update(&player_face);
     float previous_x=player_x;
     enum phase before=phase;int level_before=current_level;

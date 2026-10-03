@@ -214,11 +214,11 @@ int main(void)
     press(api,&input,CHIRKY_BUTTON_PRIMARY);
     assert(current_level==1 && phase==PHASE_LEVEL_INTRO && lives==STARTING_LIVES);
     phase=PHASE_LEVEL_INTRO;level_intro_timer=LEVEL_INTRO_TICKS;
-    assert(level_intro_zoom()==5);float last_zoom=5;
+    assert(level_intro_zoom()==4);float last_zoom=4;
     level_intro_timer=LEVEL_INTRO_ZOOM_TICKS;
-    assert(level_intro_zoom()==5); /* The full hold leaves the camera still. */
+    assert(level_intro_zoom()==4); /* The full hold leaves the camera still. */
     level_intro_timer=LEVEL_INTRO_ZOOM_TICKS*3/4;
-    assert(level_intro_zoom()>4.5f); /* Slower departure than a linear tween. */
+    assert(level_intro_zoom()>3.6f); /* Slower departure than a linear tween. */
     level_intro_timer=LEVEL_INTRO_ZOOM_TICKS/4;
     assert(level_intro_zoom()<1.5f); /* Most travel completes before settling. */
     for(int i=LEVEL_INTRO_TICKS;i>=0;i--) {

@@ -175,7 +175,8 @@ void robot_motion_update(struct robot_motion *m,int intent,float distance,bool g
 }
 
 void robot_face_init(struct robot_face *f)
-{ if(f)*f=(struct robot_face){.left_open=1,.right_open=1,.smile=1}; }
+{ if(f)*f=(struct robot_face){.left_open=1,.right_open=1,.smile=1,
+    .expression_random=0x72b95a31u,.expression_ticks=90}; }
 void robot_face_blink(struct robot_face *f)
 { if(f)f->requested_blink=9; }
 static float blink_envelope(unsigned age)
@@ -183,17 +184,27 @@ static float blink_envelope(unsigned age)
     if(age>8)return 0;
     return age<3?age/2.f:age<5?1.f:(9-age)/5.f;
 }
+static uint32_t face_random(struct robot_face *f)
+{
+    /* Private deterministic stream: cosmetic choices never change gameplay RNG. */
+    uint32_t x=f->expression_random;
+    x^=x<<13;x^=x>>17;x^=x<<5;
+    return f->expression_random=x;
+}
 void robot_face_update(struct robot_face *f)
 {
     if(!f)return;
     f->tick=(f->tick+1)%960;
     /* Long, unequal holds with short eased eye movements. This clock never
        depends on a movement clip, so a jump cannot restart a glance or blink. */
-    static const unsigned times[]={0,130,290,430,570,740,870};
-    static const float gaze[][2]={{0,0},{.8f,.25f},{.1f,-.2f},{-.7f,.4f},{0,0},{.5f,-.25f},{0,0}};
-    unsigned target=0;for(unsigned i=1;i<7;i++)if(f->tick>=times[i])target=i;
+    static const unsigned times[]={0,60,135,300,390,590,680,830,900};
+    static const float gaze[][2]={{0,0},{.8f,.25f},{0,0},{-.7f,.4f},{0,0},
+                                {.5f,-.25f},{0,0},{-.4f,-.1f},{0,0}};
+    unsigned target=0;for(unsigned i=1;i<sizeof(times)/sizeof(times[0]);i++)if(f->tick>=times[i])target=i;
     f->gaze_x+=(gaze[target][0]-f->gaze_x)*.22f;
     f->gaze_y+=(gaze[target][1]-f->gaze_y)*.22f;
+    /* Idle follows the eyes gently, then holds still. No cyclic head shaking. */
+    f->head_look+=(f->gaze_x-f->head_look)*.055f;
     f->blink=0;
     const unsigned blinks[]={108,337,527,541,813};
     for(unsigned i=0;i<5;i++)if(f->tick>=blinks[i])f->blink=fmaxf(f->blink,blink_envelope(f->tick-blinks[i]));
@@ -201,10 +212,28 @@ void robot_face_update(struct robot_face *f)
         f->blink=fmaxf(f->blink,blink_envelope(9-f->requested_blink));
         f->requested_blink--;
     }
+    enum robot_expression expression=f->expression;
+    if(expression==ROBOT_FACE_AUTO) {
+        if(!f->idle) {
+            f->idle_expression=ROBOT_FACE_NEUTRAL;
+            f->expression_ticks=90;
+        } else if(f->expression_ticks && --f->expression_ticks==0) {
+            if(f->idle_expression==ROBOT_FACE_NEUTRAL) {
+                const enum robot_expression moods[]={ROBOT_FACE_HAPPY,ROBOT_FACE_CURIOUS,
+                    ROBOT_FACE_HAPPY,ROBOT_FACE_CURIOUS,ROBOT_FACE_HAPPY,ROBOT_FACE_SLEEPY};
+                f->idle_expression=moods[face_random(f)%6];
+                f->expression_ticks=120+face_random(f)%121;
+            } else {
+                f->idle_expression=ROBOT_FACE_NEUTRAL;
+                f->expression_ticks=180+face_random(f)%181;
+            }
+        }
+        expression=f->idle_expression;
+    }
     float left=1,right=1,smile=1;
-    if(f->expression==ROBOT_FACE_HAPPY){left=right=.72f;smile=1.7f;}
-    else if(f->expression==ROBOT_FACE_CURIOUS){left=1.05f;right=.75f;smile=.6f;}
-    else if(f->expression==ROBOT_FACE_SLEEPY){left=right=.4f;smile=.5f;}
+    if(expression==ROBOT_FACE_HAPPY){left=right=.72f;smile=1.7f;}
+    else if(expression==ROBOT_FACE_CURIOUS){left=1.05f;right=.75f;smile=.6f;}
+    else if(expression==ROBOT_FACE_SLEEPY){left=right=.4f;smile=.5f;}
     f->left_open+=(left-f->left_open)*.15f;
     f->right_open+=(right-f->right_open)*.15f;
     f->smile+=(smile-f->smile)*.15f;
@@ -291,8 +320,7 @@ static bool robot_draw_at_scale(const struct chirky_host_api *api,int cx,int flo
     float lean_cos=cosf(lean),lean_sin=sinf(lean);
     chirky_scope(api,"robot.pose",false);
     chirky_scope(api,"robot.transform",true);
-    float idle=fmodf(tick,360.f);
-    float glance=animation==ROBOT_IDLE?robot_style.idle_look*sinf(idle*.017453293f)*sinf(idle*.008726646f):0;
+    float glance=animation==ROBOT_IDLE && face?robot_style.idle_look*face->head_look:0;
     float head_offset=animation==ROBOT_JUMP?robot_style.head_lead*(tick/3.f)*expf(1-tick/3.f):0;
     float body_offset=animation==ROBOT_JUMP?-robot_style.body_lag*expf(-tick/9.f):0;
     if(animation==ROBOT_FALL)

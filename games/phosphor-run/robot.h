@@ -6,11 +6,15 @@ struct robot_tuning { float ambient,brightness,head_lead,body_lag,idle_look,blin
 extern struct robot_tuning robot_style;
 
 enum robot_clip { ROBOT_IDLE, ROBOT_RUN, ROBOT_JUMP, ROBOT_FALL, ROBOT_DASH, ROBOT_DEATH };
-enum robot_expression { ROBOT_FACE_NEUTRAL, ROBOT_FACE_HAPPY, ROBOT_FACE_CURIOUS, ROBOT_FACE_SLEEPY };
+enum robot_expression { ROBOT_FACE_NEUTRAL, ROBOT_FACE_HAPPY, ROBOT_FACE_CURIOUS, ROBOT_FACE_SLEEPY, ROBOT_FACE_AUTO };
 struct robot_face {
     unsigned tick, requested_blink;
     enum robot_expression expression;
-    float gaze_x,gaze_y,blink,left_open,right_open,smile;
+    enum robot_expression idle_expression;
+    uint32_t expression_random;
+    unsigned expression_ticks;
+    bool idle;
+    float gaze_x,gaze_y,head_look,blink,left_open,right_open,smile;
 };
 void robot_face_init(struct robot_face *face);
 void robot_face_update(struct robot_face *face);

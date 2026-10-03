@@ -32,7 +32,7 @@ float level_intro_zoom(void)
        middle, then settle into the gameplay camera without a velocity snap. */
     float remaining=1-t;
     float eased=t<.5f?4*t*t*t:1-4*remaining*remaining*remaining;
-    return 1+4*(1-eased);
+    return 1+(LEVEL_INTRO_SCALE-1)*(1-eased);
 }
 static int view_x(int x) { return scene_view?(int)lroundf(x*zoom+shift_x):x; }
 static int view_y(int y) { return scene_view?(int)lroundf(y*zoom+shift_y):y; }
@@ -302,7 +302,7 @@ void render_title(void)
 void render_game(void)
 {
     zoom=level_intro_zoom();
-    float blend=(zoom-1)/4;
+    float blend=(zoom-1)/(LEVEL_INTRO_SCALE-1);
     float anchor_x=(int)(player_x-camera_x)+PLAYER_WIDTH/2;
     float anchor_y=(int)(player_y-camera_y)+9;
     shift_x=blend*(host->screen_width*.5f-anchor_x)-anchor_x*(zoom-1);

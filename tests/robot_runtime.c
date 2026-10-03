@@ -112,7 +112,18 @@ int main(void)
     robot_draw_view(&api,32,4,1,ROBOT_IDLE,0,NULL,5);
     assert(fabsf(vertices[0].x-(32+(x-32)*5))<.001f);
     assert(fabsf(vertices[0].y-(4+(y-4)*5))<.001f);
-    struct robot_face face,copy;robot_face_init(&face);robot_face_init(&copy);
+    struct robot_face face,copy;robot_face_init(&face);
+    /* Idle rests, leads a glance with the eyes, then settles back to neutral.
+       A continuous sine wave or immediate head snap breaks these holds. */
+    for(int i=0;i<59;i++)robot_face_update(&face);
+    assert(face.gaze_x==0 && face.head_look==0);
+    robot_face_update(&face);
+    assert(face.gaze_x>0 && face.head_look>0 && face.head_look<face.gaze_x*.1f);
+    while(face.tick<130)robot_face_update(&face);
+    assert(face.head_look>.75f && face.head_look<.81f);
+    while(face.tick<260)robot_face_update(&face);
+    assert(fabsf(face.gaze_x)<.001f && fabsf(face.head_look)<.001f);
+    robot_face_init(&face);robot_face_init(&copy);
     for(int i=0;i<110;i++){robot_face_update(&face);robot_face_update(&copy);}
     assert(face.blink==1 && !memcmp(&face,&copy,sizeof(face)));
     /* The same blink works during EVERY clip. It never squashes the smile,
@@ -145,6 +156,34 @@ int main(void)
     assert(face.blink==1);
     for(int i=0;i<10;i++)robot_face_update(&face);
     assert(face.blink==0);
+    /* Automatic idle moods have sustained, varied holds and neutral rests.
+       Their private random clock never restarts gaze/blinking or changes on draw. */
+    robot_face_init(&face);robot_face_init(&copy);
+    face.expression=copy.expression=ROBOT_FACE_AUTO;face.idle=copy.idle=true;
+    unsigned seen=0,changes=0;
+    for(int i=0;i<7200;i++) {
+        enum robot_expression before=face.idle_expression;
+        float smile=face.smile;
+        robot_face_update(&face);robot_face_update(&copy);
+        assert(!memcmp(&face,&copy,sizeof(face)) && face.tick==(unsigned)(i+1)%960);
+        assert(fabsf(face.smile-smile)<.11f);
+        seen|=1u<<face.idle_expression;
+        if(face.idle_expression!=before) {
+            changes++;
+            if(before==ROBOT_FACE_NEUTRAL)assert(face.expression_ticks>=120 && face.expression_ticks<=240);
+            else assert(face.idle_expression==ROBOT_FACE_NEUTRAL && face.expression_ticks>=180 && face.expression_ticks<=360);
+        }
+        if(i<89)assert(face.idle_expression==ROBOT_FACE_NEUTRAL);
+    }
+    assert(changes>20 && changes<50 && seen==15);
+    uint32_t seed=face.expression_random;unsigned face_tick=face.tick;
+    face.idle=false;
+    for(int i=0;i<240;i++)robot_face_update(&face);
+    assert(face.idle_expression==ROBOT_FACE_NEUTRAL && face.expression_random==seed);
+    assert(face.tick==(face_tick+240)%960 && fabsf(face.left_open-1)<.001f);
+    face.expression=ROBOT_FACE_HAPPY;
+    for(int i=0;i<60;i++)robot_face_update(&face);
+    assert(fabsf(face.left_open-.72f)<.001f && face.expression_random==seed);
     struct chirky_host_api unsupported=api;unsupported.draw_mesh=NULL;
     assert(!robot_draw(&unsupported,32,4,1,ROBOT_IDLE,0));
     double start=seconds();

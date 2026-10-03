@@ -25,9 +25,10 @@ EMSCRIPTEN_KEEPALIVE int preview_reload(void)
 { return robot_load("games/phosphor-run/game.conf"); }
 EMSCRIPTEN_KEEPALIVE void preview_style(float ambient,float brightness,float lead,float lag,float look,int blink)
 { robot_style=(struct robot_tuning){ambient,brightness,lead,lag,look,(float)blink}; }
-EMSCRIPTEN_KEEPALIVE int preview_face(int steps,int expression,int blink)
+EMSCRIPTEN_KEEPALIVE int preview_face(int steps,int expression,int blink,int clip)
 {
-    if(expression>=ROBOT_FACE_NEUTRAL && expression<=ROBOT_FACE_SLEEPY)face.expression=(enum robot_expression)expression;
+    if(expression>=ROBOT_FACE_NEUTRAL && expression<=ROBOT_FACE_AUTO)face.expression=(enum robot_expression)expression;
+    face.idle=clip==ROBOT_IDLE;
     if(blink)robot_face_blink(&face);
     for(int i=0;i<steps && i<12;i++)robot_face_update(&face);
     return (int)face.tick;

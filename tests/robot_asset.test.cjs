@@ -26,4 +26,15 @@ test('Pocket CRT exports a bounded mesh with an orthonormal face basis and expli
   for(const eye of [parts[1],parts[2]])assert(Math.max(...eye.map(p=>p[2]))-Math.min(...eye.map(p=>p[2]))>.39);
   assert(Math.max(...parts[3].map(p=>p[2]))<Math.min(...parts[1].map(p=>p[2])));
   const objects=info.vertex_parts;assert.equal(objects.mouth,3);assert.equal(objects.neck,4);
+  // Idle breathes slowly, without the old looping yaw that read as head-shaking.
+  const table=start+vertices*20+triangles*8;
+  const first=data.readUInt32LE(table),count=data.readUInt32LE(table+4),ticks=data.readUInt32LE(table+8);
+  assert.equal(count*ticks,192);
+  const poses=table+clips*16;
+  for(let frame=first;frame<first+count;frame++) {
+    const head=poses+(frame*bones+2)*48;
+    assert(Math.abs(data.readFloatLE(head)-1)<1e-6);
+    assert(Math.abs(data.readFloatLE(head+4))<1e-6);
+    assert(Math.abs(data.readFloatLE(head+8))<1e-6);
+  }
 });

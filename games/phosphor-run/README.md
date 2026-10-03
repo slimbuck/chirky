@@ -17,7 +17,7 @@ Z for Secondary, Enter for Start and Escape for Menu.
 Collect every shard in the current level to unlock its portal. A run starts with
 three lives and ends when all three are lost. Lives carry between campaign levels.
 Each level starts with fresh shards, checkpoint, dash, particles, camera state and
-a 60 Hz timer. Its opening camera holds a 5× view of the actual robot in the level for
+a 60 Hz timer. Its opening camera holds a 4× view of the actual robot in the level for
 1.5 seconds, then zooms the whole scene out over two-thirds of a second with a
 cubic ease-in/out: gentle departure, a brisk middle, and a soft arrival before
 control and the run timer begin. The HUD stays at native size. A qualifying completion enters the top ten for
@@ -163,7 +163,13 @@ scrub, slow playback, or change robot size from 1× to 10×. This is the same C
 pose evaluator and GPU renderer used in play, with an independent preview camera.
 Jump poses stay camera-centred for comparison; gameplay collision is unchanged.
 
-The **Independent face** panel selects Neutral, Happy, Curious or Sleepy, triggers
+The **Independent face** panel defaults to Automatic idle moods, with manual
+Neutral, Happy, Curious or Sleepy overrides. Automatic mode occasionally picks
+a happy or curious expression (and a rarer sleepy look) while idle, holds it for
+2–4 seconds, then rests at neutral for 3–6 seconds. Transitions ease smoothly;
+movement returns the automatic expression to neutral without resetting gaze or
+blinking. Cosmetic choices use a private random stream, independent of gameplay.
+The panel also triggers
 a blink, pauses the face clock or steps it one tick. The face keeps advancing
 when movement is paused, restarted, scrubbed or changed. The playback speed
 applies to both clocks; their pause and step controls remain independent.
@@ -184,6 +190,10 @@ blender --background games/phosphor-run/assets/models/phosphor-robot.blend --pyt
 basis. The selected Pocket CRT has A's small rolling body, rounded cabinet,
 convex glass, large capsule eyes and a tiny smile. It has no brow or jaw vent.
 The body radius and head/neck pivots are exported from the adapted rig.
+Idle uses a subtle 3.2-second breathing pose with no authored side-to-side sway.
+The independent face clock supplies occasional eye glances and blinks; the head
+gently follows the eyes during idle, with neutral rests between glances. The
+level-start close-up uses this same idle animation.
 Jump extends the head first and offsets the rolling body briefly
 behind it; simulation/collision and jump responsiveness stay unchanged.
 On falling, the body leads instead: the head briefly hangs back, its downward

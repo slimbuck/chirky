@@ -10,13 +10,13 @@ canvas{image-rendering:pixelated;display:block}aside{padding:20px;background:#18
 </style></head><body><main>
 <header><div><small>PHOSPHOR RUN / CHARACTER WORKSHOP</small><h1>Robot studio</h1><p>Inspect the actual game model. Light, animate, and tweak it live.</p></div><a href="/#edit/phosphor-run">← Game editor</a></header>
 <div class="studio"><section><div class="stage"><div id="preview-display"><canvas id="screen" width="320" height="240" aria-label="Live robot animation preview"></canvas></div></div><p id="status" role="status">Loading GPU preview…</p><small>Same model, C animation and GPU renderer as the game. Grid spacing: 16 screen pixels. Jump preview holds the camera on the robot so you can inspect the spring motion.</small></section>
-<aside><label for="clip">Animation</label><select id="clip"><option value="0">Idle · gentle head movement</option><option value="1">Run · rolling ball</option><option value="2">Jump · head leads body</option><option value="3">Fall</option><option value="4">Dash</option><option value="5">Death</option></select>
+<aside><label for="clip">Animation</label><select id="clip"><option value="0">Idle · occasional glances</option><option value="1">Run · rolling ball</option><option value="2">Jump · head leads body</option><option value="3">Fall</option><option value="4">Dash</option><option value="5">Death</option></select>
 <div class="buttons"><button id="play">Pause</button><button id="step">Step</button><button id="restart">Restart</button><button id="facing">Face left</button></div>
-<label for="tick">Frame <output id="tick-value">0</output></label><input id="tick" type="range" min="0" max="359" step="1" value="0">
+<label for="tick">Frame <output id="tick-value">0</output></label><input id="tick" type="range" min="0" max="191" step="1" value="0">
 <label for="scale">Robot size <output id="scale-value">7×</output></label><input id="scale" type="range" min="1" max="10" step="1" value="7">
 <label for="speed">Playback speed</label><select id="speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Normal · 60 fps</option></select>
 <hr><fieldset><legend>Independent face</legend>
-<label for="expression">Expression</label><select id="expression"><option value="0">Neutral</option><option value="1">Happy</option><option value="2">Curious</option><option value="3">Sleepy</option></select>
+<label for="expression">Expression</label><select id="expression"><option value="4" selected>Automatic · idle moods</option><option value="0">Neutral</option><option value="1">Happy</option><option value="2">Curious</option><option value="3">Sleepy</option></select>
 <label><input id="face-playing" type="checkbox" checked> Animate face</label>
 <div class="buttons"><button id="face-blink">Blink now</button><button id="face-step">Step face</button></div>
 <small>Face frame: <output id="face-tick" style="float:none">0</output>. Eyes keep their own time when you pause, restart or change the movement clip.</small></fieldset>
