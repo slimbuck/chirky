@@ -172,8 +172,8 @@ static void render_player(void)
         !on_ground?(velocity_y>0?"player-jump":"player-fall"):
         absolute(velocity_x)>.3f?"player-run":"player-idle";
     if (dash_timer>0) draw_sprite("dash-trail",x-facing*7,y+4,facing<0,frame_number,NULL);
-    if(!robot_draw_view(host,view_x(x+PLAYER_WIDTH/2),view_y(y),facing,
-        phase==PHASE_LEVEL_INTRO?ROBOT_IDLE:player_robot_clip(),(float)player_animation_tick,&player_motion,zoom))
+    if(!robot_draw_character(host,view_x(x+PLAYER_WIDTH/2),view_y(y),facing,
+        phase==PHASE_LEVEL_INTRO?ROBOT_IDLE:player_robot_clip(),(float)player_animation_tick,&player_motion,&player_face,zoom))
         draw_sprite(id,x,y,facing<0,frame_number,NULL);
 }
 

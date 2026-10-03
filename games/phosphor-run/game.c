@@ -36,6 +36,7 @@ struct high_score high_scores[CONTENT_LIMIT][HIGH_SCORE_COUNT];
 bool on_ground, touching_left, touching_right, dash_available;
 int player_animation_tick;
 struct robot_motion player_motion;
+struct robot_face player_face;
 enum robot_clip player_robot_clip(void)
 {
     return (phase==PHASE_DEAD || phase==PHASE_GAME_OVER)?ROBOT_DEATH:dash_timer>0?ROBOT_DASH:
@@ -436,6 +437,7 @@ static bool game_init(const struct chirky_host_api *host_api, const char *config
     if(host->asset_request)for(int i=0;i<SOUND_COUNT;i++)
         sound_assets[i]=host->asset_request(host->context,sound_path(i),CHIRKY_ASSET_SOUND);
     player_animation_tick=0;
+    robot_face_init(&player_face);
     begin_level();
     memset(high_scores,0,sizeof(high_scores));
     scores_load();score_save_failed=false;initials_blink=0;
@@ -486,6 +488,7 @@ static void game_render(void)
 
 static void game_update(const struct chirky_input *input)
 {
+    robot_face_update(&player_face);
     float previous_x=player_x;
     enum phase before=phase;int level_before=current_level;
     enum robot_clip animation_before=player_robot_clip();

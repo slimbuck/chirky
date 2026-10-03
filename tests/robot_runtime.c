@@ -40,6 +40,16 @@ static void eye_center(float *x,float *y)
     assert(count);*x/=count;*y/=count;
 }
 static double seconds(void) { struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec*1e-9; }
+static uint64_t casing_hash(float *mouth_y)
+{
+    uint64_t value=1469598103934665603ull;*mouth_y=1000;
+    for(size_t i=0;i<vertex_count;i++) {
+        const struct chirky_mesh_vertex *v=&vertices[i];
+        if(v->emissive && v->g>v->r && v->g>v->b+30){*mouth_y=fminf(*mouth_y,v->y);continue;}
+        for(size_t j=0;j<sizeof(*v);j++)value=(value^((const unsigned char *)v)[j])*1099511628211ull;
+    }
+    return value;
+}
 int main(void)
 {
     struct chirky_host_api api={.screen_width=64,.screen_height=64,.draw_mesh=mesh};
@@ -67,7 +77,7 @@ int main(void)
         assert(fabsf(motion.lean+mirror.lean)<.00001f && fabsf(motion.roll+mirror.roll)<.00001f);
         if(tick>=15 && tick<19){assert(motion.lean>0);assert(motion.roll==0);}
         if(tick==20)assert(motion.roll>0);
-        if(tick==72){assert(fabsf(motion.roll_speed)<.02f);assert(motion.lean>.15f);}
+        if(tick==72){assert(fabsf(motion.roll_speed)*.396f*8<.088f);assert(motion.lean>.15f);}
         fprintf(trace,"%d,%d,%.7f,%.7f,%.7f\n",tick+1,intent,distance,motion.roll,motion.lean);
         struct robot_motion saved=motion;
         assert(robot_draw_weighted(&api,32,4,1,intent?ROBOT_RUN:ROBOT_IDLE,(float)tick,&motion));
@@ -102,9 +112,39 @@ int main(void)
     robot_draw_view(&api,32,4,1,ROBOT_IDLE,0,NULL,5);
     assert(fabsf(vertices[0].x-(32+(x-32)*5))<.001f);
     assert(fabsf(vertices[0].y-(4+(y-4)*5))<.001f);
-    robot_draw(&api,32,4,1,ROBOT_IDLE,112);uint64_t blinking=hash();
-    robot_style.blink=0;robot_draw(&api,32,4,1,ROBOT_IDLE,112);assert(hash()!=blinking);
-    robot_style.blink=1;
+    struct robot_face face,copy;robot_face_init(&face);robot_face_init(&copy);
+    for(int i=0;i<110;i++){robot_face_update(&face);robot_face_update(&copy);}
+    assert(face.blink==1 && !memcmp(&face,&copy,sizeof(face)));
+    /* The same blink works during EVERY clip. It never squashes the smile,
+       moves the casing, advances simulation, or starts a second mesh draw. */
+    for(int clip=0;clip<6;clip++) {
+        float mouth_open,mouth_closed;
+        robot_style.blink=0;draws=0;
+        assert(robot_draw_character(&api,32,4,1,clip,0,NULL,&face,1));
+        uint64_t open=hash(),casing=casing_hash(&mouth_open);
+        robot_style.blink=1;
+        assert(robot_draw_character(&api,32,4,1,clip,0,NULL,&face,1));
+        assert(hash()!=open && casing_hash(&mouth_closed)==casing && fabsf(mouth_closed-mouth_open)<.001f);
+        assert(draws==2 && !memcmp(&face,&copy,sizeof(face)));
+    }
+    for(int i=0;i<500;i++) {
+        robot_face_update(&face);robot_face_update(&copy);
+        assert(face.blink>=0 && face.blink<=1 && fabsf(face.gaze_x)<=1 && fabsf(face.gaze_y)<=1);
+        assert(robot_draw_character(&api,32,4,i%2?1:-1,i%6,0,NULL,&face,1));
+        assert(!memcmp(&face,&copy,sizeof(face))); /* Changing clips cannot reset face time. */
+    }
+    uint64_t moods[4];
+    for(int mood=0;mood<4;mood++) {
+        robot_face_init(&face);face.expression=mood;
+        for(int i=0;i<60;i++)robot_face_update(&face);
+        assert(robot_draw_character(&api,32,4,1,ROBOT_IDLE,0,NULL,&face,1));moods[mood]=hash();
+        for(int j=0;j<mood;j++)assert(moods[mood]!=moods[j]);
+    }
+    robot_face_init(&face);robot_face_blink(&face);
+    for(int i=0;i<3;i++)robot_face_update(&face);
+    assert(face.blink==1);
+    for(int i=0;i<10;i++)robot_face_update(&face);
+    assert(face.blink==0);
     struct chirky_host_api unsupported=api;unsupported.draw_mesh=NULL;
     assert(!robot_draw(&unsupported,32,4,1,ROBOT_IDLE,0));
     double start=seconds();
@@ -129,13 +169,17 @@ int main(void)
     unsigned char *data=malloc((size_t)length);assert(data);assert(fread(data,1,(size_t)length,source)==(size_t)length);fclose(source);
     unsigned char *original=malloc((size_t)length);assert(original);memcpy(original,data,(size_t)length);
     unsigned vertex_count=(unsigned)data[4]|(unsigned)data[5]<<8;
-    unsigned vertex_offset=28+data[16]*4;
-    for(int mutation=0;mutation<7;mutation++) {
+    assert(!memcmp(data,"PRB2",4));
+    unsigned vertex_offset=28+84+data[16]*4;
+    for(int mutation=0;mutation<10;mutation++) {
         memcpy(data,original,(size_t)length);
         if(mutation==1)data[4]=255; /* Vertex count no longer matches the stream. */
         if(mutation==4)data[vertex_offset+12]=255; /* Invalid bone. */
         if(mutation==5){data[vertex_offset+2]=0xc0;data[vertex_offset+3]=0x7f;} /* NaN. */
-        if(mutation==6){data[vertex_offset+vertex_count*16]=255;data[vertex_offset+vertex_count*16+1]=255;}
+        if(mutation==6){data[vertex_offset+vertex_count*20]=255;data[vertex_offset+vertex_count*20+1]=255;}
+        if(mutation==7)data[vertex_offset+16]=255; /* Unknown face part. */
+        if(mutation==8)memset(data+28,0,4); /* Invalid body radius. */
+        if(mutation==9)memset(data+28+7*4,0,12); /* Invalid U basis. */
         FILE *file=fopen(path,"wb");assert(file);
         fwrite(data,1,mutation==0?20:mutation==2?(size_t)length-1:(size_t)length,file);
         if(mutation==3)fputc(1,file);

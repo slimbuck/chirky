@@ -82,6 +82,7 @@ extern struct high_score high_scores[CONTENT_LIMIT][HIGH_SCORE_COUNT];
 extern bool on_ground, touching_left, touching_right, dash_available;
 extern int player_animation_tick;
 extern struct robot_motion player_motion;
+extern struct robot_face player_face;
 enum robot_clip player_robot_clip(void);
 
 

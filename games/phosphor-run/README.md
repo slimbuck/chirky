@@ -163,6 +163,11 @@ scrub, slow playback, or change robot size from 1× to 10×. This is the same C
 pose evaluator and GPU renderer used in play, with an independent preview camera.
 Jump poses stay camera-centred for comparison; gameplay collision is unchanged.
 
+The **Independent face** panel selects Neutral, Happy, Curious or Sleepy, triggers
+a blink, pauses the face clock or steps it one tick. The face keeps advancing
+when movement is paused, restarted, scrubbed or changed. The playback speed
+applies to both clocks; their pause and step controls remain independent.
+
 Lighting, brightness, jump head lead/body delay, idle glance and blinking update
 live. **Save to game** writes `assets/models/robot.conf` with validation and stale
 file protection. Refresh the browser player to load saved settings, or deploy
@@ -175,19 +180,19 @@ The robot's authored source is `assets/models/phosphor-robot.blend`. Export with
 blender --background games/phosphor-run/assets/models/phosphor-robot.blend --python tools/blender/export_phosphor_robot.py
 ```
 
-`model-info.json` describes the PRB1 mesh, six clips, rigid bone order and eye
-material. Runtime keeps the helmet, visor, twin phosphor eyes, antenna and
-rolling ball; adjustable fill light makes the dark teal surfaces more legible.
-Idle adds a slow head glance and a short eyelid-like compression of the luminous
-eye geometry. Jump extends the head first and offsets the rolling body briefly
+`model-info.json` describes the PRB2 mesh, six clips, rigid bone order and face
+basis. The selected Pocket CRT has A's small rolling body, rounded cabinet,
+convex glass, large capsule eyes and a tiny smile. It has no brow or jaw vent.
+The body radius and head/neck pivots are exported from the adapted rig.
+Jump extends the head first and offsets the rolling body briefly
 behind it; simulation/collision and jump responsiveness stay unchanged.
 On falling, the body leads instead: the head briefly hangs back, its downward
 pitch follows four ticks later, and the neck suspension settles during descent.
 
-The CPU interpolates 3 rigid bones and transforms 654 vertices; 1,224 triangles
+The CPU interpolates 3 rigid bones and transforms 1,230 vertices; 2,228 triangles
 are submitted in one mesh call. The GPU handles lighting, depth and coverage at
 the requested camera size. It never enlarges a tiny software-rendered robot image.
-At the normal camera, the robot retains its previous world size. Pixel scenery
+The collision box is unchanged. Pixel scenery
 uses rounded shared edges during the temporary zoom and returns to 1:1 pixels.
 
 Validation: `make test`, `make web`, and `sh tools/texture-tests.sh` (GLES headers
@@ -198,9 +203,68 @@ must include the large preview and the live 1× game, not just mesh structure.
 
 `make robot-review` builds an offscreen review tool and writes
 `build/robot-gpu-review.ppm`: six clips, four poses, both facings, 1× and 4×.
+Rows also cover neutral eyes, a closed blink, Happy and Curious expressions.
 It uses the real GLES renderer and also reports a bounded timing measurement
 including GPU completion; this is an offscreen workload, not a live FPS claim.
 The reviewed sheet is retained as `tests/references/phosphor-robot-gpu.png`.
 Use the sheet together with the Blender portrait and live studio when changing
 geometry, materials, or motion. Different GPUs may differ at triangle edges;
 reference review must distinguish those edges from changes to identity or pose.
+
+### Face animation and asset contract
+
+`robot_face` owns a fixed-tick clock, eased gaze, blink envelope and expression
+blend. `game_update` advances it once per simulation tick; pause freezes it.
+Movement clip changes and restarts never reset it, and rendering is read-only.
+Natural blinking has unequal gaps and an occasional double blink. Expressions
+and gaze blend independently of the body's six animation clips.
+
+The face uses a head-local origin and orthonormal U (right), V (up), and normal
+(outward) vectors. Eye vertices carry explicit left/right tags; the smile has
+its own tag, so blinking cannot flatten the mouth. The evaluator applies gaze,
+expression and eyelid opening in UV, projects back onto the curved CRT surface,
+then applies the head bone and suspension. All triangles still share one GPU
+mesh submission. The host ABI stays at 14.
+
+PRB2 is little-endian: `PRB2`, six uint32 counts (vertices, triangles, bones,
+materials, clips, frames), then 21 float32 rig values: body radius, head pivot Z,
+neck minimum/maximum Z, origin XYZ, U XYZ, V XYZ, normal XYZ, screen half width,
+half height, bulge, eye half-spacing and eye centre V. Palette entries are four
+bytes (RGB/emissive); each vertex is XYZ float32 plus bone and part uint32.
+Part IDs are 0 rigid, 1 left eye, 2 right eye, 3 mouth, 4 neck. Triangles remain
+four uint16 (three indices/material), clips four uint32, poses 3×4 float32 bone
+matrices. The loader validates dimensions, basis, tags and bounds before use;
+historical PRB1 studies remain readable.
+
+To verify source reproducibility, append `-- --output-root build/robot-export-check`
+to the normal Blender export command and byte-compare that directory's
+`games/phosphor-run/assets/models/{player.robot,model-info.json}` with the shipped
+files. Never patch the binary. `tests/robot_asset.test.cjs` checks the format,
+manifest, face basis, semantic parts, large eyes and their separation.
+
+For historical non-shipping proportion studies, run Blender in the background with
+`--python tools/blender/compare_phosphor_proportions.py`. This edits copies of
+the authored model and uses the normal exporter; Blender sources, PRB1 meshes
+and a parameter manifest go under `build/robot-options/`. The current model and
+three alternatives can be reviewed with `make robot-review`, then, for each
+`<id>` (`current`, `a`, `b`, `c`):
+
+```sh
+build/robot-review build/robot-options/<id>/portrait.ppm build/robot-options/<id>/games/phosphor-run/game.conf portrait
+```
+
+These are static silhouette studies at 14×, 1× and 4× through the game renderer.
+Selecting a study still requires adapting the bone pivots and runtime eye/neck
+anchors, reviewing every animation, and updating the approved runtime reference.
+The comparison command does not replace the shipped model or tuning. These
+studies require the original pre-CRT source at
+`build/robot-options/current/robot.blend`; they do not re-proportion the adopted
+CRT source. `adopt_phosphor_crt.py` records the one-time selection and pivot/tag
+adaptation; future editing and exports use the adopted canonical `.blend`.
+
+Pass `-- --crt` after the Blender script to continue from proportion A with
+three rounded CRT head studies (`crt1`, `crt2`, `crt3`). These replace the brow,
+visor and jaw vent with a rounded cabinet, a thin rim, genuinely convex glass,
+rounded phosphor eyes and a small smile. `crt-manifest.json` records cabinet
+dimensions, corner radii and glass curvature. Render them with the same portrait
+command above; the same static-study limitations apply.

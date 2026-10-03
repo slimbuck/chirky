@@ -1,6 +1,6 @@
 {
-  "vertices": 654,
-  "triangles": 1224,
+  "vertices": 1230,
+  "triangles": 2228,
   "bones": 3,
   "clips": [
     "idle",
@@ -11,16 +11,54 @@
     "death"
   ],
   "pose_frames": 68,
-  "runtime_bytes": 30208,
-  "format": "PRB1",
+  "runtime_bytes": 52464,
+  "format": "PRB2",
   "bone_order": [
     "root",
     "body",
     "head"
   ],
   "eye_material": 6,
-  "eye_center_z": 1.55,
+  "eye_center_z": 1.305,
   "pixels_per_unit": 8,
   "tuning": "robot.conf",
-  "renderer": "ABI 14 GPU triangle list"
+  "renderer": "ABI 14 GPU triangle list",
+  "face_rig": {
+    "body_radius": 0.396,
+    "head_pivot_z": 0.85,
+    "neck_min_z": 0.7249,
+    "neck_max_z": 0.9079,
+    "origin": [
+      0,
+      -0.472,
+      1.25
+    ],
+    "u": [
+      1,
+      0,
+      0
+    ],
+    "v": [
+      0,
+      0,
+      1
+    ],
+    "normal": [
+      0,
+      -1,
+      0
+    ],
+    "half_width": 0.5725,
+    "half_height": 0.3675,
+    "bulge": 0.09,
+    "eye_spacing": 0.255,
+    "eye_v": 0.055
+  },
+  "vertex_parts": {
+    "rigid": 0,
+    "left_eye": 1,
+    "right_eye": 2,
+    "mouth": 3,
+    "neck": 4
+  }
 }

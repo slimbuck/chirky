@@ -96,6 +96,12 @@ int main(void)
            !saw_old_signal && !saw_pickup_multiplier);
     assert(!saw_hud_panel && !saw_intro_panel);
     finish_intro(api,&input);
+    unsigned face_tick=player_face.tick;
+    neutral(api,&input,1);
+    assert(player_face.tick==(face_tick+1)%960);
+    player_animation_tick=0;face_tick=player_face.tick;
+    neutral(api,&input,1);
+    assert(player_face.tick==(face_tick+1)%960); /* Movement timer resets don't reset the face. */
     const struct animation *shard=content_animation(&content,"shard");
     assert(shard && shard->count==3);
     assert(animation_frame(shard,0)==animation_frame(shard,shard->ticks*3));
@@ -113,8 +119,9 @@ int main(void)
     assert(robot_ready());
     player_x=150;player_y=150;camera_x=camera_y=0;on_ground=true;
     for(int direction=-1;direction<=1;direction+=2) {
-        facing=direction;draws=0;int tick=player_animation_tick;api->render();
+        facing=direction;draws=0;int tick=player_animation_tick;struct robot_face saved_face=player_face;api->render();
         assert(draws>0 && draws<5000 && player_animation_tick==tick);
+        assert(!memcmp(&saved_face,&player_face,sizeof(player_face)));
     }
     for (int stage=0;stage<content.level_count;stage++) {
         if (phase==PHASE_LEVEL_INTRO) finish_intro(api,&input);

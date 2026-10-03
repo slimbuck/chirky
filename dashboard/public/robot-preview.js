@@ -3,6 +3,7 @@ const fields={ambient:["Fill light",0,1,.01],brightness:["Colour brightness",.5,
 const periods=[360,120,48,36,24,48];
 const period=()=>periods[Number($("clip").value)];
 let runtime,saved,values,hash,playing=true,tick=0,facing=1,last=0,ready=false;
+let faceFraction=0,blinkRequested=0,faceStep=0;
 for(const [key,[label,min,max,step]] of Object.entries(fields)){
   const row=document.createElement("label");row.htmlFor=key;row.textContent=label;
   const out=document.createElement("output");out.id=key+"-value";row.append(out);
@@ -24,6 +25,8 @@ function pause(){playing=false;$("play").textContent="Play";}
 $("step").onclick=()=>{pause();tick=(Math.floor(tick)+1)%period();};
 $("restart").onclick=()=>{tick=0;};$("clip").onchange=()=>{tick=0;$("tick").max=period()-1;};
 $("tick").oninput=()=>{pause();tick=Number($("tick").value);};
+$("face-blink").onclick=()=>{blinkRequested=1;};
+$("face-step").onclick=()=>{$("face-playing").checked=false;faceStep++;};
 $("facing").onclick=()=>{facing=-facing;$("facing").textContent=facing===1?"Face left":"Face right";};
 $("scale").oninput=()=>{$("scale-value").value=$("scale").value+"×";};
 $("reset").onclick=()=>{values={...saved};showValues();status("Restored saved settings.");};
@@ -33,6 +36,9 @@ function frame(now){if(!ready)return;const dt=last?Math.min((now-last)/1000,.1):
   if(playing)tick=(tick+dt*60*Number($("speed").value))%period();
   $("tick").value=Math.floor(tick);$("tick-value").value=Math.floor(tick);
   runtime._preview_style(...Object.keys(fields).map(key=>values[key]));
+  if($("face-playing").checked)faceFraction+=dt*60*Number($("speed").value);
+  const faceSteps=Math.floor(faceFraction)+faceStep;faceFraction-=Math.floor(faceFraction);faceStep=0;
+  $("face-tick").value=runtime._preview_face(faceSteps,Number($("expression").value),blinkRequested);blinkRequested=0;
   if(!runtime._preview_render(Number($("clip").value),tick,facing,Number($("scale").value))){status("GPU preview failed.",true);ready=false;return;}
   requestAnimationFrame(frame);
 }
