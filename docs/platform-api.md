@@ -64,8 +64,19 @@ the position and dimensions of the logical viewport, never individual sprites.
 `draw_text` uses the built-in 5x7 font. `x` is its left edge and `y` identifies
 the bottom-left coordinate of the glyphs' top pixel row; the remaining rows
 descend in logical coordinates. Each character advances by `6 * scale` and each
-set font pixel occupies `scale` square logical pixels. Use `button_label` when
-showing controls so the game names logical Chirky inputs or the current platform binding. With nonzero capacity, the callback writes a NUL-terminated label.
+set font pixel occupies `scale` square logical pixels. Both text renderers also
+support the UTF-8 direction arrows `← → ↑ ↓`, each occupying one glyph cell.
+Use `text_encoding.h` for glyph counts and clipping without splitting a symbol.
+Use `button_label` when
+showing controls: it resolves the logical action to the mapped physical control
+on the most recently used device. Query it during rendering so remapping and
+device changes are reflected immediately. Examples are `B` / `SELECT` on the
+configured SNES/Pico, `X` / `ESC` on the default keyboard, and `A` / `MENU` on
+touch. Unknown controls use button/axis identifiers, and missing bindings return
+`UNBOUND`. With nonzero capacity the callback writes a NUL-terminated label.
+`include/input_labels.h` also groups direction labels without assuming arrow keys.
+Labels are presentation only: logical enums, button states and ABI layout stay
+unchanged. Controller legends belong to host profiles, never game code.
 
 ## Asset operations
 

@@ -185,8 +185,30 @@ static void shared_menu_layouts(void)
         }
     }
 }
+static void physical_label(void *context,enum chirky_button action,char *out,size_t size)
+{snprintf(out,size,"%s",((const char *const *)context)[action]);}
+static void check_direction_labels(void)
+{
+    const char *labels[]={CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT,CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,"B","Y","START","SELECT"};
+    struct chirky_host_api api={.context=labels,.button_label=physical_label};
+    char text[100];
+    chirky_direction_label(&api,0,4,text,sizeof(text));assert(!strcmp(text,CHIRKY_ARROW_LEFT CHIRKY_ARROW_RIGHT CHIRKY_ARROW_UP CHIRKY_ARROW_DOWN));
+    assert(chirky_text_length(text)==4 && launcher_text_width(text,0)==28);
+    chirky_direction_label(&api,2,2,text,sizeof(text));assert(!strcmp(text,CHIRKY_ARROW_UP CHIRKY_ARROW_DOWN));
+    labels[2]="W";labels[3]="S";
+    chirky_direction_label(&api,2,2,text,sizeof(text));assert(!strcmp(text,"W/S"));
+    labels[2]=CHIRKY_ARROW_UP;labels[3]=CHIRKY_ARROW_DOWN;
+    chirky_direction_label(&api,0,4,text,2);assert(text[0]==0);
+    chirky_direction_label(&api,0,4,text,5);assert(!strcmp(text,CHIRKY_ARROW_LEFT));
+    chirky_text_copy(text,sizeof(text),CHIRKY_ARROW_LEFT " MOVE",3);assert(!strcmp(text,CHIRKY_ARROW_LEFT " M"));
+    assert(chirky_text_length("\xe2")==1 && chirky_text_length("\xe2\x86")==2);
+    static const uint8_t up[7]={4,14,21,4,4,4,0};assert(!memcmp(glyph(0x2191),up,sizeof(up)));
+    chirky_direction_label(&api,0,4,NULL,0);
+    api.button_label=NULL;chirky_input_label(&api,CHIRKY_BUTTON_PRIMARY,text,sizeof(text));assert(!strcmp(text,"UNBOUND"));
+}
 int main(void)
 {
+    check_direction_labels();
     scrolling_launcher();
     shared_menu_layouts();
     pause_text_bottom=999;pause_selection_top=-1;

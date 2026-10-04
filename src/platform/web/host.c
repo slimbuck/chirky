@@ -138,11 +138,13 @@ static void outlined(void *unused,int x,int y,const char *value,int scale,unsign
 }
 static void play(void *unused,const char *device,const char *path)
 { (void)unused;(void)device;sound(path); }
+EM_JS(void,physical_label,(int button,char *out,int size),{
+    stringToUTF8(Module.onButtonLabel(button),out,size);
+});
 static void label(void *unused,enum chirky_button button,char *out,size_t size)
 {
     (void)unused;
-    const char *names[]={"LEFT","RIGHT","UP","DOWN","PRIMARY","SECONDARY","START","MENU"};
-    snprintf(out,size,"%s",button>=0 && button<CHIRKY_BUTTON_COUNT?names[button]:"?");
+    if(size)physical_label(button,out,(int)size);
 }
 #include "console_bridge.h"
 EMSCRIPTEN_KEEPALIVE int web_init(const char *config)

@@ -206,7 +206,10 @@ void chirky_console_draw_display(const struct chirky_console *c,const struct chi
     char rows[4][64];const char *labels[6];
     for(int i=0;i<4;i++){snprintf(rows[i],sizeof(rows[i]),"%s: %d",names[i],values[i]);labels[i]=rows[i];}labels[4]="Save";labels[5]="Back";
     console_scroll_list(api,labels,NULL,6,c->display_option,c->menu_offset,45,h-78);
-    console_menu_text(api,12,34,c->settings_message && *c->settings_message?c->settings_message:"Left/Right adjusts - keep edges visible",1,201,191,173);
+    char direction[52],hint[96];
+    chirky_direction_label(api,CHIRKY_BUTTON_LEFT,2,direction,sizeof(direction));
+    snprintf(hint,sizeof(hint),"%s adjusts - keep edges visible",direction);
+    console_menu_text(api,12,34,c->settings_message && *c->settings_message?c->settings_message:hint,1,201,191,173);
     console_menu_footer(api,true);
 }
 void chirky_console_render(struct chirky_console *c,const struct chirky_host_api *api,struct splash_art *art,unsigned pad,unsigned key,const char *pad_names,const char *key_names)

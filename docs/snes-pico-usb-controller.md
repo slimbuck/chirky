@@ -141,6 +141,10 @@ the prompts for all eight Chirky inputs. The Pico firmware translates the serial
 SNES protocol into a standard USB controller; Chirky then maps that USB device
 to its logical Chirky inputs (B to Primary, Y to Secondary, Start to Start, and Select to Menu).
 
+The `snes-pico` label profile supports both hat-axis directions and the installed
+adapter's button directions (evdev 704 Up, 705 Down, 706 Left, 707 Right).
+These render as arrow symbols without changing the saved input bindings.
+
 ## Troubleshooting
 
 - `RPI-RP2` remains visible: the Pico is in BOOTSEL mode, not controller mode.

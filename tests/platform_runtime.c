@@ -4,6 +4,7 @@
 #include "../src/asset_store.h"
 #include "../games/rosey-chop/game_state.h"
 #include <assert.h>
+#include "text_encoding.h"
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -154,7 +155,7 @@ static void text(void *context, int x, int y, const char *value, int scale,
     on_main(p);
     (void)r; (void)g; (void)b;
     assert(value && scale > 0);
-    assert(x >= 0 && x + (int)strlen(value) * 6 * scale - scale <= 288);
+    assert(x >= 0 && x + (int)chirky_text_length(value) * 6 * scale - scale <= 288);
     assert(y - 6 * scale >= 0 && y + scale <= 216);
     p->texts++;
 }
@@ -162,7 +163,8 @@ static void text(void *context, int x, int y, const char *value, int scale,
 static void label(void *context, enum chirky_button button, char *value, size_t capacity)
 {
     on_main(context);
-    snprintf(value, capacity, "%s", button == CHIRKY_BUTTON_SECONDARY ? "Y" : "B");
+    const char *labels[]={CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT,CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,"B","Y","START","SELECT"};
+    snprintf(value,capacity,"%s",labels[button]);
 }
 
 static void sprite(void *context, chirky_asset handle, int x, int y, int w, int h,

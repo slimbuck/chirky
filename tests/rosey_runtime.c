@@ -23,10 +23,10 @@ static void rectangle(void *ctx, int x, int y, int w, int h, unsigned char r, un
 }
 static void lettering(void *ctx, int x, int y, const char *s, int scale, unsigned char r, unsigned char g, unsigned char b)
 {
-    assert(x >= 0 && x+(int)strlen(s)*6*scale-scale <= test_host.screen_width);
+    assert(x >= 0 && x+(int)chirky_text_length(s)*6*scale-scale <= test_host.screen_width);
     assert(y-6*scale >= 0 && y+scale <= test_host.screen_height);
-    for (; *s; s++, x+=6*scale) {
-        const uint8_t *rows=glyph(*s);
+    for (; *s; x+=6*scale) {
+        const uint8_t *rows=glyph(chirky_text_next(&s));
         for (int row=0; row<7; row++) for (int col=0; col<5; col++)
             if (rows[row] & (1u<<(4-col))) rectangle(ctx,x+col*scale,y-row*scale,scale,scale,r,g,b);
     }
@@ -38,7 +38,11 @@ static void effect(void *ctx, const char *device, const char *path)
     char magic[4]; assert(fread(magic,1,4,f)==4 && !memcmp(magic,"RIFF",4)); fclose(f); sounds++;
 }
 static void label(void *ctx, enum chirky_button action, char *s, size_t n)
-{ (void)ctx; snprintf(s,n,"%s",action==CHIRKY_BUTTON_SECONDARY ? "Y" : "B"); }
+{
+    (void)ctx;
+    const char *labels[]={CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT,CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,"B","Y","START","SELECT"};
+    snprintf(s,n,"%s",labels[action]);
+}
 static void preview(const char *name)
 {
     draws=0; game->render(); assert(draws>0 && draws<(garden.phase==TITLE?320*240:5000));

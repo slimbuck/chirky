@@ -3,7 +3,7 @@
 (() => {
 const $=selector=>document.querySelector(selector);
 const canvas=$("#screen");
-const inputNames=["Left","Right","Up","Down","Primary","Secondary","Start","Menu"];
+const inputNames=["Move left","Move right","Move up","Move down","Confirm / main action","Back / other action","Start action","Pause / menu"];
 const defaultKeys=["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyX","KeyZ","Enter","Escape"];
 const settingsKey="chirky.inputs.v1";
 function validKeys(value){return Array.isArray(value) && value.length===8 && new Set(value).size===8 && value.every(code=>typeof code==="string" && /^(Arrow(Left|Right|Up|Down)|Key[A-Z]|Digit[0-9]|Numpad[0-9]|Enter|Escape|Space|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Backspace|Tab|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|Backquote)$/.test(code));}
@@ -11,7 +11,7 @@ function loadInputSettings(){
   try{const saved=JSON.parse(localStorage.getItem(settingsKey));if(saved?.version===1 && validKeys(saved.keys) && ["auto","show","hide"].includes(saved.touch))return saved;}catch{}
   return {version:1,keys:[...defaultKeys],touch:"auto"};
 }
-function keyName(code){return code.replace(/^Key|^Digit/,"").replace(/^Arrow/,"").replace("Escape","Esc");}
+function keyName(code){return ({ArrowLeft:"←",ArrowRight:"→",ArrowUp:"↑",ArrowDown:"↓"})[code] || code.replace(/^Key|^Digit/,"").replace("Escape","Esc");}
 function keycapName(code){
   const names={ArrowLeft:"←",ArrowRight:"→",ArrowUp:"↑",ArrowDown:"↓",Enter:"Enter ↵",Escape:"Esc",
     ShiftLeft:"Shift L",ShiftRight:"Shift R",ControlLeft:"Ctrl L",ControlRight:"Ctrl R",AltLeft:"Alt L",AltRight:"Alt R",

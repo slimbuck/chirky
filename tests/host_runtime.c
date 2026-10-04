@@ -402,9 +402,32 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     }
     update_host(host);
     char name[96];host->last_keyboard=true;
-    button_label(host,CHIRKY_BUTTON_SECONDARY,name,sizeof(name));assert(!strcmp(name,"SECONDARY"));
+    button_label(host,CHIRKY_BUTTON_SECONDARY,name,sizeof(name));assert(!strcmp(name,"R"));
     host->last_keyboard=false;
-    button_label(host,CHIRKY_BUTTON_SECONDARY,name,sizeof(name));assert(!strcmp(name,"SECONDARY"));
+    button_label(host,CHIRKY_BUTTON_SECONDARY,name,sizeof(name));assert(!strcmp(name,"Y"));
+    button_label(host,CHIRKY_BUTTON_PRIMARY,name,sizeof(name));assert(!strcmp(name,"START"));
+    /* Labels follow the physical binding, not the action or evdev BTN name. */
+    const char *snes[]={"Y","B","X","A","L","R"};
+    for(unsigned i=0;i<6;i++) {
+        struct controller_binding binding={BINDING_KEY,304+i,0};
+        controller_binding_label(&binding,CONTROLLER_LABEL_SNES_PICO,name,sizeof(name));assert(!strcmp(name,snes[i]));
+        controller_binding_label(&binding,CONTROLLER_LABEL_GENERIC,name,sizeof(name));assert(strstr(name,"BTN "));
+    }
+    controller_binding_label(&(struct controller_binding){BINDING_ABS,ABS_HAT0Y,-1},CONTROLLER_LABEL_SNES_PICO,name,sizeof(name));
+    assert(!strcmp(name,CHIRKY_ARROW_UP));
+    const char *directions[]={CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT};
+    for(unsigned i=0;i<4;i++) {
+        struct controller_binding binding={BINDING_KEY,BTN_TRIGGER_HAPPY1+i,0};
+        controller_binding_label(&binding,CONTROLLER_LABEL_SNES_PICO,name,sizeof(name));assert(!strcmp(name,directions[i]));
+        controller_binding_label(&binding,CONTROLLER_LABEL_GENERIC,name,sizeof(name));assert(strstr(name,"BTN "));
+    }
+    keyboard_name(&(struct controller_binding){BINDING_KEY,KEY_LEFT,0},name,sizeof(name));assert(!strcmp(name,CHIRKY_ARROW_LEFT));
+    keyboard_name(&(struct controller_binding){BINDING_KEY,KEY_W,0},name,sizeof(name));assert(!strcmp(name,"W"));
+    controller_binding_label(&(struct controller_binding){BINDING_ABS,ABS_RX,1},CONTROLLER_LABEL_GENERIC,name,sizeof(name));
+    assert(!strcmp(name,"AX3 POS"));
+    button_label(host,CHIRKY_BUTTON_COUNT,name,sizeof(name));assert(!strcmp(name,"UNBOUND"));
+    char tiny[2]={'?','?'};button_label(host,CHIRKY_BUTTON_PRIMARY,tiny,sizeof(tiny));assert(tiny[1]==0);
+    button_label(host,CHIRKY_BUTTON_PRIMARY,NULL,0);
     event(host,0,EV_KEY,BTN_SOUTH,1);event(host,1,EV_KEY,KEY_R,1);
     event(host,0,EV_KEY,BTN_MODE,1);event(host,1,EV_KEY,KEY_T,1);
     event(host,0,EV_ABS,ABS_HAT0X,-1);update_host(host);
@@ -413,9 +436,9 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     held_input_names(host,true,name,sizeof(name));assert(strstr(name," R") && strstr(name," T"));
     draw_controller_settings(host);
     char output[512];snprintf(output,sizeof(output),"%s/input-test.ppm",output_dir);write_preview(output);
-    /* Secondary's wider column preserves its full label at CRT-safe sizes. */
-    int extra=(host->api.screen_width-24-208)/4,cell=66+extra,x=host->safe_x+12+58+extra;
-    int indicator_y=host->safe_y+host->api.screen_height-105-(CHIRKY_BUTTON_SECONDARY/4)*26;
+    /* Physical legends wrap above the independent controller/key indicators. */
+    int cell=(host->api.screen_width-24)/4,x=host->safe_x+12+cell;
+    int indicator_y=host->safe_y+host->api.screen_height-105-(CHIRKY_BUTTON_SECONDARY/4)*32;
     assert(framebuffer[indicator_y][x+3][1]==220);
     assert(framebuffer[indicator_y][x+cell/2][0]==244);
     event(host,1,EV_KEY,KEY_R,0);update_host(host);draw_controller_settings(host);
@@ -451,6 +474,13 @@ int main(int argc,char **argv)
     check_transition_gates();
     check_uninitialized_controller_axes();
     check_timing_toggle();check_capture_gpu();
+    FILE *profile=fopen(HOST_CONFIG_PATH,"w");assert(profile);
+    fputs("controller_labels=generic\n",profile);fclose(profile);
+    static struct host generic;
+    load_host_config(&generic);assert(generic.controller_labels==CONTROLLER_LABEL_GENERIC);
+    assert(generic.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_EAST);
+    assert(save_bindings(&generic));load_host_config(&generic);
+    assert(generic.controller_labels==CONTROLLER_LABEL_GENERIC);
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
     fputs("boot_game=launcher\n# Keep this comment\nbind_confirm=key:313\nframe_timing=1\n",config);fclose(config);
     static struct host host;

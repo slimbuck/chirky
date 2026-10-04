@@ -1,5 +1,6 @@
 #include "game_state.h"
 #include "splash_art.h"
+#include "input_labels.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -107,15 +108,6 @@ static void outlined_text(int x, int y, const char *value, int scale, struct col
         for (int offset_x=-1;offset_x<=1;offset_x++)
             if (offset_x || offset_y) text(x+offset_x,y+offset_y,value,scale,black);
     text(x,y,value,scale,colour);
-}
-
-static void controller_label(enum chirky_button action, const char *fallback,
-                             char *label, size_t capacity)
-{
-    if (host->button_label != NULL)
-        host->button_label(host->context, action, label, capacity);
-    else
-        copy_text(label, capacity, fallback);
 }
 
 /* Drawing consumes state only; effects can later be added as separate passes. */
@@ -246,16 +238,16 @@ static void centered_text(int y, const char *value, int scale, struct colour col
 {
     char visible[96];
     int columns=(host->screen_width-12)/(6*scale);
-    snprintf(visible,sizeof(visible),"%.*s",columns,value);
-    text((host->screen_width-(int)strlen(visible)*6*scale)/2,y,visible,scale,colour);
+    chirky_text_copy(visible,sizeof(visible),value,(size_t)columns);
+    text((host->screen_width-(int)chirky_text_length(visible)*6*scale)/2,y,visible,scale,colour);
 }
 
 static void centered_outlined_text(int y, const char *value, int scale, struct colour colour)
 {
     char visible[96];
     int columns=(host->screen_width-12)/(6*scale);
-    snprintf(visible,sizeof(visible),"%.*s",columns,value);
-    outlined_text((host->screen_width-(int)strlen(visible)*6*scale)/2,y,visible,scale,colour);
+    chirky_text_copy(visible,sizeof(visible),value,(size_t)columns);
+    outlined_text((host->screen_width-(int)chirky_text_length(visible)*6*scale)/2,y,visible,scale,colour);
 }
 
 static void format_time(int ticks, char *value, size_t capacity)
@@ -328,25 +320,31 @@ static void render_initials(void)
         if(pending)rectangle(table_x+(4+initial_cursor)*6,baseline-9,5,1,settings.amber);
     }
     char next[16],back[16];
-    controller_label(CHIRKY_BUTTON_PRIMARY,"PRIMARY",next,sizeof(next));
-    controller_label(CHIRKY_BUTTON_SECONDARY,"SECONDARY",back,sizeof(back));
-    centered_text(39,"UP/DOWN LETTER",1,settings.edge);
+    chirky_input_label(host,CHIRKY_BUTTON_PRIMARY,next,sizeof(next));
+    chirky_input_label(host,CHIRKY_BUTTON_SECONDARY,back,sizeof(back));
+    char direction[52];chirky_direction_label(host,CHIRKY_BUTTON_UP,2,direction,sizeof(direction));
+    snprintf(line,sizeof(line),"%s LETTER",direction);centered_text(39,line,1,settings.edge);
     snprintf(line,sizeof(line),"%s %s  %s BACK",next,initial_cursor<2?"NEXT":"SAVE",back);
     centered_text(29,line,1,settings.edge);
 }
 
 void render_title(void)
 {
-    char jump[32],dash[32],menu[32],line[96];
-    controller_label(CHIRKY_BUTTON_PRIMARY,"PRIMARY",jump,sizeof(jump));
-    controller_label(CHIRKY_BUTTON_SECONDARY,"SECONDARY",dash,sizeof(dash));
-    controller_label(CHIRKY_BUTTON_MENU,"MENU",menu,sizeof(menu));
+    bool show_begin=(title_timer/28)%2==0;
+    char jump[32],dash[32],menu[32],start[24],move[100],line[160];
+    chirky_input_label(host,CHIRKY_BUTTON_PRIMARY,jump,sizeof(jump));
+    chirky_input_label(host,CHIRKY_BUTTON_SECONDARY,dash,sizeof(dash));
+    chirky_input_label(host,CHIRKY_BUTTON_MENU,menu,sizeof(menu));
+    chirky_input_label(host,CHIRKY_BUTTON_START,start,sizeof(start));
+    chirky_direction_label(host,0,4,move,sizeof(move));
     if (splash_draw(&title_art,host)) {
         rectangle(0,0,host->screen_width,48,settings.background);
         centered_text(39,"RESTORE THE LAST SIGNAL",1,settings.paper);
-        centered_text(27,"PRIMARY JUMP / SECONDARY DASH",1,settings.edge);
-        centered_text(17,"START USE LIFE / MENU PAUSE",1,settings.edge);
-        centered_text(7,"PRIMARY - BEGIN",1,settings.amber);
+        snprintf(line,sizeof(line),"%s JUMP / %s DASH",jump,dash);centered_text(27,line,1,settings.edge);
+        snprintf(line,sizeof(line),"%s USE LIFE / %s PAUSE",start,menu);centered_text(17,line,1,settings.edge);
+        if(show_begin) {
+            snprintf(line,sizeof(line),"%s - BEGIN",jump);centered_text(7,line,1,settings.amber);
+        }
         return;
     }
     render_background();
@@ -355,12 +353,12 @@ void render_title(void)
     centered_text(height-54,"RUN",3,settings.amber);
     rectangle(16,height-80,host->screen_width-32,2,settings.edge);
     centered_text(height-98,"RESTORE THE LAST SIGNAL",1,settings.paper);
-    centered_text(height-116,"ARROWS MOVE / START USE LIFE",1,settings.edge);
+    snprintf(line,sizeof(line),"%s MOVE / %s USE LIFE",move,start);centered_text(height-116,line,1,settings.edge);
     snprintf(line,sizeof(line),"JUMP - %s",jump); centered_text(height-130,line,1,settings.edge);
     snprintf(line,sizeof(line),"DASH - %s",dash); centered_text(height-144,line,1,settings.edge);
     snprintf(line,sizeof(line),"%s - PAUSE",menu); centered_text(height-158,line,1,settings.edge);
-    if ((title_timer/28)&1) {
-        centered_text(14,"PRESS A BUTTON TO BEGIN",1,settings.paper);
+    if (show_begin) {
+        snprintf(line,sizeof(line),"%s - BEGIN",jump);centered_text(14,line,1,settings.paper);
     }
 }
 
@@ -392,7 +390,7 @@ void render_game(void)
         render_initials();
     } else if (phase==PHASE_WIN) {
         char confirm[32],line[96],clock[24];
-        controller_label(CHIRKY_BUTTON_PRIMARY,"B",confirm,sizeof(confirm));
+        chirky_input_label(host,CHIRKY_BUTTON_PRIMARY,confirm,sizeof(confirm));
         rectangle(8,middle-58,host->screen_width-16,116,settings.background);
         centered_text(middle+29,"TRANSMISSION",3,settings.phosphor);
         centered_text(middle-2,"RESTORED",2,settings.paper);
@@ -408,7 +406,7 @@ void render_game(void)
         centered_text(middle-48,line,1,settings.amber);
     } else if (phase==PHASE_GAME_OVER) {
         char confirm[32],line[64];
-        controller_label(CHIRKY_BUTTON_PRIMARY,"B",confirm,sizeof(confirm));
+        chirky_input_label(host,CHIRKY_BUTTON_PRIMARY,confirm,sizeof(confirm));
         rectangle(24,middle-42,host->screen_width-48,84,settings.background);
         centered_text(middle+15,"GAME OVER",3,settings.hazard);
         snprintf(line,sizeof(line),"%s - TITLE",confirm);

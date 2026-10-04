@@ -1,5 +1,6 @@
 #include "game_state.h"
 #include <assert.h>
+#include "text_encoding.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +45,7 @@ static void sound(void *ctx,const char *device,const char *path) {
 static void text(void *ctx,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)ctx;(void)r;(void)g;(void)b;
-    assert(x>=0 && x+(int)strlen(value)*6*scale-scale<=host->screen_width);
+    assert(x>=0 && x+(int)chirky_text_length(value)*6*scale-scale<=host->screen_width);
     assert(y-6*scale>=0 && y+scale<=host->screen_height);
     if (!strncmp(value,"LEVEL 1 - RELAY SHAFT",21)) saw_level_title=true;
     if (!strncmp(value,"LIVES ",6)) saw_lives=true;

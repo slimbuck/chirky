@@ -1,5 +1,6 @@
 #include "game_state.h"
 #include "splash_art.h"
+#include "input_labels.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -25,7 +26,7 @@ static void text(int x, int y, const char *s, int scale, unsigned int c)
 }
 static void center(int y, const char *s, int scale, unsigned int c)
 {
-    text((host->screen_width-((int)strlen(s)*6-1)*scale)/2, y, s, scale, c);
+    text((host->screen_width-((int)chirky_text_length(s)*6-1)*scale)/2, y, s, scale, c);
 }
 
 static void rose_art(int x, int y, char kind, bool cut)
@@ -154,12 +155,12 @@ static void hud(void)
 static void action_line(int y, enum chirky_button action, const char *verb)
 {
     char key[24], line[64];
-    if (host->button_label) host->button_label(host->context,action,key,sizeof(key));
-    else snprintf(key,sizeof(key),"%s",action == CHIRKY_BUTTON_SECONDARY ? "SECONDARY" : "PRIMARY");
+    chirky_input_label(host,action,key,sizeof(key));
     int key_width = (host->screen_width-48)/6-3-(int)strlen(verb);
     if (key_width < 1) key_width = 1;
     if (key_width > 22) key_width = 22;
-    snprintf(line,sizeof(line),"%.*s / %s",key_width,key,verb);
+    char visible[24];chirky_text_copy(visible,sizeof(visible),key,(size_t)key_width);
+    snprintf(line,sizeof(line),"%s / %s",visible,verb);
     center(y,line,1,0xf7d6b4);
 }
 
@@ -177,8 +178,8 @@ static void overlay(void)
         center(top+84,"ONE WASP STING ENDS THE RUN",1,0xe9b76a);
         action_line(top+101,CHIRKY_BUTTON_PRIMARY,"CHOP / HOLD TO SWEEP");
         action_line(top+113,CHIRKY_BUTTON_SECONDARY,"JUMP TO DODGE");
-        center(top+125,"MENU - PAUSE",1,0xaacb9f);
-        center(top+139,"PRESS A BUTTON TO BEGIN",1,0xffedcc);
+        action_line(top+125,CHIRKY_BUTTON_MENU,"PAUSE");
+        action_line(top+139,CHIRKY_BUTTON_PRIMARY,"BEGIN");
     } else {
         bool won = garden.phase == WON;
         center(top+18,won ? "GARDEN SAVED" : "GAME OVER",2,won ? 0xffb8c6 : 0xe9b76a);
@@ -201,9 +202,14 @@ static void render_scene(void)
         rect(0,top,host->screen_width,57,0x203d36);
         center(top+4,"CHOP BLACK ROSES BEFORE THE RAIN",1,0xffedcc);
         center(top+15,"DODGE THE WASP - ONE STING ENDS IT",1,0xe9b76a);
-        center(top+27,"PRIMARY CHOP / SECONDARY JUMP",1,0xaacb9f);
-        center(top+38,"ARROWS MOVE / MENU PAUSE",1,0xaacb9f);
-        center(top+49,"PRIMARY - BEGIN",1,0xffb8c6);
+        char primary[24],secondary[24],menu[24],move[100],line[160];
+        chirky_input_label(host,CHIRKY_BUTTON_PRIMARY,primary,sizeof(primary));
+        chirky_input_label(host,CHIRKY_BUTTON_SECONDARY,secondary,sizeof(secondary));
+        chirky_input_label(host,CHIRKY_BUTTON_MENU,menu,sizeof(menu));
+        chirky_direction_label(host,0,4,move,sizeof(move));
+        snprintf(line,sizeof(line),"%s CHOP / %s JUMP",primary,secondary);center(top+27,line,1,0xaacb9f);
+        snprintf(line,sizeof(line),"%s MOVE / %s PAUSE",move,menu);center(top+38,line,1,0xaacb9f);
+        snprintf(line,sizeof(line),"%s - BEGIN",primary);center(top+49,line,1,0xffb8c6);
         return;
     }
     int view_h = host->screen_height-42;

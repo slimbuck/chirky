@@ -87,6 +87,10 @@ half-pixel tie correction when interpolating large absolute atlas coordinates.
 Ordinary integer-destination sprites retain their original sampling convention.
 
 `rect_renderer_text` caches plain/outlined 5×7 glyph atlases at scales 1–8. Glyphs
+include the four UTF-8 direction arrows. ASCII and arrow cells occupy seven
+16-cell rows per style; UTF-8 symbols advance one cell, not one cell per byte.
+The menu renderer uses the same native 5×7 arrow masks alongside its Fredoka text.
+Glyphs
 are expanded exactly at load time, with a one-pixel black outline and transparent
 gutters, so source and destination dimensions match. Foreground tint multiplies
 white glyph pixels and leaves black outlines black. Font textures belong to the

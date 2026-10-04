@@ -1,8 +1,15 @@
 #ifndef CHIRKY_PIXEL_FONT_H
 #define CHIRKY_PIXEL_FONT_H
 #include <stdint.h>
-static const uint8_t *glyph(char character)
+#include "text_encoding.h"
+static const uint8_t *glyph(unsigned character)
 {
+    /* Left, up, right, down. Native 5x7 cells, shared by both renderers. */
+    static const uint8_t arrows[4][7]={
+        {0,4,8,31,8,4,0},{4,14,21,4,4,4,0},
+        {0,4,2,31,2,4,0},{0,4,4,4,21,14,4}
+    };
+    if(character>=0x2190 && character<=0x2193)return arrows[character-0x2190];
     static const uint8_t alphabet[26][7] = {
         {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},
         {14,17,16,16,16,17,14},{30,17,17,17,17,17,30},

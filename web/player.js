@@ -127,6 +127,52 @@ function playAssetSound(handle){
 }
 const {inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer}=window.ChirkyShell;
 let inputSettings=initialSettings,bindings={};
+// Presentation follows the most recently pressed device. Held pads and noisy
+// axes must not continually steal labels back from keyboard/touch users.
+let labelSource=typeof matchMedia==="function" && matchMedia("(any-pointer: coarse)").matches?"touch":"keyboard";
+let labelPad=null;
+const labelPadHeld=new Map();
+function updateLabelDevice(connected=pads()){
+  const present=new Set();
+  for(const pad of connected){
+    const identity=`${pad.index ?? 0}|${padIdentity(pad)}`;present.add(identity);
+    const held=new Set(rawPad(pad).map(v=>`${v.kind}:${v.code}:${v.direction}`));
+    const previous=labelPadHeld.get(identity) || new Set();
+    if([...held].some(v=>!previous.has(v))){labelSource="controller";labelPad=identity;}
+    labelPadHeld.set(identity,held);
+  }
+  for(const identity of labelPadHeld.keys())if(!present.has(identity))labelPadHeld.delete(identity);
+  if(labelSource==="controller" && !present.has(labelPad)){labelSource="keyboard";labelPad=null;}
+}
+function padBindingLabel(pad,binding){
+  if(!binding)return "UNBOUND";
+  if(binding.kind===2){
+    if(pad.mapping==="standard" && binding.code<4)
+      return `${binding.code<2?"L":"R"} STICK ${binding.code%2?(binding.direction<0?"UP":"DOWN"):(binding.direction<0?"LEFT":"RIGHT")}`;
+    return `AX${binding.code} ${binding.direction<0?"NEG":"POS"}`;
+  }
+  if(pad.mapping==="standard"){
+    // Positions are reliable; a standard Gamepad mapping doesn't specify the
+    // printed legends (Xbox, Nintendo and PlayStation all differ).
+    const names=["SOUTH","EAST","WEST","NORTH","L1","R1","L2","R2","SELECT","START","L STICK","R STICK","↑","↓","←","→","HOME"];
+    return names[binding.code] || `BTN ${binding.code}`;
+  }
+  return `BTN ${binding.code}`;
+}
+function onButtonLabel(action){
+  if(!Number.isInteger(action) || action<0 || action>=8)return "UNBOUND";
+  if(labelSource==="touch")return ["←","→","↑","↓","A","B","START","MENU"][action];
+  if(labelSource==="controller"){
+    const pad=pads().find(p=>`${p.index ?? 0}|${padIdentity(p)}`===labelPad);
+    if(pad){
+      const saved=padSettings[padIdentity(pad)];
+      const binding=validPadMap(saved)?saved[action]:pad.mapping==="standard"?
+        {kind:1,code:[14,15,12,13,0,2,9,8][action],direction:0}:null;
+      return padBindingLabel(pad,binding);
+    }
+  }
+  return keyName(inputSettings.keys[action]).toUpperCase();
+}
 const keyCodes=[...new Set([...defaultKeys,...Array.from({length:26},(_,i)=>"Key"+String.fromCharCode(65+i)),
   ...Array.from({length:10},(_,i)=>"Digit"+i),...Array.from({length:10},(_,i)=>"Numpad"+i),
   "Space","ShiftLeft","ShiftRight","ControlLeft","ControlRight","AltLeft","AltRight","Backspace","Tab",
@@ -256,11 +302,11 @@ function consoleGesture(){
 window.addEventListener("keydown",event=>{
   const capturing=shell?._web_capture_keyboard()===1;
   if(event.code==="F1"){
-    event.preventDefault();if(!event.repeat)cancelPressed=true;unlock();return;
+    labelSource="keyboard";event.preventDefault();if(!event.repeat)cancelPressed=true;unlock();return;
   }
   if(capturing || event.code in bindings){
     event.preventDefault();if(event.repeat)return;
-    keys.add(event.code);refreshKeyFeedback();unlock();
+    labelSource="keyboard";keys.add(event.code);refreshKeyFeedback();unlock();
     if(capturing){const code=keyCodes.indexOf(event.code);if(code>=0)shell._web_capture(1,code,0);}
     else {pending|=1<<bindings[event.code];consoleGesture();}
   }
@@ -310,7 +356,7 @@ function moveDpad(event){
     if(Math.abs(x)>Math.abs(y)*diagonal)value|=x<0?1:2;
     if(Math.abs(y)>Math.abs(x)*diagonal)value|=y<0?4:8;
   }
-  touch.set(dpadPointer,value);dpadPending=value;refreshTouchFeedback();
+  labelSource="touch";touch.set(dpadPointer,value);dpadPending=value;refreshTouchFeedback();
 }
 dpad.onpointerdown=event=>{
   if(event.button>0 || dpadPointer!==null)return;
@@ -329,7 +375,7 @@ dpad.onpointercancel=dpad.onlostpointercapture=event=>{
 dpad.oncontextmenu=event=>event.preventDefault();
 document.querySelectorAll("[data-button]").forEach(button=>{
   if(Number(button.dataset.button)<4)return; // Directions share the sliding pad.
-  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();button.setPointerCapture(event.pointerId);touch.set(event.pointerId,1<<Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
+  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();labelSource="touch";button.setPointerCapture(event.pointerId);touch.set(event.pointerId,1<<Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
   button.onpointerup=event=>{if(touch.has(event.pointerId))consoleGesture();touch.delete(event.pointerId);refreshTouchFeedback();};
   button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);fullscreenQueued=false;refreshTouchFeedback();};
   button.oncontextmenu=event=>event.preventDefault();
@@ -337,6 +383,7 @@ document.querySelectorAll("[data-button]").forEach(button=>{
 function frame(now){
   if(leaving)return;
   const current=mask(),connected=pads();
+  updateLabelDevice(connected);
   const capturing=shell._web_capture_keyboard();
   if(capturing!==0)mappingPad=null;
   if(capturing===0){
@@ -410,7 +457,7 @@ async function createModule({default:create},wasmBinary){
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
-    onSaveMapping,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
+    onButtonLabel,onSaveMapping,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();

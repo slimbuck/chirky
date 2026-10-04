@@ -63,6 +63,33 @@ test('logical keys, standard gamepads, raw USB axes and buttons',()=>{
   p.run('navigator.getGamepads=()=>[]');assert.equal(p.run('mask()'),0,'disconnect releases inputs');
   assert.match(p.storage.get('chirky.controllers.v1'),/USB SNES/);
 });
+test('physical labels follow remaps and the last pressed device without changing logical inputs',()=>{
+  const p=player();
+  assert.equal(p.run('onButtonLabel(4)'), 'X');
+  assert.equal(p.run('onButtonLabel(0)'), '←');
+  assert.equal(p.run('onButtonLabel(2)'), '↑');
+  p.run('var values=defaultKeys.map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ");onSaveMapping(true,values)');
+  assert.equal(p.run('onButtonLabel(4)'), 'Q');
+  p.run('var pad={index:0,id:"standard",mapping:"standard",buttons:Array.from({length:16},(_,i)=>({pressed:i===0})),axes:[0,0]};navigator.getGamepads=()=>[pad];updateLabelDevice()');
+  assert.equal(p.run('onButtonLabel(4)'), 'SOUTH');
+  assert.equal(p.run('onButtonLabel(0)'), '←');
+  assert.equal(p.run('mask()'),16);
+  p.events.keydown({code:'KeyQ',preventDefault(){}});
+  p.run('updateLabelDevice()');
+  assert.equal(p.run('onButtonLabel(4)'), 'Q', 'a held pad does not steal keyboard prompts');
+  p.touch[4].onpointerdown({pointerId:1,preventDefault(){}});
+  p.run('updateLabelDevice()');
+  assert.equal(p.run('onButtonLabel(4)'), 'A');
+  assert.equal(p.run('onButtonLabel(5)'), 'B');
+  p.run('pad.buttons[2].pressed=true;updateLabelDevice();mappingPad=padIdentity(pad);onSaveMapping(false,[14,15,12,13,1,2,9,8].map(code=>({kind:1,code,direction:0})))');
+  assert.equal(p.run('onButtonLabel(4)'), 'EAST', 'remapping changes the physical legend');
+  p.run('pad.id="unknown adapter";pad.mapping="";updateLabelDevice();mappingPad=padIdentity(pad);onSaveMapping(false,[14,15,12,13,1,2,9,8].map(code=>({kind:1,code,direction:0})))');
+  assert.equal(p.run('onButtonLabel(4)'), 'BTN 1', 'unknown USB legends are not guessed');
+  assert.equal(p.run('onButtonLabel(-1)'), 'UNBOUND');
+  p.run('navigator.getGamepads=()=>[];updateLabelDevice()');
+  assert.equal(p.run('onButtonLabel(4)'), 'Q');
+});
+
 test('mapping commits atomically, rejects duplicates and preserves old bindings if storage fails',()=>{
   const p=player();
   p.run('var values=defaultKeys.map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ")');

@@ -295,6 +295,7 @@ struct host {
     struct controller_binding bindings[CHIRKY_BUTTON_COUNT];
     struct controller_binding keyboard_bindings[CHIRKY_BUTTON_COUNT];
     bool last_keyboard;
+    enum controller_label_profile controller_labels;
     int safe_x,safe_y,safe_offset_x,safe_offset_y;
 
 };
@@ -397,9 +398,6 @@ static const char *const button_config_keys[CHIRKY_BUTTON_COUNT] = {
     "bind_primary", "bind_secondary", "bind_start", "bind_menu"
 };
 
-static const char *const button_names[CHIRKY_BUTTON_COUNT] = {
-    "LEFT", "RIGHT", "UP", "DOWN", "PRIMARY", "SECONDARY", "START", "MENU"
-};
 
 static const char *const keyboard_config_keys[CHIRKY_BUTTON_COUNT] = {
     "key_left", "key_right", "key_up", "key_down",
@@ -495,10 +493,12 @@ static void keyboard_name(const struct controller_binding *binding, char *name, 
     if (binding->kind==BINDING_NONE) { copy_text(name,capacity,"UNBOUND"); return; }
     const char *label=NULL;
     switch (binding->code) {
-        case KEY_UP: label="UP"; break; case KEY_DOWN: label="DOWN"; break;
-        case KEY_LEFT: label="LEFT"; break; case KEY_RIGHT: label="RIGHT"; break;
+        case KEY_UP: label=CHIRKY_ARROW_UP; break; case KEY_DOWN: label=CHIRKY_ARROW_DOWN; break;
+        case KEY_LEFT: label=CHIRKY_ARROW_LEFT; break; case KEY_RIGHT: label=CHIRKY_ARROW_RIGHT; break;
         case KEY_ENTER: label="ENTER"; break; case KEY_ESC: label="ESC"; break;
         case KEY_SPACE: label="SPACE"; break; case KEY_TAB: label="TAB"; break;
+        case KEY_BACKSPACE: label="BACKSPACE"; break; case KEY_DELETE: label="DELETE"; break;
+        case KEY_LEFTALT: label="LEFT ALT"; break; case KEY_RIGHTALT: label="RIGHT ALT"; break;
         case KEY_F1: label="F1"; break; case KEY_F12: label="F12"; break;
         case KEY_LEFTSHIFT: label="LEFT SHIFT"; break; case KEY_RIGHTSHIFT: label="RIGHT SHIFT"; break;
         case KEY_LEFTCTRL: label="LEFT CTRL"; break; case KEY_RIGHTCTRL: label="RIGHT CTRL"; break;
@@ -506,14 +506,25 @@ static void keyboard_name(const struct controller_binding *binding, char *name, 
     static const unsigned int letters[]={KEY_A,KEY_B,KEY_C,KEY_D,KEY_E,KEY_F,KEY_G,KEY_H,KEY_I,KEY_J,KEY_K,KEY_L,KEY_M,KEY_N,KEY_O,KEY_P,KEY_Q,KEY_R,KEY_S,KEY_T,KEY_U,KEY_V,KEY_W,KEY_X,KEY_Y,KEY_Z};
     if (label) { copy_text(name,capacity,label); return; }
     for (int i=0;i<26;i++) if (binding->code==letters[i]) { snprintf(name,capacity,"%c",'A'+i); return; }
+    if(binding->code>=KEY_1 && binding->code<=KEY_0){snprintf(name,capacity,"%u",(binding->code-KEY_1+1)%10);return;}
+    if(binding->code>=KEY_F1 && binding->code<=KEY_F10){snprintf(name,capacity,"F%u",binding->code-KEY_F1+1);return;}
+    if(binding->code==KEY_F11){copy_text(name,capacity,"F11");return;}
     snprintf(name,capacity,"KEY %u",binding->code);
 }
 
 static void button_label(void *context, enum chirky_button button,
                          char *text, size_t capacity)
 {
-    (void)context;
-    copy_text(text,capacity,button>=0 && button<CHIRKY_BUTTON_COUNT ? button_names[button] : "UNBOUND");
+    struct host *host=context;
+    if(button<0 || button>=CHIRKY_BUTTON_COUNT){copy_text(text,capacity,"UNBOUND");return;}
+    bool keyboard=host->last_keyboard;
+    if(!keyboard) {
+        bool controller=false;
+        for(int i=0;i<host->inputs.count;i++)controller|=host->inputs.devices[i].controller;
+        keyboard=!controller;
+    }
+    if(keyboard)keyboard_name(&host->keyboard_bindings[button],text,capacity);
+    else controller_binding_label(&host->bindings[button],host->controller_labels,text,capacity);
 }
 
 static bool draw_mesh(void *context,const struct chirky_mesh_vertex *v,size_t count,float ambient)
@@ -680,6 +691,7 @@ static void load_host_config(struct host *host)
 {
     default_bindings(host->bindings);
     default_keyboard_bindings(host->keyboard_bindings);
+    host->controller_labels=CONTROLLER_LABEL_SNES_PICO;
     host->safe_x=CHIRKY_SAFE_X; host->safe_y=CHIRKY_SAFE_Y;
     host->safe_offset_x=host->safe_offset_y=0;
     host->frame_timing_enabled=false;
@@ -701,6 +713,8 @@ static void load_host_config(struct host *host)
         else if (!strcmp(key,"safe_offset_x")) { int n=atoi(value); if(n>=-32 && n<=32)host->safe_offset_x=n; }
         else if (!strcmp(key,"safe_offset_y")) { int n=atoi(value); if(n>=-24 && n<=24)host->safe_offset_y=n; }
         else if (!strcmp(key,"input_version")) input_version=atoi(value);
+        else if (!strcmp(key,"controller_labels")) host->controller_labels=
+            !strcmp(value,"snes-pico")?CONTROLLER_LABEL_SNES_PICO:CONTROLLER_LABEL_GENERIC;
         else {
             int button=binding_button_for_key(key), old=legacy_binding_for_key(key), previous=snes_binding_for_key(key);
             struct controller_binding parsed;

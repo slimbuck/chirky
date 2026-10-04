@@ -2,6 +2,7 @@
 #include "../src/asset_store.h"
 #include "../games/bramble-hollow/game_state.h"
 #include <assert.h>
+#include "text_encoding.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -32,7 +33,7 @@ static void lettering(void *context, int x, int y, const char *value, int scale,
                       unsigned char r, unsigned char g, unsigned char b)
 {
     (void)context; (void)r; (void)g; (void)b;
-    assert(value && scale > 0 && x >= 0 && x + (int)strlen(value) * 6 * scale - scale <= 288);
+    assert(value && scale > 0 && x >= 0 && x + (int)chirky_text_length(value) * 6 * scale - scale <= 288);
     assert(y - 6 * scale >= 0 && y + scale <= 216); texts++;
 }
 static void sprite(void *context, chirky_asset asset, int x, int y, int width, int height,

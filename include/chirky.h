@@ -59,16 +59,19 @@ struct chirky_host_api {
                       unsigned char blue);
     void (*play_sound)(void *context, const char *device, const char *path);
     /* Draws the built-in 5x7 font. It supports A-Z, a-z, 0-9, space, dash,
-       slash, dot and colon; unsupported characters use the question glyph.
+       slash, dot, colon and UTF-8 arrows U+2190 through U+2193; unsupported
+       characters use the question glyph.
        x is the left edge and y is the bottom-left coordinate of the glyphs'
        top pixel row; subsequent rows descend by scale pixels. Characters
        advance by 6*scale. */
     void (*draw_text)(void *context, int x, int y, const char *text, int scale,
                       unsigned char red, unsigned char green,
                       unsigned char blue);
-    /* Writes the current host-facing label for a logical Chirky button as a
-       NUL-terminated string when capacity is nonzero. Games should display
-       this label instead of naming a keyboard key. */
+    /* Writes the mapped physical control for the most recently used input
+       device (e.g. B, SELECT, X), NUL-terminated when capacity is nonzero.
+       Query while drawing: remapping/device changes update the label live.
+       Unknown controls use button/axis identifiers; unavailable is UNBOUND.
+       This is presentation only; games still use logical button enums. */
     void (*button_label)(void *context, enum chirky_button action,
                          char *text, size_t capacity);
     /* Optional nested CPU scopes. NULL outside a bounded diagnostic capture. */

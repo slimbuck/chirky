@@ -220,7 +220,13 @@ static void game_render(void)
                             rgb[0], rgb[1], rgb[2]);
         }
     }
-    host->draw_text(host->context,10,12,"PRIMARY MOVE / SECONDARY SOUND",1,238,240,232);
+    char primary[24]="UNBOUND",secondary[24]="UNBOUND",line[80];
+    if(host->button_label) {
+        host->button_label(host->context,CHIRKY_BUTTON_PRIMARY,primary,sizeof(primary));
+        host->button_label(host->context,CHIRKY_BUTTON_SECONDARY,secondary,sizeof(secondary));
+    }
+    snprintf(line,sizeof(line),"%s MOVE / %s SOUND",primary,secondary);
+    host->draw_text(host->context,10,12,line,1,238,240,232);
 }
 
 static const struct chirky_game_api api = {

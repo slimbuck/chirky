@@ -294,20 +294,20 @@ bool rect_renderer_text(struct rect_renderer *r,int x,int y,const char *text,int
 {
     if(!r || !r->program || !text || scale<1 || scale>8)return false;
     struct rect_renderer_texture *atlas=&r->fonts[scale-1];
-    const int cw=5*scale+4,ch=7*scale+4,width=16*cw,height=12*ch;
+    const int cw=5*scale+4,ch=7*scale+4,width=16*cw,height=14*ch;
     if(!atlas->id) {
         unsigned char *pixels=calloc((size_t)width*height,4);
         if(!pixels)return false;
         /* Two rows of glyph sets: plain and a one-pixel black dilation.
            Each cell has a transparent gutter outside the outline. No resampling. */
-        for(int style=0;style<2;style++)for(int c=0;c<96;c++) {
-            const uint8_t *rows=glyph((char)(c+32));
+        for(int style=0;style<2;style++)for(int c=0;c<100;c++) {
+            const uint8_t *rows=glyph(c<96?(unsigned)c+32:0x2190u+c-96);
             for(int yy=-1;yy<=7*scale;yy++)for(int xx=-1;xx<=5*scale;xx++) {
                 bool ink=font_pixel(rows,xx,yy,scale),border=false;
                 if(style && !ink)for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++)
                     border|=font_pixel(rows,xx+dx,yy+dy,scale);
                 if(!ink && !border)continue;
-                size_t i=((size_t)((c/16+style*6)*ch+yy+2)*width+c%16*cw+xx+2)*4;
+                size_t i=((size_t)((c/16+style*7)*ch+yy+2)*width+c%16*cw+xx+2)*4;
                 pixels[i]=pixels[i+1]=pixels[i+2]=ink?255:0;pixels[i+3]=255;
             }
         }
@@ -317,11 +317,12 @@ bool rect_renderer_text(struct rect_renderer *r,int x,int y,const char *text,int
     int edge=outline?1:0;
     int64_t px=x,bottom=(int64_t)y-6*scale-edge;
     if(bottom<INT_MIN || bottom>INT_MAX)return true;
-    for(const unsigned char *p=(const unsigned char *)text;*p;p++,px+=6*scale) {
-        if(*p==' ' || px-edge<INT_MIN || px-edge>INT_MAX)continue;
-        unsigned c=(*p>=32 && *p<128?*p:'?')-32;
+    for(const char *p=text;*p;px+=6*scale) {
+        unsigned code=chirky_text_next(&p);
+        if(code==' ' || px-edge<INT_MIN || px-edge>INT_MAX)continue;
+        unsigned c=code>=0x2190 && code<=0x2193?96+code-0x2190:(code>=32 && code<128?code:'?')-32;
         rect_renderer_sprite_clipped(r,atlas,(int)px-edge,(int)bottom,5*scale+2*edge,7*scale+2*edge,
-            c%16*cw+2-edge,(c/16+(outline?6:0))*ch+2-edge,5*scale+2*edge,7*scale+2*edge,
+            c%16*cw+2-edge,(c/16+(outline?7:0))*ch+2-edge,5*scale+2*edge,7*scale+2*edge,
             red,green,blue,255,false,clip_x,clip_y,clip_w,clip_h);
     }
     return true;

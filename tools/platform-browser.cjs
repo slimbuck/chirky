@@ -11,7 +11,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Renderer-owned font atlases survive game unload, one allocation per size.
 function persistentTextureCount(audit) {
   const fonts=audit.uploads.filter(({width,height})=>
-    Array.from({length:8},(_,i)=>i+1).some(s=>width===(5*s+4)*16 && height===(7*s+4)*12));
+    Array.from({length:8},(_,i)=>i+1).some(s=>width===(5*s+4)*16 && height===(7*s+4)*14));
   const sizes=new Set(fonts.map(({width,height})=>`${width}x${height}`));
   assert.equal(fonts.length,sizes.size,'Each font size uploads once per renderer lifetime');
   return 1+sizes.size; // Launcher mascot plus renderer font cache.

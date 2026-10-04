@@ -82,6 +82,14 @@ neutral value has been observed. Some digital USB controllers advertise unused
 sticks fixed at their minimum; those must not block console navigation. Explicit
 axis bindings still use the current device value for logical input.
 
+The existing `button_label` callback resolves a logical action through the
+current physical binding for the last-used input source. Linux keeps the tested
+SNES/Pico legends in a configurable host profile; unknown layouts can use raw
+button/axis identifiers. Browser labels follow keyboard, touch or the active
+gamepad and its saved mapping. Games query labels during rendering and never
+interpret device identities. `include/input_labels.h` provides portable prompt
+helpers without changing the input ABI or game update logic.
+
 ## Web platform
 
 `src/platform/web/host.c` owns the Emscripten/WebGL bridge.

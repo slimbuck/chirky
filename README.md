@@ -156,6 +156,10 @@ Run from SSH while the CRT is connected:
 Chirky exposes eight logical inputs: **Left, Right, Up, Down, Primary,
 Secondary, Start and Menu**. Games use these names; physical controllers and
 keyboards are mapped by the host. Both platforms use the same game-facing API.
+On-screen prompts show the mapped physical control, rather than these internal
+action names, and follow the last input device used. Remapping changes prompts
+immediately without changing game logic. Setup asks for action roles such as
+"Confirm / main action"; normal menus and games show the assigned button/key.
 
 | Chirky input | Default SNES controller | Default keyboard |
 | --- | --- | --- |
@@ -167,6 +171,12 @@ keyboards are mapped by the host. Both platforms use the same game-facing API.
 
 The Pi defaults match the tested SNES/Pico adapter. See the
 [controller wiring guide](docs/snes-pico-usb-controller.md) for that hardware.
+`controller_labels=snes-pico` in `config/host.conf` selects its physical legends,
+with directions labelled `← → ↑ ↓`. Keyboard arrow keys use the same symbols;
+remapped letter keys retain their letters. This is also the compatibility
+default for existing Pi configurations. For other
+adapters use `controller_labels=generic` to display raw button/axis identifiers
+until a matching legend profile is added. This setting does not change bindings.
 
 - Primary selects menu items; Secondary goes back. Menu pauses gameplay.
 - Rosey Chop: Primary chops and Secondary jumps.
@@ -186,7 +196,8 @@ two controller buttons for one second cancels controller setup. F1/F12 remain
 reserved. Cancellation and failed saves preserve the previous mapping.
 
 Green controller and gold keyboard indicators show both sources independently.
-**Test buttons** suspends navigation; hold Secondary for one second or press F1
+**Test buttons** suspends navigation; hold the displayed back control (the
+Secondary binding) for one second or press F1
 to return. Screen transitions consume the opening press and wait for two neutral
 updates before accepting input on the next screen.
 

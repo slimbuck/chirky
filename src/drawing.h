@@ -15,8 +15,8 @@ static inline bool chirky_clip_rect(const struct chirky_host_api *api,int *x,int
 static inline void chirky_draw_text_pixels(const struct chirky_host_api *api,int x,int y,
     const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 {
-    for(;*value;value++,x+=6*scale) {
-        const uint8_t *rows=glyph(*value);
+    for(;*value;x+=6*scale) {
+        const uint8_t *rows=glyph(chirky_text_next(&value));
         for(int row=0;row<7;row++)for(int col=0;col<5;col++)
             if(rows[row]&(1<<(4-col)))api->fill_rect(api->context,x+col*scale,y-row*scale,scale,scale,r,g,b);
     }

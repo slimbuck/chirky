@@ -129,6 +129,14 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
 `python tools/build-launcher-art.py`; see `assets/launcher/README.md`.
 
 - Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
+- Console and game prompts resolve those internal actions to current physical
+  controls. The last pressed device selects keyboard, touch or controller
+  labels; a held pad does not override a subsequent keyboard/touch press.
+  Keyboard remaps are reflected immediately; touch shows A/B and Menu/Start.
+  Arrow keys and D-pad directions use `← → ↑ ↓`; letter bindings keep their letters.
+  Standard gamepads use positional face labels (South/East/West/North), since
+  standard mapping does not identify the printed legends. Raw adapters use
+  button/axis identifiers. Disconnecting the active pad restores keyboard labels.
 - The desktop keyboard guide uses chunky keycaps: an inverted-T movement cluster,
   coral Primary, turquoise Secondary, and cream Start/Menu keys. Labels follow
   saved keyboard mappings and depress while the corresponding key is held.

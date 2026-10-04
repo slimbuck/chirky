@@ -2,6 +2,7 @@
 #define CHIRKY_CONSOLE_UI_H
 #include "chirky.h"
 #include "input_setup.h"
+#include "input_labels.h"
 #include "launcher_config.h"
 #include "launcher_wordmark.h"
 #include "splash_art.h"
@@ -9,7 +10,7 @@
 #include "launcher_font.h"
 #include "launcher_icons.h"
 
-static const char *const console_button_names[]={"Left","Right","Up","Down","Primary","Secondary","Start","Menu"};
+static const char *const console_button_names[]={"Move left","Move right","Move up","Move down","Confirm / main action","Back / other action","Start action","Pause / menu"};
 static inline int console_menu_move(int *selected,int count,int direction)
 {
     int next=*selected+direction;
@@ -44,23 +45,38 @@ static inline void launcher_round(const struct chirky_host_api *api,int x,int y,
     launcher_rect(api,x+1,y+2,w-2,h-4,colour,low,high);
     launcher_rect(api,x,y+4,w,h-8,colour,low,high);
 }
+static inline int launcher_character_width(unsigned c,int font)
+{
+    if(c>=0x2190 && c<=0x2193)return font==2?12:7;
+    if(c<32 || c>126)c='?';
+    return launcher_font_advance[font][c-32];
+}
 static inline int launcher_text_width(const char *text,int font)
 {
-    int width=0;for(;*text;text++){unsigned c=(unsigned char)*text;if(c<32 || c>126)c='?';width+=launcher_font_advance[font][c-32];}return width;
+    int width=0;while(*text)width+=launcher_character_width(chirky_text_next(&text),font);return width;
 }
 static inline void launcher_text(const struct chirky_host_api *api,int x,int top,const char *text,int font,
     struct launcher_colour colour,struct launcher_colour background,int right,int low,int high)
 {
-    for(;*text;text++) {
-        unsigned c=(unsigned char)*text;if(c<32 || c>126)c='?';c-=32;
-        if(x+launcher_font_advance[font][c]>right)break;
+    while(*text) {
+        unsigned c=chirky_text_next(&text);int advance=launcher_character_width(c,font);
+        if(x+advance>right)break;
+        if(c>=0x2190 && c<=0x2193) {
+            const uint8_t *rows=glyph(c);int scale=font==2?2:1;
+            int y=top+(font==2?1:font==1?-3:-4);
+            for(int row=0;row<7;row++)for(int col=0;col<5;col++)
+                if(rows[row]&(1u<<(4-col)))launcher_rect(api,x+col*scale,y-row*scale,scale,scale,colour,low,high);
+            x+=advance;continue;
+        }
+        if(c<32 || c>126)c='?';
+        c-=32;
         for(int row=0;row<20;row++)for(int col=0;col<16;) {
             unsigned coverage=(launcher_font_mask[font][c][row]>>(col*2))&3u;
             if(!coverage){col++;continue;}
             int end=col+1;while(end<16 && ((launcher_font_mask[font][c][row]>>(end*2))&3u)==coverage)end++;
             launcher_rect(api,x+col,top+2-row,end-col,1,launcher_mix(colour,background,(int)coverage*85),low,high);col=end;
         }
-        x+=launcher_font_advance[font][c];
+        x+=advance;
     }
 }
 static inline void launcher_mascot(const struct chirky_host_api *api,const struct splash_art *art,int x,int y)
@@ -92,14 +108,29 @@ static inline void console_menu_text(const struct chirky_host_api *api,int x,int
 {
     launcher_text(api,x,top,text,scale>1?2:0,(struct launcher_colour){r,g,b},launcher_navy,api->screen_width-8,0,api->screen_height);
 }
+static inline void console_prompt_pair(const struct chirky_host_api *api,const char *first,const char *second,int left,int right,int top)
+{
+    char line[160];snprintf(line,sizeof(line),"%s   %s",first,second);
+    if(launcher_text_width(line,0)<=right-left) {
+        int x=left+(right-left-launcher_text_width(line,0))/2;
+        launcher_text(api,x,top,line,0,console_muted,launcher_navy,right,0,api->screen_height);
+    } else {
+        const char *lines[]={first,second};
+        for(int i=0;i<2;i++) {
+            int x=left+(right-left-launcher_text_width(lines[i],0))/2;if(x<left)x=left;
+            launcher_text(api,x,top+6-i*12,lines[i],0,console_muted,launcher_navy,right,0,api->screen_height);
+        }
+    }
+}
 static inline void console_menu_footer(const struct chirky_host_api *api,bool can_go_back)
 {
-    char primary[32]="Primary",secondary[32]="Secondary",line[96];
-    if(api->button_label){api->button_label(api->context,CHIRKY_BUTTON_PRIMARY,primary,sizeof(primary));api->button_label(api->context,CHIRKY_BUTTON_SECONDARY,secondary,sizeof(secondary));}
-    if(can_go_back)snprintf(line,sizeof(line),"%s select   %s back",primary,secondary);
-    else snprintf(line,sizeof(line),"Up/Down choose   %s select",primary);
-    int x=(api->screen_width-launcher_text_width(line,0))/2;if(x<8)x=8;
-    launcher_text(api,x,17,line,0,console_muted,launcher_navy,api->screen_width-8,0,api->screen_height);
+    char primary[24],secondary[24],direction[52],first[64],second[40];
+    chirky_input_label(api,CHIRKY_BUTTON_PRIMARY,primary,sizeof(primary));
+    chirky_input_label(api,CHIRKY_BUTTON_SECONDARY,secondary,sizeof(secondary));
+    chirky_direction_label(api,CHIRKY_BUTTON_UP,2,direction,sizeof(direction));
+    if(can_go_back){snprintf(first,sizeof(first),"%s select",primary);snprintf(second,sizeof(second),"%s back",secondary);}
+    else{snprintf(first,sizeof(first),"%s choose",direction);snprintf(second,sizeof(second),"%s select",primary);}
+    console_prompt_pair(api,first,second,8,api->screen_width-8,17);
 }
 static inline void console_draw_loading(const struct chirky_host_api *api)
 {
@@ -172,19 +203,21 @@ static inline void console_draw_settings_menu(const struct chirky_host_api *api,
 }
 static inline void console_draw_live_inputs(const struct chirky_host_api *api,unsigned pad_mask,unsigned key_mask,const char *pad_line,const char *key_line)
 {
-    int h=api->screen_height,extra=(api->screen_width-24-208)/4;
-    const int widths[]={58+extra,66+extra,42+extra,42+extra};
+    int h=api->screen_height,cell=(api->screen_width-24)/4;
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         bool pad=(pad_mask&(1u<<i))!=0,key=(key_mask&(1u<<i))!=0;
-        int cell=widths[i%4],x=12,y=h-108-(i/4)*26;
-        for(int column=0;column<i%4;column++)x+=widths[column];
-        launcher_round(api,x,y,cell-3,22,console_card,0,h);
-        launcher_text(api,x+3,y+19,console_button_names[i],0,pad||key?launcher_cream:console_muted,console_card,x+cell-4,0,h);
+        int x=12+(i%4)*cell,y=h-108-(i/4)*32;
+        launcher_round(api,x,y,cell-3,30,console_card,0,h);
+        char label[24];chirky_input_label(api,(enum chirky_button)i,label,sizeof(label));
+        char *split=launcher_text_width(label,0)>cell-9?strrchr(label,' '):NULL;
+        if(split)*split++=0;
+        launcher_text(api,x+3,y+27,label,0,pad||key?launcher_cream:console_muted,console_card,x+cell-4,0,h);
+        if(split)launcher_text(api,x+3,y+15,split,0,pad||key?launcher_cream:console_muted,console_card,x+cell-4,0,h);
         launcher_rect(api,x+3,y+3,(cell-9)/2,3,pad?(struct launcher_colour){93,220,153}:launcher_navy,0,h);
         launcher_rect(api,x+cell/2,y+3,(cell-9)/2,3,key?launcher_gold:launcher_navy,0,h);
     }
-    launcher_text(api,12,h-144,pad_line,0,(struct launcher_colour){93,220,153},launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,h-158,key_line,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,h-152,pad_line,0,(struct launcher_colour){93,220,153},launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,h-164,key_line,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
 }
 static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset)
 {
@@ -192,7 +225,8 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
     if(setup->active) {
         int step=setup->step<CHIRKY_BUTTON_COUNT?setup->step:CHIRKY_BUTTON_COUNT-1;
         const char *name=console_button_names[step];
-        launcher_text(api,(api->screen_width-launcher_text_width(name,2))/2,h-83,name,2,launcher_gold,launcher_navy,api->screen_width-12,0,h);
+        int font=launcher_text_width(name,2)>api->screen_width-24?1:2;
+        launcher_text(api,(api->screen_width-launcher_text_width(name,font))/2,h-83,name,font,launcher_gold,launcher_navy,api->screen_width-12,0,h);
         char line[80];snprintf(line,sizeof(line),"%d of %d  -  %s",step+1,CHIRKY_BUTTON_COUNT,setup->wait_release?"Release all inputs":"Press now");
         launcher_text(api,(api->screen_width-launcher_text_width(line,0))/2,h-107,line,0,launcher_cream,launcher_navy,api->screen_width-12,0,h);
         int cell=(api->screen_width-32)/CHIRKY_BUTTON_COUNT;
@@ -201,7 +235,8 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         const char *hint=setup->keyboard?"F1 cancels - saves after all 8":"Hold two buttons to cancel";
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else if(input_test) {
-        const char *hint="Hold Secondary to go back";
+        char label[24],hint[64];chirky_input_label(api,CHIRKY_BUTTON_SECONDARY,label,sizeof(label));
+        snprintf(hint,sizeof(hint),"Hold %s to go back",label);
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
         const char *labels[]={"Map controller","Map keyboard","Test buttons","Back"};
@@ -223,7 +258,11 @@ static inline void console_draw_pause_menu(const struct chirky_host_api *api,int
         launcher_round(api,x+10,cy-13,width-20,26,background,0,api->screen_height);
         launcher_text(api,x+20,cy+8,labels[i],1,i==selected?launcher_navy:launcher_cream,background,x+width-18,0,api->screen_height);
     }
-    launcher_text(api,x+14,y+19,"Primary select   Secondary back",0,console_muted,launcher_navy,x+width-12,0,api->screen_height);
+    char primary[24],secondary[24],first[40],second[40];
+    chirky_input_label(api,CHIRKY_BUTTON_PRIMARY,primary,sizeof(primary));
+    chirky_input_label(api,CHIRKY_BUTTON_SECONDARY,secondary,sizeof(secondary));
+    snprintf(first,sizeof(first),"%s select",primary);snprintf(second,sizeof(second),"%s back",secondary);
+    console_prompt_pair(api,first,second,x+14,x+width-12,y+19);
 }
 
 #endif

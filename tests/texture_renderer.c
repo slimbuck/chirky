@@ -88,7 +88,9 @@ static void font_rect(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned
 static void font_tests(void)
 {
     struct chirky_host_api api={.screen_width=288,.screen_height=216,.fill_rect=font_rect};api.context=&api;
-    const char *lines[]={"ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", "0123456789 -/.:?@"};
+    const char *lines[]={CHIRKY_ARROW_LEFT CHIRKY_ARROW_RIGHT CHIRKY_ARROW_UP CHIRKY_ARROW_DOWN "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        CHIRKY_ARROW_LEFT CHIRKY_ARROW_RIGHT CHIRKY_ARROW_UP CHIRKY_ARROW_DOWN "abcdefghijklmnopqrstuvwxyz",
+        CHIRKY_ARROW_LEFT CHIRKY_ARROW_RIGHT CHIRKY_ARROW_UP CHIRKY_ARROW_DOWN "0123456789 -/.:?@"};
     for(int scale=1;scale<=8;scale++)for(int outline=0;outline<2;outline++) {
         begin();
         for(int line=0;line<3;line++) {
@@ -103,7 +105,7 @@ static void font_tests(void)
             int x=line==0?-3:line==1?270:4,y=line==0?3:line==1?213:125;
             assert(rect_renderer_text(&renderer,x+13,y+11,lines[line],scale,197,227,143,outline,13,11,288,216));
         }
-        assert(!renderer.rectangles && renderer.sprites<=68);
+        assert(!renderer.rectangles && renderer.sprites<=80);
         compare(outline?"outlined glyph atlas matches all original pixels and clipping":"plain glyph atlas matches all original pixels and clipping",0);
     }
 }
