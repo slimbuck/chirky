@@ -454,8 +454,39 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     event(host,1,EV_KEY,KEY_R,0);update_host(host);
 }
 
+static void check_separate_devices(void)
+{
+    struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
+    h.controller_labels=CONTROLLER_LABEL_SNES_PICO;
+    h.inputs.count=3;
+    for(int i=0;i<2;i++) {
+        h.inputs.devices[i].controller=true;h.inputs.devices[i].connection_id=3+i;
+    }
+    event(&h,0,EV_KEY,BTN_EAST,1);update_controller_buttons(&h);update_device_inputs(&h);
+    assert(h.inputs.state.buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(h.inputs.state.device_count==3 && h.inputs.state.devices[1].id==3 && h.inputs.state.devices[2].id==4);
+    assert(h.inputs.state.devices[1].button_pressed[CHIRKY_BUTTON_PRIMARY]);
+    assert(!h.inputs.state.devices[2].buttons[CHIRKY_BUTTON_PRIMARY]);
+    event(&h,1,EV_KEY,BTN_EAST,1);event(&h,1,EV_KEY,BTN_EAST,0);
+    update_controller_buttons(&h);update_device_inputs(&h);
+    assert(!h.inputs.state.button_pressed[CHIRKY_BUTTON_PRIMARY]); /* Combined input remains held. */
+    assert(h.inputs.state.devices[2].button_pressed[CHIRKY_BUTTON_PRIMARY]); /* Independent short tap. */
+    assert(!h.inputs.state.devices[2].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(!strcmp(h.inputs.state.devices[1].labels[CHIRKY_BUTTON_PRIMARY],"B"));
+    h.keyboard_bindings[CHIRKY_BUTTON_PRIMARY]=(struct controller_binding){BINDING_KEY,KEY_Q,0};
+    event(&h,2,EV_KEY,KEY_Q,1);update_device_inputs(&h);
+    assert(h.inputs.state.devices[0].id==1 && h.inputs.state.devices[0].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(!strcmp(h.inputs.state.devices[0].labels[CHIRKY_BUTTON_PRIMARY],"Q"));
+    h.inputs.devices[0].fd=-1;disconnect_input(&h.inputs.devices[0]);
+    update_controller_buttons(&h);update_device_inputs(&h);
+    assert(h.inputs.state.device_count==2 && h.inputs.state.devices[1].id==4);
+    h.inputs.devices[0]=(struct input_device){.fd=0,.controller=true,.connection_id=5};
+    update_device_inputs(&h);assert(h.inputs.state.devices[1].id==5);
+}
+
 int main(int argc,char **argv)
 {
+    check_separate_devices();
     assert(argc==2);
     struct game_record ordered[3]={0};
     assert(load_manifest("bramble-hollow",&ordered[0]));

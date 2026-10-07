@@ -8,6 +8,7 @@
 #include "runtime.h"
 #include "viewport.h"
 #include "save_data.h"
+#include "local_input.h"
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <GLES2/gl2.h>
@@ -19,6 +20,19 @@ static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context;
 static struct chirky_host_api api;
 static struct chirky_input input;
 static unsigned previous;
+static struct local_input_bank local_inputs;
+_Static_assert(CHIRKY_BUTTON_COUNT==8 && CHIRKY_INPUT_LABEL_SIZE==24,"Browser device-label transport layout");
+EM_JS(void,device_labels,(unsigned id,char *labels),{
+    for(let b=0;b<8;b++)stringToUTF8(Module.onDeviceLabel(id,b),labels+b*24,24);
+});
+EMSCRIPTEN_KEEPALIVE void web_input_begin(void){input.device_count=0;}
+EMSCRIPTEN_KEEPALIVE void web_input_device(unsigned id,int kind,unsigned mask,unsigned pending)
+{
+    if(kind<CHIRKY_DEVICE_KEYBOARD || kind>CHIRKY_DEVICE_TOUCH)return;
+    struct chirky_device_input *out=local_input_add(&local_inputs,&input,id,kind,mask,pending);
+    if(out)device_labels(id,(char *)out->labels);
+}
+EMSCRIPTEN_KEEPALIVE void web_input_end(void){local_input_finish(&local_inputs,&input);}
 static struct asset_store *assets;
 static struct image_cache images;
 EMSCRIPTEN_KEEPALIVE void web_destroy(void);
@@ -223,5 +237,5 @@ EMSCRIPTEN_KEEPALIVE void web_destroy(void)
     web_unload();splash_free(&art);
     asset_store_destroy(assets);assets=NULL;
     if(context>0){rect_renderer_destroy(&renderer);emscripten_webgl_destroy_context(context);}
-    context=0;previous=0;memset(&input,0,sizeof(input));
+    context=0;previous=0;memset(&input,0,sizeof(input));memset(&local_inputs,0,sizeof(local_inputs));
 }

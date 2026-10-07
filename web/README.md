@@ -7,7 +7,7 @@ and file paths. One persistent main module owns the console, renderer, assets
 and game runtime. Each game is a loadable WASM side module with isolated game
 symbols, using the same `chirky_game_entry()` contract as the Pi. The generated
 `<game>.js` file only identifies its WASM and configuration paths. Both hosts
-and all game modules use ABI 15 and must be rebuilt together.
+and all game modules use ABI 16 and must be rebuilt together.
 
 ## Build and run
 

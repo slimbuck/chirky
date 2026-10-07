@@ -90,6 +90,27 @@ test('physical labels follow remaps and the last pressed device without changing
   assert.equal(p.run('onButtonLabel(4)'), 'Q');
 });
 
+test('local players use distinct connection IDs, mapped labels and independent short taps',()=>{
+  const p=player();
+  p.run(`var a={index:0,id:'same',mapping:'standard',buttons:Array.from({length:16},()=>({pressed:false})),axes:[0,0]};
+    var b={...a,index:1,buttons:Array.from({length:16},()=>({pressed:false}))};navigator.getGamepads=()=>[a,b];
+    var devices=localDevices();var aid=devices[2].id,bid=devices[3].id;`);
+  assert.notEqual(p.run('aid'),p.run('bid'));
+  p.run('a.buttons[0].pressed=true;b.buttons[14].pressed=true;devices=localDevices()');
+  assert.deepEqual(Array.from(p.run('devices.map(d=>d.mask)')),[0,0,16,1]);
+  assert.equal(p.run('onDeviceLabel(aid,4)'), 'SOUTH');
+  assert.equal(p.run('onDeviceLabel(1,4)'), 'X');
+  assert.equal(p.run('onDeviceLabel(2,4)'), 'A');
+  p.events.keydown({code:'KeyX',preventDefault(){}});p.events.keyup({code:'KeyX'});
+  assert.equal(p.run('localDevices()[0].pending'),16);
+  assert.equal(p.run('localDevices()[0].mask'),0);
+  p.run('navigator.getGamepads=()=>[b];localDevices();navigator.getGamepads=()=>[a,b];devices=localDevices()');
+  assert.notEqual(p.run('devices[2].id'),p.run('aid'));
+  assert.equal(p.run('devices[3].id'),p.run('bid'));
+  p.events.gamepaddisconnected({gamepad:{index:1}});
+  assert.notEqual(p.run('localDevices()[3].id'),p.run('bid'),'reused browser index gets a new connection ID');
+});
+
 test('mapping commits atomically, rejects duplicates and preserves old bindings if storage fails',()=>{
   const p=player();
   p.run('var values=defaultKeys.map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ")');

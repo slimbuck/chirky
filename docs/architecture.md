@@ -13,7 +13,7 @@ The Pi/Linux and desktop/mobile browser console are equally supported targets.
 The local dashboard is a development and Pi administration tool, separate from
 the public static browser site. Bramble's director is an optional service,
 not the console host. See [platform evolution](platform-evolution.md) for
-proposed content identity, online scores, submissions and multiplayer; those
+proposed content identity, online scores, submissions and network multiplayer; those
 features are not part of the implemented ABI described here.
 
 ## Portable code
@@ -87,7 +87,7 @@ current physical binding for the last-used input source. Linux keeps the tested
 SNES/Pico legends in a configurable host profile; unknown layouts can use raw
 button/axis identifiers. Browser labels follow keyboard, touch or the active
 gamepad and its saved mapping. Games query labels during rendering and never
-interpret device identities. `include/input_labels.h` provides portable prompt
+interpret raw device identities. `include/input_labels.h` provides portable prompt
 helpers without changing the input ABI or game update logic.
 
 ## Web platform
@@ -167,3 +167,21 @@ textures. Phosphor Run packs its editable text grids and configured palette once
 at game init. Both hosts use the same renderer-owned glyph atlases for 5×7 text
 and one-pixel outlines. Font atlases survive game switches; game scenery atlases
 do not. The original rectangle paths remain pixel oracles and headless fallbacks.
+
+## Local multiplayer (ABI 16)
+
+The combined input remains the default for existing games and all console menus.
+Alongside it, hosts provide up to eight logical device snapshots with opaque
+connection IDs, independent button edges and physical labels. `src/local_input.h`
+shares edge tracking between adapters; games never see evdev or Gamepad codes.
+Games own device-to-player assignment and their response to a disconnected
+source. The host reports devices without assigning player slots.
+
+Linux groups keyboard interfaces, keeps gamepads separate, scans for newly
+connected devices once per second, and clears unplugged state. Its existing
+controller mapping/legend profile is still shared by pads; this first slice
+targets two compatible SNES adapters or a SNES adapter plus keyboard. Browser
+connection IDs distinguish identical pads at different indices, while mappings
+remain saved by device model identity. Touch is one additional source.
+Both hosts keep tracking per-source edges while the console is paused/loading,
+so a menu press does not become a gameplay press on resume.

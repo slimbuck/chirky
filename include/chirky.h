@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 15
+#define CHIRKY_ABI_VERSION 16
 
 /* Unindexed triangle list in logical pixels; z is [-1,1], larger is nearer.
    Normals are in screen axes (+x right, +y up, +z toward viewer).
@@ -38,9 +38,25 @@ enum chirky_button {
     CHIRKY_BUTTON_COUNT
 };
 
+#define CHIRKY_INPUT_DEVICES 8
+#define CHIRKY_INPUT_LABEL_SIZE 24
+enum chirky_device_kind { CHIRKY_DEVICE_KEYBOARD, CHIRKY_DEVICE_CONTROLLER, CHIRKY_DEVICE_TOUCH };
+/* Connection-scoped opaque IDs, never player numbers. Missing IDs are disconnected.
+   Keyboard interfaces form one source; each gamepad is a separate source. */
+struct chirky_device_input {
+    uint32_t id;
+    enum chirky_device_kind kind;
+    bool buttons[CHIRKY_BUTTON_COUNT];
+    bool button_pressed[CHIRKY_BUTTON_COUNT];
+    char labels[CHIRKY_BUTTON_COUNT][CHIRKY_INPUT_LABEL_SIZE];
+};
+
 struct chirky_input {
     bool buttons[CHIRKY_BUTTON_COUNT];
     bool button_pressed[CHIRKY_BUTTON_COUNT];
+    /* Combined controls above remain unchanged for single-player games. */
+    unsigned device_count;
+    struct chirky_device_input devices[CHIRKY_INPUT_DEVICES];
 };
 
 struct chirky_host_api {

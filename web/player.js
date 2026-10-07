@@ -131,6 +131,39 @@ let inputSettings=initialSettings,bindings={};
 // axes must not continually steal labels back from keyboard/touch users.
 let labelSource=typeof matchMedia==="function" && matchMedia("(any-pointer: coarse)").matches?"touch":"keyboard";
 let labelPad=null;
+// Physical connection IDs are distinct from mapping profiles: two identical
+// controllers may share a profile but must never share a player slot.
+let nextDeviceId=2,localKeyPending=0,localTouchPending=0;
+const localPads=new Map();
+window.addEventListener("gamepaddisconnected",event=>{localPads.delete(event.gamepad.index);});
+function localDevices(connected=pads()){
+  const present=new Set();
+  const result=[{id:1,kind:0,mask:keyboardMask(),pending:localKeyPending},
+    {id:2,kind:2,mask:[...touch.values()].reduce((a,b)=>a|b,0),pending:localTouchPending|dpadPending}];
+  for(const pad of connected){
+    const index=pad.index ?? 0,identity=padIdentity(pad);present.add(index);
+    let device=localPads.get(index);
+    if(!device || device.identity!==identity){device={id:++nextDeviceId,identity};localPads.set(index,device);}
+    device.pad=pad;
+    result.push({id:device.id,kind:1,mask:padMask(pad),pending:0});
+  }
+  for(const index of localPads.keys())if(!present.has(index))localPads.delete(index);
+  return result.slice(0,8);
+}
+function onDeviceLabel(id,action){
+  if(id===1)return keyName(inputSettings.keys[action]).toUpperCase();
+  if(id===2)return ["←","→","↑","↓","A","B","START","MENU"][action];
+  const device=[...localPads.values()].find(d=>d.id===id);
+  if(!device)return "UNBOUND";
+  const pad=device.pad,saved=padSettings[padIdentity(pad)];
+  return padBindingLabel(pad,validPadMap(saved)?saved[action]:pad.mapping==="standard"?
+    {kind:1,code:[14,15,12,13,0,2,9,8][action],direction:0}:null);
+}
+function feedLocalInputs(){
+  shell._web_input_begin();
+  for(const d of localDevices())shell._web_input_device(d.id,d.kind,d.mask,d.pending);
+  shell._web_input_end();localKeyPending=0;localTouchPending=0;
+}
 const labelPadHeld=new Map();
 function updateLabelDevice(connected=pads()){
   const present=new Set();
@@ -249,6 +282,7 @@ async function playSound(path){
   }catch(error){console.warn("Sound unavailable",path,error);}
 }
 function setPaused(value){
+  localKeyPending=localTouchPending=0;
   paused=value;keys.clear();touch.clear();dpadPointer=null;dpadBounds=null;dpadPending=0;fullscreenQueued=false;refreshTouchFeedback();pending=0;last=0;accumulator=0;
   refreshKeyFeedback();
   if(value){shell?._web_console_pause();stopSounds();}
@@ -293,6 +327,7 @@ function consoleGesture(){
   // the browser's user gesture. Gameplay stays on the fixed simulation clock.
   if(shell && !loading && shell._web_console_state()!==4){
     const connected=pads();
+    if(shell._web_input_begin)feedLocalInputs();
     shell._web_console_tick(mask()|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
       connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
     pending=0;dpadPending=0;cancelPressed=false;
@@ -308,7 +343,7 @@ window.addEventListener("keydown",event=>{
     event.preventDefault();if(event.repeat)return;
     labelSource="keyboard";keys.add(event.code);refreshKeyFeedback();unlock();
     if(capturing){const code=keyCodes.indexOf(event.code);if(code>=0)shell._web_capture(1,code,0);}
-    else {pending|=1<<bindings[event.code];consoleGesture();}
+    else {pending|=1<<bindings[event.code];localKeyPending|=1<<bindings[event.code];consoleGesture();}
   }
 });
 window.addEventListener("keyup",event=>{keys.delete(event.code);refreshKeyFeedback();});
@@ -375,7 +410,7 @@ dpad.onpointercancel=dpad.onlostpointercapture=event=>{
 dpad.oncontextmenu=event=>event.preventDefault();
 document.querySelectorAll("[data-button]").forEach(button=>{
   if(Number(button.dataset.button)<4)return; // Directions share the sliding pad.
-  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();labelSource="touch";button.setPointerCapture(event.pointerId);touch.set(event.pointerId,1<<Number(button.dataset.button));pending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
+  button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();labelSource="touch";button.setPointerCapture(event.pointerId);touch.set(event.pointerId,1<<Number(button.dataset.button));pending|=1<<Number(button.dataset.button);localTouchPending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
   button.onpointerup=event=>{if(touch.has(event.pointerId))consoleGesture();touch.delete(event.pointerId);refreshTouchFeedback();};
   button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);fullscreenQueued=false;refreshTouchFeedback();};
   button.oncontextmenu=event=>event.preventDefault();
@@ -397,6 +432,7 @@ function frame(now){
   if(last)accumulator+=Math.min(now-last,100);
   while(accumulator>=1000/60){
     {
+      feedLocalInputs();
       const gameTick=shell._web_console_tick(current|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
         connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
       if(gameTick)runtime._web_tick(current|pending|dpadPending);
@@ -457,7 +493,7 @@ async function createModule({default:create},wasmBinary){
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
-    onButtonLabel,onSaveMapping,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
+    onButtonLabel,onDeviceLabel,onSaveMapping,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();

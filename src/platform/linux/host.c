@@ -206,12 +206,16 @@ extern void glScissor(GLint x, GLint y, GLsizei width, GLsizei height);
 extern void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
                          GLenum format, GLenum type, void *pixels);
 
+#include "local_input.h"
 #define MAX_INPUTS 32
 #define MAX_GAMES 32
 #define HOST_CONFIG_PATH "config/host.conf"
 
 struct input_device {
     int fd;
+    int event_index;
+    uint32_t connection_id;
+    unsigned pending;
     bool controller;
     char name[128];
     bool keys[KEY_MAX + 1];
@@ -235,6 +239,11 @@ struct input_set {
     bool pressed[KEY_MAX + 1];
     bool controller_pressed;
     struct chirky_input state;
+    struct local_input_bank local;
+    uint32_t next_connection_id;
+    uint64_t next_scan;
+    bool hotplug;
+    unsigned keyboard_pending;
 };
 
 struct game_record {
@@ -1263,10 +1272,18 @@ static int axis_direction(const struct input_device *device, unsigned int code,
     return 0;
 }
 
-static void open_inputs(struct input_set *inputs)
+static void scan_inputs(struct input_set *inputs)
 {
-    memset(inputs, 0, sizeof(*inputs));
     for (int index = 0; index < MAX_INPUTS; ++index) {
+        bool found=false;
+        int slot=-1;
+        for(int i=0;i<inputs->count;i++) {
+            if(inputs->devices[i].fd>=0 && inputs->devices[i].event_index==index)found=true;
+            if(inputs->devices[i].fd<0 && slot<0)slot=i;
+        }
+        if(found)continue;
+        if(slot<0)slot=inputs->count;
+        if(slot>=MAX_INPUTS)break;
         char path[64];
         snprintf(path, sizeof(path), "/dev/input/event%d", index);
         int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
@@ -1279,8 +1296,11 @@ static void open_inputs(struct input_set *inputs)
         ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits);
         ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits);
 
-        struct input_device *device = &inputs->devices[inputs->count];
+        struct input_device *device = &inputs->devices[slot];
+        memset(device,0,sizeof(*device));
         device->fd = fd;
+        device->event_index=index;
+        device->connection_id=++inputs->next_connection_id;
         copy_text(device->name, sizeof(device->name), name);
         for (unsigned int code = 0; code <= KEY_MAX; ++code) {
             if (input_bit(key_bits, code) && controller_button_code(code))
@@ -1305,10 +1325,23 @@ static void open_inputs(struct input_set *inputs)
             strcasestr(name, "stick") != NULL ||
             strcasestr(name, "gp2040") != NULL)
             device->controller = true;
-        ++inputs->count;
+        if(slot==inputs->count)++inputs->count;
         printf("Input: %s (%s)%s\n", path, name,
                device->controller ? " [controller]" : "");
     }
+}
+
+static void open_inputs(struct input_set *inputs)
+{
+    memset(inputs,0,sizeof(*inputs));
+    inputs->next_connection_id=2;inputs->hotplug=true;
+    scan_inputs(inputs);
+}
+
+static void disconnect_input(struct input_device *device)
+{
+    if(device->fd>=0)close(device->fd);
+    memset(device,0,sizeof(*device));device->fd=-1;
 }
 
 static bool capture_axis(unsigned int code)
@@ -1360,6 +1393,46 @@ static bool button_down(const struct host *host, int action)
         binding_down(&host->inputs,&host->keyboard_bindings[action],true);
 }
 
+static unsigned device_mask(const struct host *host,const struct input_device *device)
+{
+    unsigned mask=0;
+    const struct controller_binding *map=device->controller?host->bindings:host->keyboard_bindings;
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
+        const struct controller_binding *b=&map[i];
+        bool down=b->kind==BINDING_KEY && b->code<=KEY_MAX && device->keys[b->code];
+        if(device->controller && b->kind==BINDING_ABS && b->code<=ABS_MAX)
+            down=axis_direction(device,b->code,device->abs_values[b->code])==b->direction;
+        if(down)mask|=1u<<i;
+    }
+    return mask;
+}
+
+static void update_device_inputs(struct host *host)
+{
+    struct input_set *in=&host->inputs;
+    in->state.device_count=0;
+    unsigned keyboard=0;bool has_keyboard=false;
+    for(int i=0;i<in->count;i++)if(in->devices[i].fd>=0 && !in->devices[i].controller) {
+        has_keyboard=true;keyboard|=device_mask(host,&in->devices[i]);
+        in->keyboard_pending|=in->devices[i].pending;in->devices[i].pending=0;
+    }
+    if(has_keyboard) {
+        struct chirky_device_input *out=local_input_add(&in->local,&in->state,1,CHIRKY_DEVICE_KEYBOARD,keyboard,in->keyboard_pending);
+        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)keyboard_name(&host->keyboard_bindings[b],out->labels[b],sizeof(out->labels[b]));
+    }
+    in->keyboard_pending=0;
+    for(int i=0;i<in->count;i++) {
+        struct input_device *d=&in->devices[i];
+        if(d->fd<0 || !d->controller)continue;
+        struct chirky_device_input *out=local_input_add(&in->local,&in->state,d->connection_id,
+            CHIRKY_DEVICE_CONTROLLER,device_mask(host,d),d->pending);
+        d->pending=0;
+        if(out)for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)
+            controller_binding_label(&host->bindings[b],host->controller_labels,out->labels[b],sizeof(out->labels[b]));
+    }
+    local_input_finish(&in->local,&in->state);
+}
+
 static void update_controller_buttons(struct host *host)
 {
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
@@ -1375,6 +1448,7 @@ static void process_input_event(struct host *host, struct input_device *device, 
 {
     /* Linux autorepeat is not a physical press or release. */
     if(event->type==EV_KEY && event->value==2)return;
+    unsigned device_before=device_mask(host,device);
     bool before[CHIRKY_BUTTON_COUNT];
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) before[i]=button_down(host,i);
     if (event->type==EV_KEY && event->code<=KEY_MAX) {
@@ -1416,6 +1490,7 @@ static void process_input_event(struct host *host, struct input_device *device, 
                 chirky_console_capture(&host->console,(struct controller_binding){BINDING_ABS,event->code,direction});
         }
     }
+    device->pending|=device_mask(host,device)&~device_before;
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++)
         if (!before[i] && button_down(host,i)) host->inputs.pending_buttons[i]=true;
     /* A release followed by a new press may both arrive between frames. */
@@ -1431,6 +1506,7 @@ static void process_input(struct host *host, int fd)
     struct input_event events[32]; ssize_t bytes;
     while ((bytes=read(fd,events,sizeof(events)))>0)
         for (size_t i=0;i<(size_t)bytes/sizeof(events[0]);i++) process_input_event(host,device,&events[i]);
+    if(bytes==0 || (bytes<0 && errno!=EAGAIN && errno!=EINTR))disconnect_input(device);
 }
 
 static bool recovery_chord(const struct input_set *inputs)
@@ -1448,10 +1524,14 @@ static bool recovery_chord(const struct input_set *inputs)
 
 static void update_host(struct host *host)
 {
+    if(host->inputs.hotplug && monotonic_us()>=host->inputs.next_scan) {
+        scan_inputs(&host->inputs);host->inputs.next_scan=monotonic_us()+1000000;
+    }
     ensure_launcher(host);finish_loading(host);poll_audio(host);
     enum console_screen before=current_screen(host);
     struct chirky_input *input=&host->inputs.state;
     update_controller_buttons(host);
+    update_device_inputs(host);
     if(!host->console.setup.active && host->inputs.pressed[KEY_F12])snapshot_requested=1;
     struct console_input frame={.logical=input,
         .keyboard_held=!buttons_released(&host->inputs,true),
@@ -1640,8 +1720,14 @@ static void wait_for_events(struct host *host)
         if (result < 0) { if (errno == EINTR) continue; host->running = false; break; }
         if (fds[0].revents & POLLIN) drmHandleEvent(host->drm_fd, &context);
         if (fds[1].revents & POLLIN) process_control(host);
-        for (int index = 0; index < host->inputs.count; ++index)
-            if (fds[index + 2].revents & POLLIN) process_input(host, fds[index + 2].fd);
+        for (int index = 0; index < host->inputs.count; ++index) {
+            if (fds[index + 2].revents & (POLLERR|POLLHUP|POLLNVAL)) {
+                disconnect_input(&host->inputs.devices[index]);fds[index+2].fd=-1;
+            } else if (fds[index + 2].revents & POLLIN) {
+                process_input(host, fds[index + 2].fd);
+                fds[index+2].fd=host->inputs.devices[index].fd;
+            }
+        }
     }
 }
 

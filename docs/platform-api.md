@@ -1,7 +1,7 @@
-# Platform API 15
+# Platform API 16
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 15`. Native games export
+game report `CHIRKY_ABI_VERSION == 16`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a WASM side module loaded by the persistent Emscripten host.
 `src/runtime.c` owns the same lifecycle on both platforms; `src/console.c` owns
@@ -75,7 +75,7 @@ configured SNES/Pico, `X` / `ESC` on the default keyboard, and `A` / `MENU` on
 touch. Unknown controls use button/axis identifiers, and missing bindings return
 `UNBOUND`. With nonzero capacity the callback writes a NUL-terminated label.
 `include/input_labels.h` also groups direction labels without assuming arrow keys.
-Labels are presentation only: logical enums, button states and ABI layout stay
+Labels are presentation only; logical enums and combined button semantics stay
 unchanged. Controller legends belong to host profiles, never game code.
 
 ## Asset operations
@@ -272,7 +272,7 @@ or invalid; hosts do not rasterize triangles in software.
 
 Phosphor Run evaluates its small rigid skeleton on the CPU and submits the actor
 once. Lighting, triangle coverage and depth resolution run on the GPU. All hosts
-and game modules must be rebuilt together for ABI 15.
+and game modules must be rebuilt together for ABI 16.
 
 ## Load-time images and atlas text (ABI 15)
 
@@ -299,3 +299,27 @@ and clips coverage while preserving the original UV mapping. This preserves
 Phosphor Run's fractional level-start zoom. Ordinary integer sprites continue
 to use `draw_sprite` unchanged. Textures use nearest filtering, explicit texel
 centres, no mipmaps, clamp-to-edge and transparent atlas gutters on both hosts.
+
+## Local device input (ABI 16)
+
+`chirky_input.buttons` and `button_pressed` retain their combined input semantics.
+New `device_count` and `devices[CHIRKY_INPUT_DEVICES]` expose up to eight independent
+logical sources. Each `chirky_device_input` supplies a nonzero opaque connection
+`id`, a `kind` (keyboard/controller/touch), held buttons, press edges, and eight
+NUL-terminated physical `labels`, each at most 23 UTF-8 bytes. Snapshots are valid
+only for the current update; copy any state needed for rendering. Array positions
+can change. Use IDs, never array positions or kinds, to assign players.
+
+A missing ID means disconnected; reconnecting a pad gets a new ID even at the same
+USB/Gamepad index. Keyboard interfaces form one logical source (browser APIs
+cannot distinguish physical keyboards); browser touch is one source. IDs are
+local to this host session, not persistent identities or network player IDs.
+
+A press edge can be true while held is false for a tap between ticks. Hosts
+consume these edges every console tick, including pause/loading, rather than
+queuing stale actions for the game. Opposite directions may both be held; games
+choose their conflict rule. Combined controls and console pause remain available
+from all devices, including unassigned ones. No network service is introduced.
+
+Player assignment, joining and disconnect policy belong to the consuming game.
+Rebuild the host and all modules together for ABI 16.

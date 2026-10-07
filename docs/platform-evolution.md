@@ -1,7 +1,7 @@
 # Platform evolution
 
 Status: design direction, not an implemented API or a commitment to a backend
-or transport. The current ABI is 15. This plan preserves equally supported
+or transport. The current ABI is 16. This plan preserves equally supported
 Pi/Linux and desktop/mobile browser consoles while making room for personal
 content, global scores and multiplayer.
 
@@ -143,8 +143,9 @@ compatibility, bounded message sizes/queues, and connection state. Linux owns
 sockets; browser adapters own browser-supported transport. Gameplay defines
 its state and authority rules. Do not serialize raw C structs across the wire.
 
-The current game update API receives one logical controller, so a networked
-game will need a deliberate extension for multiple players. Build and test that
+ABI 16 provides combined controls plus separate local device snapshots. Network
+players still need a deliberate session contract; local connection IDs are not
+network identities. Build and test that
 contract with its first consumer on both hosts, rather than adding unused
 callbacks now. Networking must remain asynchronous and pending work must be
 cancelled or ignored after leaving a session or switching games.
