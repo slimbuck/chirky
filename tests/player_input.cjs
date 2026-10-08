@@ -191,6 +191,31 @@ test('standard SNES stick directions survive preset saving and reload while resp
   assert.equal(p.run('mask()'),0,'Generic profiles use only their explicit bindings');
 });
 
+test('GP2040 Generic HID directions use its separate D-pad buttons, including old saved presets',()=>{
+  const id='GP2040-CE (Generic) (Vendor: 10c4 Product: 82c0)';
+  const connect=`var pad={index:0,id:${JSON.stringify(id)},mapping:'',buttons:Array.from({length:32},()=>({pressed:false})),axes:[.0039216,.0039216,.0039216,0,0,.0039216,0,0,0,1.2857144]};navigator.getGamepads=()=>[pad];localDevices()`;
+  function check(p){
+    for(const [buttons,expected] of [[[18],1],[[19],2],[[16],4],[[17],8],[[16,18],5],[[],0]]){
+      p.run(`pad.buttons.forEach((b,i)=>b.pressed=${JSON.stringify(buttons)}.includes(i))`);
+      assert.equal(p.run('mask()'),expected);
+      assert.equal(p.run('localDevices().at(-1).mask'),expected);
+    }
+    assert.deepEqual(Array.from(p.run('[0,1,2,3].map(b=>onDeviceLabel(localDevices().at(-1).id,b))')),['←','→','↑','↓']);
+  }
+  const p=player();p.run(connect);check(p);
+  assert(p.run('onSaveController(localDevices().at(-1).id,1,null)'));check(p);
+  const restored=player(null,{'chirky.controllers.v2':p.storage.get('chirky.controllers.v2')});restored.run(connect);check(restored);
+  const old=[14,15,12,13,1,0,9,8].map(code=>({kind:1,code,direction:0}));
+  const saved=profile=>({'chirky.controllers.v2':JSON.stringify({[id+'|']:profile})});
+  const migrated=player(null,saved({type:'snes',bindings:old}));migrated.run(connect);check(migrated);
+  const generic=player(null,saved({type:'generic',bindings:old}));generic.run(connect+';pad.buttons[18].pressed=true');
+  assert.equal(generic.run('mask()'),0,'Generic mappings are explicit');
+  old[0]={kind:1,code:4,direction:0};
+  const custom=player(null,saved({type:'snes',bindings:old}));custom.run(connect+';pad.buttons[18].pressed=true');
+  assert.equal(custom.run('mask()'),0,'Custom SNES maps are preserved');
+  custom.run('pad.buttons[4].pressed=true');assert.equal(custom.run('mask()'),1);
+});
+
 test('new controllers default to SNES and can be selected before saving any settings',()=>{
   const p=player();
   p.run(`var pad={index:0,id:'new adapter',mapping:'',buttons:Array.from({length:16},(_,i)=>({pressed:i===1||i===14})),axes:[0,0]};

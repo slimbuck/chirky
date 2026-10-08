@@ -14,7 +14,8 @@ build them on the Pi, and launch games. Installed Pis run independently of the
 dashboard. The current dashboard selects one Pi through its configuration;
 it is not a fleet-management or multiplayer server.
 
-There are three unfinished games: Phosphor Run, Rosey Chop and Bramble Hollow.
+There are four unfinished games: Phosphor Run, Rosey Chop, Bramble Hollow and
+Circuit Clash, a local two-player fighter prototype.
 Hardware Test is an additional diagnostic module. Each playable game has
 dashboard settings editing; level and sprite editors are available where the
 game supplies an editor description. Bramble currently has settings editing,
@@ -28,8 +29,9 @@ repository. The public site does not include the dashboard or Pi control API.
 
 Phosphor Run already saves local high scores on the Pi and in the browser.
 Bramble Hollow optionally connects to a separate world-director service.
-There are no global leaderboards, public content submissions or real-time
-multiplayer sessions yet. See the [platform evolution plan](docs/platform-evolution.md)
+Circuit Clash supports two local players on one console. There are no global
+leaderboards, public content submissions or network multiplayer sessions yet.
+See the [platform evolution plan](docs/platform-evolution.md)
 for the proposed groundwork and implementation order.
 
 The **dashboard** is the local development/editing portal. The **console** is
@@ -158,8 +160,8 @@ Secondary, Start and Menu**. Games use these names; physical controllers and
 keyboards are mapped by the host. Both platforms use the same game-facing API.
 On-screen prompts show the mapped physical control, rather than these internal
 action names, and follow the last input device used. Remapping changes prompts
-immediately without changing game logic. Setup asks for action roles such as
-"Confirm / main action"; normal menus and games show the assigned button/key.
+immediately without changing game logic. Setup uses the eight logical input names
+listed above; normal menus and games show the assigned button/key.
 
 | Chirky input | Default SNES controller | Default keyboard |
 | --- | --- | --- |
@@ -210,8 +212,9 @@ reserved. Cancellation and failed saves preserve the previous mapping.
 P1 is the default keyboard layout everywhere: arrow keys with N/M. P2 uses
 WASD with F/G. Enter (Start) and Esc (Menu) are shared. There is no separate solo
 layout: changing P1 also changes menu and single-player controls. Player layouts
-must use distinct keys except matching Start/Menu bindings. Prompts and
-keyboard help follow the saved mappings.
+must use distinct keys except matching Start/Menu bindings. The fighter joins
+with each player's action button, so Enter does not claim both slots. Prompts
+and keyboard help follow the saved mappings.
 
 USB setup is disabled until a controller/joystick is connected. The menu order is
 Test inputs, USB controller/joystick, keyboard 1, keyboard 2, Back. Controller
@@ -225,10 +228,11 @@ keyboards still control games normally.
 Desktop browser and Pi keyboard setup remain available as before.
 
 **Test inputs** gives each connected source a separate labelled, coloured row,
-including both keyboard layouts, each USB controller and browser touch. Rows show
-the physical labels of held or newly pressed inputs; raw USB/key readings remain
-available below. This screen suspends navigation; hold the displayed back control (the
-Secondary binding) for one second or press F1
+including both keyboard layouts and each USB controller. Fixed touch controls are
+not listed. The table always shows configured physical labels under D-pad, Prim,
+Sec, Start and Menu. Up sits above Left/Down/Right when row space permits.
+Held or newly pressed inputs highlight their cells.
+This screen suspends navigation; hold the displayed Menu binding for one second or press F1
 to return. Screen transitions consume the opening press and wait for two neutral
 updates before accepting input on the next screen.
 
@@ -327,6 +331,8 @@ results and the asynchronous audio-startup follow-up.
 
 - `rosey-chop`: clear the dead black roses from a colourful garden before the
   rainstorm, with sweeping chops, jumping, chasing wasps and a complete first level
+- `circuit-clash`: two-player local fighter prototype with separate device joining,
+  movement, jumping, punching, health and rematches; see [controls](games/circuit-clash/README.md)
 - `hardware-test`: moving colour, motion, audio, input, and capture checks
 - `phosphor-run`: a scrolling CRT-native platformer with wall-jumps, air dash,
   checkpoints, hazards, particles, collectible signal shards, and a complete

@@ -20,9 +20,8 @@ static void draw_settings_menu(struct host *host)
 
 static void draw_controller_settings(struct host *host)
 {
-    struct chirky_host_api ui=console_api(host);char pad[96],key[96];
-    held_input_names(host,false,pad,sizeof(pad));held_input_names(host,true,key,sizeof(key));
-    clear_screen();chirky_console_render(&host->console,&ui,&host->launcher_art,&host->inputs.state,pad,key);
+    struct chirky_host_api ui=console_api(host);
+    clear_screen();chirky_console_render(&host->console,&ui,&host->launcher_art,&host->inputs.state);
 }
 
 static void draw_display_settings(struct host *host)
@@ -283,7 +282,6 @@ static void check_uninitialized_controller_axes(void)
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_SETTINGS);
     assert(!h.console.ui_wait_release);
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_INPUT);
-    char held[128];held_input_names(&h,false,held,sizeof(held));assert(!strcmp(held,"USB NONE"));
     tap(&h,1,KEY_DOWN);tap(&h,0,BTN_EAST);assert(h.console.controller_selecting);
     tap(&h,0,BTN_EAST);h.console.controller_option=2;tap(&h,0,BTN_EAST);
     assert(current_screen(&h)==SCREEN_SETUP && !h.console.setup.wait_release);
@@ -436,15 +434,13 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     event(host,0,EV_KEY,BTN_MODE,1);event(host,1,EV_KEY,KEY_T,1);
     event(host,0,EV_ABS,ABS_HAT0X,-1);update_host(host);
     assert(host->console.input_test && host->inputs.state.buttons[CHIRKY_BUTTON_SECONDARY]);
-    held_input_names(host,false,name,sizeof(name));assert(strstr(name,"304") && strstr(name,"316") && strstr(name,"AX16NEG"));
-    held_input_names(host,true,name,sizeof(name));assert(strstr(name," R") && strstr(name," T"));
     draw_controller_settings(host);
     char output[512];snprintf(output,sizeof(output),"%s/input-test.ppm",output_dir);write_preview(output);
     /* Each connected source has its own coloured row, including both keyboard layouts. */
     assert(host->inputs.state.device_count==3);
     for(unsigned row=0;row<3;row++) {
         struct launcher_colour colour=console_device_colour(row);
-        int y=host->safe_y+host->api.screen_height-52-(int)row*24,x=host->safe_x+13;
+        int y=host->safe_y+host->api.screen_height-49-(int)row*24,x=host->safe_x+4;
         assert(framebuffer[y][x][0]==colour.r && framebuffer[y][x][1]==colour.g && framebuffer[y][x][2]==colour.b);
     }
     event(host,1,EV_KEY,KEY_R,0);update_host(host);draw_controller_settings(host);
@@ -453,12 +449,12 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     assert(host->inputs.state.devices[2].buttons[CHIRKY_BUTTON_SECONDARY]);
     event(host,0,EV_KEY,BTN_SOUTH,0);event(host,0,EV_KEY,BTN_MODE,0);event(host,1,EV_KEY,KEY_T,0);
     event(host,0,EV_ABS,ABS_HAT0X,0);update_host(host);
-    held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"USB NONE"));
-    held_input_names(host,true,name,sizeof(name));assert(!strcmp(name,"KEY NONE"));
     tap(host,0,BTN_TR2);tap(host,0,BTN_TL2);assert(host->console.input_test);
-    event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<59;i++) update_host(host);assert(host->console.input_test);
-    update_host(host);assert(!host->console.input_test && host->console.controller_settings);
+    event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<65;i++) update_host(host);assert(host->console.input_test);
     event(host,1,EV_KEY,KEY_R,0);update_host(host);
+    event(host,1,EV_KEY,KEY_ESC,1);for(int i=0;i<59;i++) update_host(host);assert(host->console.input_test);
+    update_host(host);assert(!host->console.input_test && host->console.controller_settings);
+    event(host,1,EV_KEY,KEY_ESC,0);for(int i=0;i<3;i++)update_host(host);
 }
 
 static void check_separate_devices(void)

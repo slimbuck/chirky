@@ -189,7 +189,9 @@ profile but have separate inputs. Touch is one additional browser source.
 Input settings derives USB availability and separate test rows from the same
 per-device snapshots that games receive. Both hosts render this through the
 shared console UI; colours supplement source labels rather than identifying
-players. Raw device readings remain diagnostic text below the rows.
+players. The test table keeps configured labels visible and highlights pressed
+cells under shared action headings, with the four directions grouped together.
+Fixed touch controls are omitted from this table; keyboard and USB mappings remain visible.
 The browser supplies presentation flags for its touch layout: hide keyboard
 mapping entries and diagnostic rows until a key is used. The shared
 console owns filtering and selection recovery; game input snapshots are unchanged.
@@ -205,3 +207,7 @@ Browser `chirky.controllers.v2` uses the reported gamepad ID and mapping mode;
 old v1 arrays load as Generic profiles. Storage remains local to each host.
 Both hosts keep tracking per-source edges while the console is paused/loading,
 so a menu press does not become a gameplay press on resume.
+
+Circuit Clash owns its two-player join screen and match rules. Each slot claims
+one source; a missing source freezes the match until a replacement explicitly
+joins. Returning to the launcher or restarting clears these game-owned slots.

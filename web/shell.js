@@ -3,7 +3,7 @@
 (() => {
 const $=selector=>document.querySelector(selector);
 const canvas=$("#screen");
-const inputNames=["Move left","Move right","Move up","Move down","Confirm / main action","Back / other action","Start action","Pause / menu"];
+const inputNames=["Left","Right","Up","Down","Primary","Secondary","Start","Menu"];
 const defaultKeys=["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyN","KeyM","Enter","Escape"];
 const settingsKey="chirky.inputs.v1";
 function validKeys(value){return Array.isArray(value) && value.length===8 && new Set(value).size===8 && value.every(code=>typeof code==="string" && /^(Arrow(Left|Right|Up|Down)|Key[A-Z]|Digit[0-9]|Numpad[0-9]|Enter|Escape|Space|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Backspace|Tab|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|Backquote)$/.test(code));}

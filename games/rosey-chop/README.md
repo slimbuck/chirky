@@ -14,9 +14,10 @@ timer expires. A wasp sting immediately ends the run.
 - Menu: pause; choose Continue Game or Return to Launcher.
 
 The game reads logical Chirky inputs and uses host-provided button labels.
-Default keyboard keys are X for Primary, Z for Secondary, arrow keys for the
-D-pad and Escape for Menu. The Pi's default SNES bindings use B, Y and Select
-for Primary, Secondary and Menu; mappings belong to the host.
+Default P1 keyboard keys on both platforms are N for Primary, M for Secondary,
+arrow keys for the D-pad, Enter for Start and Escape for Menu. Default SNES
+bindings on both platforms use B, Y and Select for Primary, Secondary and Menu;
+mappings belong to the host.
 
 Wasps first announce themselves after eight seconds, give a 1.5-second warning,
 then pursue for six seconds. Keep moving or jump to dodge. Chopping does not kill

@@ -235,7 +235,7 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
             else c->settings_message="SAVE FAILED - TRY AGAIN";
         }
     } else if(c->controller_settings && c->input_test) {
-        c->controller_menu_chord_frames=input->buttons[CHIRKY_BUTTON_SECONDARY]?c->controller_menu_chord_frames+1:0;
+        c->controller_menu_chord_frames=input->buttons[CHIRKY_BUTTON_MENU]?c->controller_menu_chord_frames+1:0;
         if(frame->cancel || c->controller_menu_chord_frames>=60){c->input_test=false;c->controller_menu_chord_frames=0;}
     } else if(c->controller_settings) {
         int previous=c->selected_option;
@@ -278,14 +278,14 @@ void chirky_console_draw_display(const struct chirky_console *c,const struct chi
     console_menu_text(api,12,34,c->settings_message && *c->settings_message?c->settings_message:hint,1,201,191,173);
     console_menu_footer(api,true);
 }
-void chirky_console_render(struct chirky_console *c,const struct chirky_host_api *api,struct splash_art *art,const struct chirky_input *input,const char *pad_names,const char *key_names)
+void chirky_console_render(struct chirky_console *c,const struct chirky_host_api *api,struct splash_art *art,const struct chirky_input *input)
 {
     switch(chirky_console_screen(c)) {
     case SCREEN_PAUSE:console_draw_pause_menu(api,c->pause_option);break;
     case SCREEN_GAME:break;
     case SCREEN_DISPLAY:console_page(api,art,"Display area");chirky_console_draw_display(c,api);break;
     case SCREEN_TEST:
-        console_draw_live_inputs(api,input,pad_names,key_names,c->input_options&CONSOLE_HIDE_KEYBOARD_TEST);
+        console_draw_live_inputs(api,input,c->input_options&CONSOLE_HIDE_KEYBOARD_TEST);
         console_draw_controller_settings(api,&c->setup,true,c->selected_option,c->settings_message,c->menu_offset,c->controller_count>0,c->input_options&CONSOLE_HIDE_KEYBOARD_MAPPING);
         break;
     case SCREEN_INPUT:case SCREEN_SETUP:

@@ -10,7 +10,7 @@
 #include "launcher_font.h"
 #include "launcher_icons.h"
 
-static const char *const console_button_names[]={"Move left","Move right","Move up","Move down","Confirm / main action","Back / other action","Start action","Pause / menu"};
+static const char *const console_button_names[]={"Left","Right","Up","Down","Primary","Secondary","Start","Menu"};
 static inline int console_menu_move(int *selected,int count,int direction)
 {
     int next=*selected+direction;
@@ -228,36 +228,82 @@ static inline struct launcher_colour console_device_colour(unsigned row)
         {215,155,255},{255,168,98},{112,223,224},{238,166,203}};
     return colours[row%CHIRKY_INPUT_DEVICES];
 }
-static inline void console_draw_live_inputs(const struct chirky_host_api *api,const struct chirky_input *input,const char *pad_line,const char *key_line,bool hide_keyboard)
+/* Compact bitmap type keeps the full action headings readable at CRT resolution. */
+static inline void console_table_text(const struct chirky_host_api *api,int x,int top,const char *text,
+    struct launcher_colour colour,int right,int low,int high)
+{
+    while(*text && x+5<=right) {
+        const uint8_t *rows=glyph(chirky_text_next(&text));
+        for(int r=0;r<7;r++)for(int col=0;col<5;col++)if(rows[r]&(1u<<(4-col)))
+            launcher_rect(api,x+col,top-r,1,1,colour,low,high);
+        x+=6;
+    }
+}
+static inline void console_table_label(const struct chirky_host_api *api,int x,int y,int width,int height,
+    const char *label,bool pressed,struct launcher_colour colour)
+{
+    struct launcher_colour background=pressed?colour:console_card,ink=pressed?launcher_navy:console_muted;
+    launcher_rect(api,x,y,width,height,background,0,api->screen_height);
+    char compact[CHIRKY_INPUT_LABEL_SIZE];
+    unsigned code;char direction[8];
+    if(sscanf(label,"AX%u %7s",&code,direction)==2)snprintf(compact,sizeof(compact),"A%u%s",code,!strcmp(direction,"NEG")?"-":"+");
+    else if(sscanf(label,"BTN %u",&code)==1)snprintf(compact,sizeof(compact),"B%u",code);
+    else snprintf(compact,sizeof(compact),"%s",*label?label:"-");
+    int columns=(width-1)/6;if(columns<1)columns=1;
+    int length=(int)chirky_text_length(compact),lines=(length+columns-1)/columns;
+    int max_lines=height/8;if(max_lines<1)max_lines=1;if(lines>max_lines)lines=max_lines;
+    const char *p=compact;
+    for(int line=0;line<lines;line++) {
+        char part[CHIRKY_INPUT_LABEL_SIZE];int bytes=0,n=0;
+        while(*p && n<columns){const char *start=p;chirky_text_next(&p);int size=(int)(p-start);memcpy(part+bytes,start,(size_t)size);bytes+=size;n++;}
+        part[bytes]=0;
+        if(*p && line==lines-1){n=columns<3?columns:3;memset(part,'.',(size_t)n);part[n]=0;}
+        console_table_text(api,x+(width-(n*6-1))/2,y+(height+lines*8)/2-2-line*8,part,ink,x+width,y,y+height);
+    }
+}
+static inline void console_draw_live_inputs(const struct chirky_host_api *api,const struct chirky_input *input,bool hide_keyboard)
 {
     int h=api->screen_height;unsigned keyboards=0,controllers=0;
     launcher_rect(api,0,0,api->screen_width,h,launcher_navy,0,h);
     launcher_text(api,12,h-12,"Test inputs",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,h-33,"USB = controller/joystick",0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    int left=4,right=api->screen_width-4,device_width=32;
+    int edges[6]={left+device_width,left+device_width+64};
+    for(int col=2;col<6;col++)edges[col]=edges[1]+(right-edges[1])*(col-1)/4;
+    const char *headings[]={"D-pad","Prim","Sec","Start","Menu"};
+    for(int col=0;col<5;col++)console_table_text(api,edges[col]+(edges[col+1]-edges[col]-(int)strlen(headings[col])*6+1)/2,
+        h-34,headings[col],launcher_cream,edges[col+1],0,h);
     int count=0,visible_row=0;
-    for(unsigned i=0;i<input->device_count;i++)count+=!hide_keyboard || input->devices[i].kind!=CHIRKY_DEVICE_KEYBOARD;
-    int row_height=count?(h-104)/count:24;
+    for(unsigned i=0;i<input->device_count;i++)count+=input->devices[i].kind==CHIRKY_DEVICE_CONTROLLER ||
+        (!hide_keyboard && input->devices[i].kind==CHIRKY_DEVICE_KEYBOARD);
+    int row_height=count?(h-68)/count:24;
     if(row_height>24)row_height=24;
     for(unsigned row=0;row<input->device_count;row++) {
         const struct chirky_device_input *device=&input->devices[row];
-        if(hide_keyboard && device->kind==CHIRKY_DEVICE_KEYBOARD)continue;
+        if(device->kind!=CHIRKY_DEVICE_CONTROLLER && (hide_keyboard || device->kind!=CHIRKY_DEVICE_KEYBOARD))continue;
         struct launcher_colour colour=console_device_colour(row);
-        char name[24],held[256]="";
+        char name[24];
         if(device->kind==CHIRKY_DEVICE_KEYBOARD)snprintf(name,sizeof(name),"KB %u",++keyboards);
-        else if(device->kind==CHIRKY_DEVICE_CONTROLLER)snprintf(name,sizeof(name),"USB %u",++controllers);
-        else snprintf(name,sizeof(name),"Touch");
-        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)if(device->buttons[b] || device->button_pressed[b]) {
-            size_t used=strlen(held);snprintf(held+used,sizeof(held)-used,"%s%s",used?" ":"",device->labels[b]);
+        else snprintf(name,sizeof(name),"USB %u",++controllers);
+        int y=h-46-(++visible_row)*row_height;
+        launcher_rect(api,left,y,2,row_height-2,colour,0,h);
+        console_table_text(api,left+3,y+row_height/2+2,name,colour,edges[0],y,y+row_height);
+        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++) {
+            int x=b<4?edges[0]+(edges[1]-edges[0])*b/4:edges[b-3];
+            int next=b<4?edges[0]+(edges[1]-edges[0])*(b+1)/4:edges[b-2];
+            int bottom=y,height=row_height-2;
+            /* Up sits above Left/Down/Right. Dense device lists retain a compact strip. */
+            if(b<4 && row_height>=19) {
+                const int dx[]={0,2,1,1},dy[]={0,0,1,0};
+                int cell_height=(row_height-1)/2;
+                x=edges[0]+dx[b]*(edges[1]-edges[0])/3;
+                next=edges[0]+(dx[b]+1)*(edges[1]-edges[0])/3;
+                bottom=y+dy[b]*cell_height;height=cell_height-1;
+            }
+            console_table_label(api,x+1,bottom,next-x-2,height,device->labels[b],
+                device->buttons[b] || device->button_pressed[b],colour);
         }
-        bool active=*held;int y=h-49-visible_row++*row_height;
-        launcher_rect(api,12,y-row_height+3,api->screen_width-24,row_height-1,console_card,0,h);
-        launcher_rect(api,12,y-row_height+3,3,row_height-1,colour,0,h);
-        launcher_text(api,20,y,name,0,colour,console_card,78,0,h);
-        launcher_text(api,80,y,active?held:"-",0,active?colour:console_muted,console_card,api->screen_width-16,0,h);
     }
-    if(!count)launcher_text(api,12,h-60,"No input devices",0,console_muted,launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,47,pad_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
-    if(!hide_keyboard)launcher_text(api,12,35,key_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    if(!count)launcher_text(api,12,h-60,"No keyboard or USB controller",0,console_muted,launcher_navy,api->screen_width-12,0,h);
 }
 static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset,bool controller_available,bool hide_keyboard)
 {
@@ -275,7 +321,7 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         const char *hint=setup->keyboard?"F1 cancels - saves after all 8":"Hold two buttons to cancel";
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else if(input_test) {
-        char label[24],hint[64];chirky_input_label(api,CHIRKY_BUTTON_SECONDARY,label,sizeof(label));
+        char label[24],hint[64];chirky_input_label(api,CHIRKY_BUTTON_MENU,label,sizeof(label));
         snprintf(hint,sizeof(hint),"Hold %s to go back",label);
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {

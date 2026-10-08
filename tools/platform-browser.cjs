@@ -414,7 +414,10 @@ async function main() {
       }
       async function capture(name) {
         const pixels=await page.eval(`(() => {__platformProbe.runtime._web_render();const c=document.querySelector('#screen'),g=c.getContext('webgl'),p=new Uint8Array(c.width*c.height*4);g.readPixels(0,0,c.width,c.height,g.RGBA,g.UNSIGNED_BYTE,p);let hash=2166136261,lit=0;const colors=new Set();for(let i=0;i<p.length;i+=4){hash=Math.imul(hash^p[i],16777619);hash=Math.imul(hash^p[i+1],16777619);hash=Math.imul(hash^p[i+2],16777619);if(p[i]||p[i+1]||p[i+2])lit++;colors.add((p[i]<<16)|(p[i+1]<<8)|p[i+2]);}const r=c.getBoundingClientRect();return {hash:hash>>>0,lit,colors:colors.size,glError:g.getError(),rect:{x:r.x,y:r.y,width:r.width,height:r.height},overflow:document.documentElement.scrollWidth>innerWidth,touchVisible:getComputedStyle(document.querySelector('.touch')).display!=='none'};})()`);
-        assert.equal(pixels.glError,0);assert(pixels.lit>1000 && pixels.colors>10,`${name}: blank canvas`);assert(!pixels.overflow,'Horizontal page overflow');
+        // The input table uses flat bitmap cells; a touch-only row has fewer
+        // colours than the illustrated menus. C tests verify its labels/highlights.
+        const inputTable=(await state()).screen===3;
+        assert.equal(pixels.glError,0);assert(pixels.lit>1000 && pixels.colors>(inputTable?5:10),`${name}: blank canvas`);assert(!pixels.overflow,'Horizontal page overflow');
         await page.eval('window.scrollTo(0,0)');
         const screenshot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}-${name}.png`),Buffer.from(screenshot.data,'base64'));
@@ -562,7 +565,23 @@ async function main() {
         await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyF',key:'f',windowsVirtualKeyCode:70});
         await page.eval('__pad.buttons[1]={pressed:false,value:0};Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[__pad]})');await delay(150);
         await capture('input-device-disconnected');
-        await key('F1','F1',112);assert.equal((await state()).screen,2);
+        await page.eval(`globalThis.__snes={id:'SNES table test',index:2,connected:true,mapping:'standard',buttons:Array.from({length:16},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__snes]})`);await delay(150);
+        await capture('input-table-snes-idle');
+        await page.eval('__snes.buttons[0]={pressed:true,value:1};__snes.buttons[14]={pressed:true,value:1}');await delay(150);
+        await capture('input-table-snes-pressed');
+        await page.eval(`globalThis.__gp2040={id:'GP2040-CE (Generic) (Vendor: 10c4 Product: 82c0)',index:3,connected:true,mapping:'',buttons:Array.from({length:32},()=>({pressed:false,value:0})),axes:[.0039216,.0039216,.0039216,0,0,.0039216,0,0,0,1.2857144]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__gp2040]})`);
+        for(const [code,mask] of [[18,1],[19,2],[16,4],[17,8]]){
+          await page.eval(`__gp2040.buttons.forEach((b,i)=>{b.pressed=i===${code};b.value=Number(b.pressed)})`);await delay(150);
+          assert.equal((await state()).inputs,mask,'GP2040 D-pad reaches the console');
+          await capture(`input-table-gp2040-${code}`);
+        }
+        await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[__snes]})');
+        await page.eval('__snes.buttons[0]={pressed:false,value:0};__snes.buttons[14]={pressed:false,value:0};__snes.buttons[8]={pressed:true,value:1}');await delay(150);
+        assert.equal((await state()).screen,3); // A short Menu press remains testable.
+        await delay(1200);assert.equal((await state()).screen,2);
+        await page.eval('__snes.buttons[8]={pressed:false,value:0}');await delay(150);
+        assert.equal((await state()).screen,2); // Holding Menu only leaves the test screen.
+        await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[__pad]})');await delay(150);
         // Secondary on this otherwise-unrecognized adapter returns through menus.
         for(let i=0;i<2;i++){
           await page.eval('__pad.buttons[0]={pressed:true,value:1}');await delay(130);

@@ -11,8 +11,8 @@ A 320×240, 60 Hz platformer for the Chirky Pi and browser hosts.
 - Menu: pause; choose Continue Game or Return to Launcher
 
 The game reads logical Chirky buttons. Keyboard and controller mappings live in
-the shared Input Settings. Default browser keys are arrows, X for Primary,
-Z for Secondary, Enter for Start and Escape for Menu.
+the shared Input Settings. Default P1 keyboard keys on both platforms are arrows,
+N for Primary, M for Secondary, Enter for Start and Escape for Menu.
 
 Collect every shard in the current level to unlock its portal. A run starts with
 three lives and ends when all three are lost. Lives carry between campaign levels.

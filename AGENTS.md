@@ -8,9 +8,10 @@ the browser uses WebAssembly side modules. Both share the portable console,
 runtime, game code and game-facing ABI. Mobile currently means the browser
 player, including Home Screen launch, not a separate native app.
 
-There are three unfinished games (Phosphor Run, Rosey Chop and Bramble Hollow)
-plus Hardware Test, a platform diagnostic. `games/*/game.conf` remains the
-authoritative catalog; this overview is not a runtime registration list.
+There are four unfinished games (Phosphor Run, Rosey Chop, Bramble Hollow and
+the local two-player Circuit Clash prototype) plus Hardware Test, a platform
+diagnostic. `games/*/game.conf` remains the authoritative catalog; this overview
+is not a runtime registration list.
 
 The local Node dashboard edits working-tree game data and controls one
 configured Pi at a time over SSH/SCP, normally at a static LAN address. It
@@ -22,7 +23,7 @@ dashboard or its Pi administration routes as a public player service.
 Phosphor Run stores device-local scores through the host save callbacks.
 Bramble's optional director supplies eventually-consistent world state; it is
 not a multiplayer session service. Global scores, public content submissions
-and real-time multiplayer are future work, not existing platform features.
+and network multiplayer are future work, not existing platform features.
 
 Read `README.md` for operation, `docs/architecture.md` for code ownership,
 `docs/platform-api.md` for the current ABI, and `docs/platform-evolution.md`

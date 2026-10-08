@@ -14,7 +14,6 @@ EM_JS(int,save_keyboard,(unsigned profile,const struct controller_binding *bindi
     for(let i=0;i<8;i++)values.push({kind:HEAP32[(bindings+i*12)>>2],code:HEAPU32[(bindings+i*12+4)>>2],direction:HEAP32[(bindings+i*12+8)>>2]});
     return Number(Module.onSaveKeyboard(values,profile));
 });
-EM_JS(void,raw_names,(int keyboard,char *out,int size),{stringToUTF8(Module.onRawNames(!!keyboard),out,size);});
 static bool load_service(void *unused,int index){(void)unused;launch(index);return true;}
 static void unload_service(void *unused){(void)unused;web_unload();stopped();}
 static enum mapping_save_result mapping_service(void *unused,unsigned profile,const struct controller_binding *bindings)
@@ -77,6 +76,5 @@ EMSCRIPTEN_KEEPALIVE int web_console_tick(unsigned mask,unsigned keyboard,unsign
 }
 static void console_render(void)
 {
-    char pad[96],key[96];raw_names(0,pad,sizeof(pad));raw_names(1,key,sizeof(key));
-    chirky_console_render(&console,&api,&art,&input,pad,key);
+    chirky_console_render(&console,&api,&art,&input);
 }

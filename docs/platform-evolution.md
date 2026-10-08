@@ -14,7 +14,7 @@ comes from game manifests. These are useful boundaries to retain.
 
 | Area | Implemented today | Missing for the proposed features |
 | --- | --- | --- |
-| Games | Three unfinished games and a hardware diagnostic | No player-to-player sessions |
+| Games | Four unfinished games, including local two-player Circuit Clash, and a hardware diagnostic | No network player-to-player sessions |
 | Content | Game-owned data, editor descriptions, validation and local dashboard saves | Personal content overlays and portable user-content packages |
 | Scores | Phosphor Run stores local per-level records | Online identity, board definitions, submission and verification |
 | Services | Bramble director exchanges revisioned world state | General player-facing services and real-time session transport |

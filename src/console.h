@@ -78,6 +78,6 @@ void chirky_console_timing(struct chirky_console *,bool,uint64_t);
 /* True permits one game update. Rendering and I/O stay with the host. */
 bool chirky_console_update(struct chirky_console *,const struct console_input *);
 void chirky_console_render(struct chirky_console *,const struct chirky_host_api *,
-    struct splash_art *,const struct chirky_input *,const char *,const char *);
+    struct splash_art *,const struct chirky_input *);
 void chirky_console_draw_display(const struct chirky_console *,const struct chirky_host_api *);
 #endif

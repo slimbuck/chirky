@@ -191,6 +191,8 @@ function updateLabelDevice(connected=pads()){
 function padBindingLabel(pad,binding,profile="generic"){
   if(!binding)return "UNBOUND";
   if(profile==="snes"){
+    if(gp2040Generic(pad) && binding.kind===1 && binding.code>=16 && binding.code<=19)
+      return ["↑","↓","←","→"][binding.code-16];
     if(binding.kind===2 && binding.code<2)return ["←","→","↑","↓"][binding.code*2+(binding.direction>0?1:0)];
     const names=pad.mapping==="standard"?["B","A","Y","X","L","R",null,null,"SELECT","START",null,null,"↑","↓","←","→"]:
       ["Y","B","X","A","L","R",null,null,"SELECT","START",null,null,"↑","↓","←","→"];
@@ -234,14 +236,25 @@ try{
   }
 }catch{}
 const buttonBinding=code=>({kind:1,code,direction:0});
+function gp2040Generic(pad){
+  return pad.mapping!=="standard" && pad.buttons.length>=20 &&
+    /GP2040.*Vendor: 10c4 Product: 82c0/i.test(pad.id);
+}
 function snesPreset(pad){
-  const directions=pad.mapping==="standard" || pad.buttons.length>=16?[14,15,12,13].map(buttonBinding):
+  // GP2040 Generic HID exposes Up/Down/Left/Right as buttons 16..19.
+  const directions=gp2040Generic(pad)?[18,19,16,17].map(buttonBinding):pad.mapping==="standard" || pad.buttons.length>=16?[14,15,12,13].map(buttonBinding):
     [{kind:2,code:0,direction:-1},{kind:2,code:0,direction:1},{kind:2,code:1,direction:-1},{kind:2,code:1,direction:1}];
   return [...directions,...(pad.mapping==="standard"?[0,2,9,8]:[1,0,9,8]).map(buttonBinding)];
 }
 function padProfile(pad){
   const saved=padSettings[padIdentity(pad)];
-  if(saved && ["snes","generic"].includes(saved.type) && validPadMap(saved.bindings))return saved;
+  if(saved && ["snes","generic"].includes(saved.type) && validPadMap(saved.bindings)){
+    // Repair only the old unmodified preset. Generic and custom maps stay explicit.
+    if(saved.type==="snes" && gp2040Generic(pad) && saved.bindings.every((b,i)=>
+      b.kind===1 && b.direction===0 && b.code===[14,15,12,13,1,0,9,8][i]))
+      return {type:"snes",bindings:snesPreset(pad)};
+    return saved;
+  }
   return {type:"snes",bindings:snesPreset(pad)};
 }
 function controllerLabel(pad,action){
@@ -304,10 +317,6 @@ function keyboardMask(){
 }
 function controllerMask(){return pads().reduce((value,pad)=>value|padMask(pad),0);}
 function mask(){let value=keyboardMask()|controllerMask();for(const buttons of touch.values())value|=buttons;return value;}
-function onRawNames(keyboard){
-  if(keyboard)return "KEY "+([...keys].map(keyName).join(" ") || "NONE");
-  return "USB "+(pads().flatMap(p=>rawPad(p).map(v=>v.kind===1?`B${v.code}`:`AX${v.code}${v.direction<0?"NEG":"POS"}`)).join(" ") || "NONE");
-}
 function onSaveKeyboard(values,profile=1){
   try{
     if(profile<0 || profile>2)return false;
@@ -549,7 +558,7 @@ async function createModule({default:create},wasmBinary){
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
-    onButtonLabel,onDeviceLabel,onSaveKeyboard,onControllerInfo,onSaveController,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
+    onButtonLabel,onDeviceLabel,onSaveKeyboard,onControllerInfo,onSaveController,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();

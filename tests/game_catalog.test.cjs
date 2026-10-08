@@ -11,7 +11,7 @@ test("game manifests are the ordered browser catalog", () => {
   const catalog = gameCatalog();
   assert.equal(catalog.version, 1);
   assert.deepEqual(catalog.games.map(game => game.id),
-    ["phosphor-run", "rosey-chop", "bramble-hollow", "hardware-test"]);
+    ["phosphor-run", "rosey-chop", "bramble-hollow", "circuit-clash", "hardware-test"]);
   assert.deepEqual(catalog.games.slice(0,3).map(game=>game.order),[10,20,30]);
   assert(catalog.games.slice(0,3).every(game=>game.icon));
   assert.equal(catalog.games.at(-1).role, "diagnostic");

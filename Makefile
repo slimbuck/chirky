@@ -75,6 +75,8 @@ build/performance-benchmark: tools/performance_benchmark.c $(SOURCES) $(wildcard
 
 test: $(GAME_TARGETS)
 	mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/circuit_clash.c -o /tmp/circuit-clash-test
+	/tmp/circuit-clash-test
 	$(NODE) --test tests/launcher_art.cjs
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/console.c src/console.c -o /tmp/console-test
 	/tmp/console-test

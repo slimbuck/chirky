@@ -157,8 +157,10 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   Remap retains the existing legend profile. The wizard captures all eight inputs and saves
   after the last release. Duplicate inputs are rejected. F1 cancels a draft;
   holding two controller buttons also cancels controller setup. In Test inputs, each source has its own labelled, coloured row showing its
-  physical button labels; both keyboard layouts, each USB controller and touch
-  remain distinct. Hold Secondary for one second to return. Cancel or a storage failure preserves
+  configured physical button labels, including when released. D-pad directions are
+  arranged with Up above Left/Down/Right when row space permits, beside Prim, Sec, Start and Menu;
+  pressed cells highlight in the device colour. Both keyboard layouts and each USB
+  controller remain distinct; fixed touch controls are omitted. Hold Menu for one second to return. Cancel or a storage failure preserves
   the old mapping. Pi and browser mappings are stored independently.
 - Menu opens the shared pause menu: Continue Game or Return to Launcher.
   Primary selects and Secondary goes back. Hardware Test lives in Settings and
@@ -167,6 +169,8 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
 - Default SNES bindings on standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
   and Start/Select for Start/Menu. Saving the SNES preset retains left-stick support. Remapped directions and
   Generic joystick profiles use their explicit bindings.
+  The GP2040 Generic HID adapter uses its separate D-pad buttons (16–19);
+  old unmodified SNES presets are corrected automatically, preserving custom maps.
   Raw adapters default to the SNES/Pico layout; other USB devices can map their
   raw buttons and axes in Map USB controller/joystick; use the keyboard to get there first.
   Both platforms save profiles per model, independently of player connection IDs.
@@ -265,3 +269,19 @@ See [architecture](../docs/architecture.md) for code ownership and module lifeti
 
 Automated checks use Chromium with simulated touch. Physical controllers,
 touch devices, and other browser engines still require device testing.
+
+### Circuit Clash local play
+
+Select Circuit Clash in the launcher. Release the launch button, then each
+player presses their own action button to join. One keyboard supports both
+players: P1 arrows + N/M and P2 WASD + F/G, with shared Enter/Esc. Change either layout
+in Input Settings; P1 also controls menus and solo games. Two gamepads or keyboard
+plus gamepad also work; touch can claim one slot. Identical gamepads are distinct
+players. Primary punches, Secondary (or Up) jumps, and left/right move. Prompts
+show the mapped physical controls. Both players press their punch button to
+rematch after a KO. A disconnected player pauses the match until an unassigned
+device joins. Menu opens the normal shared pause menu.
+
+Run `node tools/circuit-clash-browser.cjs` against the dashboard for the real
+WASM check with two simulated identical pads and keyboard replacement. It checks
+independent movement and records integer-scale gameplay/lobby screenshots.

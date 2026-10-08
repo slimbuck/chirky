@@ -253,7 +253,7 @@ static void shared_menu_layouts(void)
         struct chirky_host_api api={.screen_width=sizes[size][0],.screen_height=sizes[size][1],.fill_rect=launcher_paint,.draw_sprite=mascot_draw};api.context=&api;
         for(int page=0;page<3;page++) {
             chirky_console_open(c,pages[page]);c->menu_offset=-.6f;
-            chirky_console_render(c,&api,&art,&(struct chirky_input){0},"PAD NONE","KEY NONE");
+            chirky_console_render(c,&api,&art,&(struct chirky_input){0});
         }
         chirky_console_open(c,CONSOLE_INPUT);c->input_test=true;
         struct chirky_input devices={.device_count=CHIRKY_INPUT_DEVICES};
@@ -262,17 +262,54 @@ static void shared_menu_layouts(void)
             devices.devices[i].buttons[CHIRKY_BUTTON_PRIMARY]=true;
             snprintf(devices.devices[i].labels[CHIRKY_BUTTON_PRIMARY],CHIRKY_INPUT_LABEL_SIZE,"B");
         }
-        chirky_console_render(c,&api,&art,&devices,"PAD BTN SOUTH","KEY LEFT");
+        chirky_console_render(c,&api,&art,&devices);
         c->input_options=CONSOLE_HIDE_KEYBOARD_MAPPING|CONSOLE_HIDE_KEYBOARD_TEST;
-        chirky_console_render(c,&api,&art,&devices,"USB NONE","KEY NONE");
+        chirky_console_render(c,&api,&art,&devices);
         c->input_test=false;c->selected_option=2;
-        chirky_console_render(c,&api,&art,&devices,"USB NONE","KEY NONE");
+        chirky_console_render(c,&api,&art,&devices);
         c->input_options=0;
         c->input_test=false;setup_begin(&c->setup,true);
         for(int step=0;step<8;step++) {
             c->setup.step=step;
-            chirky_console_render(c,&api,&art,&(struct chirky_input){0},"PAD NONE","KEY NONE");
+            chirky_console_render(c,&api,&art,&(struct chirky_input){0});
         }
+    }
+}
+static void input_table_states(void)
+{
+    struct chirky_input input={.device_count=2};
+    const char *labels[][8]={{CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT,CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,"N","M","ENTER","ESC"},
+        {CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT,CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,"B","Y","START","SELECT"}};
+    for(int row=0;row<2;row++) {
+        input.devices[row].kind=row?CHIRKY_DEVICE_CONTROLLER:CHIRKY_DEVICE_KEYBOARD;
+        for(int b=0;b<8;b++)snprintf(input.devices[row].labels[b],CHIRKY_INPUT_LABEL_SIZE,"%s",labels[row][b]);
+    }
+    const int sizes[][2]={{256,192},{288,216},{320,240}};
+    for(int size=0;size<3;size++) {
+        struct chirky_host_api api={.screen_width=sizes[size][0],.screen_height=sizes[size][1],.fill_rect=launcher_paint};api.context=&api;
+        console_draw_live_inputs(&api,&input,false);
+        int x=101,y=api.screen_height-69,ink=0;
+        for(int yy=y;yy<y+20;yy++)for(int xx=x;xx<x+34;xx++)
+            ink+=!memcmp(launcher_pixels[yy][xx],&console_muted,3);
+        assert(ink>0); /* The unpressed mapped N is visible. */
+        assert(!memcmp(launcher_pixels[y][x],&console_card,3));
+        input.devices[0].button_pressed[CHIRKY_BUTTON_PRIMARY]=true;
+        console_draw_live_inputs(&api,&input,false);
+        struct launcher_colour active=console_device_colour(0);
+        assert(!memcmp(launcher_pixels[y][x],&active,3));
+        input.devices[0].button_pressed[CHIRKY_BUTTON_PRIMARY]=false;
+        console_draw_live_inputs(&api,&input,false);
+        assert(!memcmp(launcher_pixels[y][x],&console_card,3));
+        unsigned char before[sizeof(launcher_pixels)];memcpy(before,launcher_pixels,sizeof(before));
+        input.devices[2]=(struct chirky_device_input){.kind=CHIRKY_DEVICE_TOUCH};input.device_count=3;
+        console_draw_live_inputs(&api,&input,false);
+        assert(!memcmp(before,launcher_pixels,sizeof(before))); /* Fixed touch controls never add a row. */
+        input.device_count=2;
+        input.devices[0].buttons[CHIRKY_BUTTON_UP]=true;
+        console_draw_live_inputs(&api,&input,false);
+        assert(!memcmp(launcher_pixels[y+13][60],&active,3));
+        assert(!memcmp(launcher_pixels[y+2][39],&console_card,3));
+        input.devices[0].buttons[CHIRKY_BUTTON_UP]=false;
     }
 }
 static void physical_label(void *context,enum chirky_button action,char *out,size_t size)
@@ -301,6 +338,7 @@ int main(void)
     check_direction_labels();
     scrolling_launcher();
     shared_menu_layouts();
+    input_table_states();
     pause_text_bottom=999;pause_selection_top=-1;
     const struct chirky_host_api api={.screen_width=288,.screen_height=216,.fill_rect=pause_rect};
     console_draw_pause_menu(&api,0);

@@ -144,6 +144,9 @@ to its logical Chirky inputs (B to Primary, Y to Secondary, Start to Start, and 
 The `snes-pico` label profile supports both hat-axis directions and the installed
 adapter's button directions (evdev 704 Up, 705 Down, 706 Left, 707 Right).
 These render as arrow symbols without changing the saved input bindings.
+In the browser, this GP2040 Generic HID device exposes the same directions as
+buttons 16 Up, 17 Down, 18 Left and 19 Right. The SNES preset recognizes this
+adapter and uses those buttons rather than the standard gamepad button numbers.
 
 ## Troubleshooting
 

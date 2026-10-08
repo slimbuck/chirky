@@ -1139,51 +1139,6 @@ static bool keyboard_binding_down(const struct input_set *inputs, const struct c
 static int axis_direction(const struct input_device *device, unsigned int code, int value);
 static bool capture_axis(unsigned int code);
 
-static void append_input_name(char *line, size_t capacity, const char *name)
-{
-    size_t used=strlen(line);
-    if (strstr(line," MORE")) return;
-    if (used+strlen(name)+6>=capacity) {
-        if (used+6<capacity) snprintf(line+used,capacity-used," MORE");
-        return;
-    }
-    snprintf(line+used,capacity-used," %s",name);
-}
-
-/* Poll the device states, including unmapped inputs, without consuming events. */
-static void held_input_names(const struct host *host, bool keyboard, char *line, size_t capacity)
-{
-    copy_text(line,capacity,keyboard?"KEY":"USB");
-    bool any=false;
-    for (unsigned int code=0;code<=KEY_MAX;code++) {
-        bool held=false;
-        for (int i=0;i<host->inputs.count;i++) {
-            const struct input_device *d=&host->inputs.devices[i];
-            if (d->controller!=keyboard && d->keys[code]) held=true;
-        }
-        if (!held) continue;
-        char name[32]; any=true;
-        if (keyboard) keyboard_name(&(struct controller_binding){BINDING_KEY,code,0},name,sizeof(name));
-        else snprintf(name,sizeof(name),"%u",code);
-        append_input_name(line,capacity,name);
-    }
-    if (!keyboard) for (unsigned int code=0;code<=ABS_MAX;code++) {
-        if (!capture_axis(code)) continue;
-        for (int direction=-1;direction<=1;direction+=2) {
-            bool held=false;
-            for (int i=0;i<host->inputs.count;i++) {
-                const struct input_device *d=&host->inputs.devices[i];
-                if (d->controller && d->abs_centred[code] && axis_direction(d,code,d->abs_values[code])==direction) held=true;
-            }
-            if (held) {
-                char name[24]; snprintf(name,sizeof(name),"AX%u%s",code,direction<0?"NEG":"POS");
-                append_input_name(line,capacity,name); any=true;
-            }
-        }
-    }
-    if (!any) append_input_name(line,capacity,"NONE");
-}
-
 static void save_snapshot(struct host *host)
 {
     int width = host->mode.hdisplay;
@@ -1777,9 +1732,7 @@ static void draw_host(struct host *host)
         chirky_scope(&host->api,host->active_game->id,false);
     }
     struct chirky_host_api ui=console_api(host);
-    char pad_names[96],key_names[96];
-    held_input_names(host,false,pad_names,sizeof(pad_names));held_input_names(host,true,key_names,sizeof(key_names));
-    chirky_console_render(&host->console,&ui,&host->launcher_art,&host->inputs.state,pad_names,key_names);
+    chirky_console_render(&host->console,&ui,&host->launcher_art,&host->inputs.state);
     chirky_scope(&host->api,"overlay",true);
     if (host->frame_timing_enabled) draw_frame_timing(host);
     chirky_scope(&host->api,"overlay",false);

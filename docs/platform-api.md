@@ -326,3 +326,8 @@ No network service is introduced.
 
 Player assignment, joining and disconnect policy belong to the consuming game.
 Rebuild the host and all modules together for ABI 16.
+
+Circuit Clash claims devices only after a neutral observation followed by a
+Primary or Secondary press. A device cannot own both slots. Disconnect freezes the local
+match; an unassigned device can claim the missing slot, followed by release and
+a countdown. This is the first consumer of the device snapshots.
