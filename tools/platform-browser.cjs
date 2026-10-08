@@ -431,13 +431,22 @@ async function main() {
           for(const entry of catalog.games.filter(g=>g.role==='game'))await tap('[data-button="3"]');
           await tap('[data-button="4"]');await tap('[data-button="4"]');
           assert.equal((await state()).screen,2);await capture('touch-input-settings');
+          await tap('[data-button="3"]');await tap('[data-button="3"]');await tap('[data-button="4"]');
+          assert.equal((await state()).screen,1,'Third touch input-menu entry is Back before keyboard use');
+          await tap('[data-button="4"]');
           await tap('[data-button="4"]');assert.equal((await state()).screen,3);
           await capture('touch-input-test');
-          await key('KeyN','n',78);assert.equal((await state()).inputOptions,1);
+          await key('KeyN','n',78);assert.equal((await state()).inputOptions,0);
           await capture('touch-keyboard-detected');
           await key('F1','F1',112);
-          await tap('[data-button="3"]');await tap('[data-button="3"]');await tap('[data-button="4"]');
-          assert.equal((await state()).screen,1,'Third touch input-menu entry is Back, even after keyboard use');
+          await tap('[data-button="3"]');await tap('[data-button="3"]');
+          await capture('touch-keyboard-mapping-menu');
+          for(let profile=1;profile<=2;profile++){
+            await tap('[data-button="4"]');assert.equal((await state()).capture,1,'Keyboard mapping is available after keyboard use');
+            await capture(`touch-map-keyboard-${profile}`);
+            await key('F1','F1',112);await tap('[data-button="3"]');
+          }
+          await tap('[data-button="4"]');assert.equal((await state()).screen,1);
           await page.call('Page.navigate',{url:new URL(`?game=${game}`,base).href});await ready();
         }
         report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?8:7);
@@ -491,8 +500,8 @@ async function main() {
         report.checks.push('in-console return keeps canvas, WebGL context and fullscreen alive');
         await key('Escape','Escape',27);assert.equal((await state()).screen,0,'Menu must not bypass the launcher Settings entry');
         const launchGames=catalog.games.filter(g=>g.role==='game');
-        // Exercise keyboard mapping in the desktop layout, including a live layout change.
-        if(mobile){await page.call('Emulation.setTouchEmulationEnabled',{enabled:false});await delay(150);assert.equal((await state()).inputOptions,0);}
+        // Physical keyboard use exposes mapping in desktop and touch layouts.
+        assert.equal((await state()).inputOptions,0);
         for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowDown','ArrowDown',40);
         await key('KeyN','n',78);assert.equal((await state()).screen,1);
         await key('KeyN','n',78);assert.equal((await state()).screen,2);
@@ -561,7 +570,6 @@ async function main() {
         }
         assert.equal((await state()).screen,0);
         await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');
-        if(mobile){await page.call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});await delay(150);assert.equal((await state()).inputOptions,1);}
         // Settings includes browser capabilities, without Pi display placement.
         await key('KeyQ','q',81);
         const diagnostics=catalog.games.filter(g=>g.role==='diagnostic').length;

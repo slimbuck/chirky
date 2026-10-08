@@ -191,7 +191,7 @@ per-device snapshots that games receive. Both hosts render this through the
 shared console UI; colours supplement source labels rather than identifying
 players. Raw device readings remain diagnostic text below the rows.
 The browser supplies presentation flags for its touch layout: hide keyboard
-mapping entries and, until a key is used, keyboard diagnostic rows. The shared
+mapping entries and diagnostic rows until a key is used. The shared
 console owns filtering and selection recovery; game input snapshots are unchanged.
 
 The shared console owns controller selection, SNES/Generic choice, remapping,

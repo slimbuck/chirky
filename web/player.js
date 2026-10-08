@@ -136,7 +136,7 @@ function consoleInputOptions(){
   const touchLayout=inputSettings.touch==="show" || (inputSettings.touch!=="hide" && coarsePointer?.matches);
   // console_input_option flags: hide keyboard mapping (1) and test rows (2).
   // Both keyboard sources remain available to games.
-  return touchLayout?1|(keyboardUsed?0:2):0;
+  return touchLayout && !keyboardUsed?3:0;
 }
 let labelPad=null;
 // Physical connection IDs are distinct from mapping profiles: two identical
@@ -242,7 +242,7 @@ function snesPreset(pad){
 function padProfile(pad){
   const saved=padSettings[padIdentity(pad)];
   if(saved && ["snes","generic"].includes(saved.type) && validPadMap(saved.bindings))return saved;
-  return {type:"snes",bindings:snesPreset(pad),automatic:true};
+  return {type:"snes",bindings:snesPreset(pad)};
 }
 function controllerLabel(pad,action){
   const profile=padProfile(pad);return padBindingLabel(pad,profile.bindings[action],profile.type);
@@ -286,9 +286,13 @@ function rawPad(pad){
 function padMask(pad){
   const profile=padProfile(pad),held=rawPad(pad);
   let result=profile.bindings.reduce((mask,b,i)=>mask|(held.some(v=>v.kind===b.kind && v.code===b.code && v.direction===b.direction)?1<<i:0),0);
-  if(profile.automatic && pad.mapping==="standard"){
-    if(pad.axes[0]<-.55)result|=1;if(pad.axes[0]>.55)result|=2;
-    if(pad.axes[1]<-.55)result|=4;if(pad.axes[1]>.55)result|=8;
+  if(profile.type==="snes" && pad.mapping==="standard"){
+    // Standard SNES directions accept the matching left-stick direction too,
+    // including saved presets. Explicitly remapped directions keep their binding.
+    for(const value of held)if(value.kind===2 && value.code<2){
+      const action=value.code*2+(value.direction>0?1:0),binding=profile.bindings[action];
+      if(binding.kind===1 && binding.code===[14,15,12,13][action])result|=1<<action;
+    }
   }
   return result;
 }

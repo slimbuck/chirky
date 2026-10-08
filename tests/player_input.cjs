@@ -27,7 +27,7 @@ test('touch layout hides keyboard setup and diagnostics until keyboard use witho
   p.run('inputSettings.touch="show"');assert.equal(p.run('consoleInputOptions()'),3);
   assert.equal(p.run('localDevices().filter(d=>d.kind===0).length'),2);
   p.events.keydown({code:'KeyN',preventDefault(){}});
-  assert.equal(p.run('consoleInputOptions()'),1,'keyboard use reveals diagnostics but keeps the touch menu compact');
+  assert.equal(p.run('consoleInputOptions()'),0,'keyboard use reveals mapping options and diagnostic rows');
   assert.equal(p.run('mask()'),16,'physical keyboard gameplay still works');
   p.events.keyup({code:'KeyN'});
   p.run('inputSettings.touch="hide"');assert.equal(p.run('consoleInputOptions()'),0);
@@ -164,6 +164,31 @@ test('standard SNES preset and legacy generic profiles use their respective phys
   assert.equal(p.run('onDeviceLabel(localDevices()[3].id,0)'),'←');
   assert.equal(p.run('onSaveController(localDevices()[3].id,0,padProfile(pad).bindings)'),true);
   assert.equal(p.run('onDeviceLabel(localDevices()[3].id,4)'),'SOUTH');
+});
+
+test('standard SNES stick directions survive preset saving and reload while respecting remaps',()=>{
+  const p=player();
+  const connect=`var pad={index:0,id:'standard',mapping:'standard',buttons:Array.from({length:16},()=>({pressed:false})),axes:[0,0]};navigator.getGamepads=()=>[pad];localDevices()`;
+  p.run(connect);
+  function checkDirections(player){
+    for(const [axes,expected] of [[[-1,0],1],[[1,0],2],[[0,-1],4],[[0,1],8],[[-1,-1],5],[[0,0],0]]){
+      player.run(`pad.axes=${JSON.stringify(axes)}`);
+      assert.equal(player.run('mask()'),expected);
+      assert.equal(player.run('localDevices().at(-1).mask'),expected);
+    }
+    player.run('pad.buttons[14].pressed=true');assert.equal(player.run('mask()'),1);
+    player.run('pad.buttons[14].pressed=false');
+  }
+  checkDirections(p);
+  assert(p.run('onSaveController(localDevices().at(-1).id,1,null)'));checkDirections(p);
+  const restored=player(null,{'chirky.controllers.v2':p.storage.get('chirky.controllers.v2')});
+  restored.run(connect);checkDirections(restored);
+  p.run('var remap=snesPreset(pad);remap[0]=buttonBinding(4);onSaveController(localDevices().at(-1).id,1,remap);pad.axes=[-1,0]');
+  assert.equal(p.run('mask()'),0,'remapping Left removes its implicit stick binding');
+  p.run('pad.buttons[4].pressed=true');assert.equal(p.run('mask()'),1);
+  p.run('pad.buttons[4].pressed=false;pad.axes=[0,-1]');assert.equal(p.run('mask()'),4,'unmodified directions retain stick support');
+  p.run('onSaveController(localDevices().at(-1).id,0,snesPreset(pad))');
+  assert.equal(p.run('mask()'),0,'Generic profiles use only their explicit bindings');
 });
 
 test('new controllers default to SNES and can be selected before saving any settings',()=>{

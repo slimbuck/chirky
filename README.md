@@ -218,9 +218,10 @@ Test inputs, USB controller/joystick, keyboard 1, keyboard 2, Back. Controller
 selection has a visible Back option; Esc/Menu, the mapped Back button or F1 also
 return to input settings. Disconnecting the last controller leaves selection.
 
-In the browser touch layout, keyboard mapping entries are hidden: the menu is
-Test inputs, USB controller/joystick, Back. Physical keyboards still control
-games; their test rows appear after keyboard use during the current page session.
+In the browser touch layout, keyboard mapping entries are initially hidden: the
+menu is Test inputs, USB controller/joystick, Back. Keyboard use reveals both
+mapping entries and test rows for the rest of the current page session. Physical
+keyboards still control games normally.
 Desktop browser and Pi keyboard setup remain available as before.
 
 **Test inputs** gives each connected source a separate labelled, coloured row,

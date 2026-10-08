@@ -148,10 +148,9 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
 - **Settings → Input Settings** runs the same portable console code as the Pi: Test inputs,
   Map USB controller/joystick, Map keyboard 1, Map keyboard 2, Back. USB setup is disabled when no
   controller is connected. Selection has a Back option and accepts Esc/Menu or F1.
-  The touch layout hides both keyboard mapping entries and hides keyboard test
-  rows until keyboard use in the current page session. Physical keyboards still
-  work in games. Switching back to the desktop layout restores keyboard setup;
-  switching to touch during a keyboard mapping draft cancels it without saving.
+  The touch layout initially hides both keyboard mapping entries and keyboard
+  test rows. Keyboard use reveals both for the rest of the page session, and
+  physical keyboards still work in games. Desktop layouts always show keyboard setup.
   USB setup first asks for a button press
   on the chosen device, then offers SNES preset, Generic joystick and Remap buttons.
   SNES applies default bindings and legends; Generic opens the mapping wizard;
@@ -166,8 +165,9 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   Menu returns there. Relaunching a game starts a fresh run. F1 provides keyboard
   recovery even if the saved mapping is inconvenient.
 - Default SNES bindings on standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
-  and Start/Select for Start/Menu. Raw adapters default to the SNES/Pico layout;
-  other USB devices can map their
+  and Start/Select for Start/Menu. Saving the SNES preset retains left-stick support. Remapped directions and
+  Generic joystick profiles use their explicit bindings.
+  Raw adapters default to the SNES/Pico layout; other USB devices can map their
   raw buttons and axes in Map USB controller/joystick; use the keyboard to get there first.
   Both platforms save profiles per model, independently of player connection IDs.
   Browser profiles use `chirky.controllers.v2` in localStorage; existing v1 maps
