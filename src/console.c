@@ -118,6 +118,11 @@ static void choose(struct chirky_console *c,int action,bool settings)
 bool chirky_console_update(struct chirky_console *c,const struct console_input *frame)
 {
     const struct chirky_input *input=frame->logical;
+    unsigned previous_count=c->controller_count;
+    c->controller_count=0;
+    for(unsigned i=0;i<input->device_count;i++)c->controller_count+=input->devices[i].kind==CHIRKY_DEVICE_CONTROLLER;
+    if(!previous_count && c->controller_count && c->settings_message &&
+       !strcmp(c->settings_message,"NO USB CONTROLLER/JOYSTICK"))c->settings_message="";
     enum console_screen before=chirky_console_screen(c);
     if(before==SCREEN_LAUNCHER || before==SCREEN_SETTINGS || before==SCREEN_INPUT || before==SCREEN_DISPLAY) {
         /* Two fixed substeps per console tick: continuous velocity on reversals,
@@ -143,8 +148,12 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
     }
     if((c->controller_options || (c->setup.active && !c->setup.keyboard)) && c->services.controller_info &&
        c->services.controller_info(c->services.context,c->controller_id,c->controller_name,sizeof(c->controller_name))<0) {
-        c->setup.active=c->controller_options=false;c->controller_selecting=true;c->controller_id=0;
+        c->setup.active=c->controller_options=false;c->controller_selecting=c->controller_count>0;c->controller_id=0;
         c->settings_message="CONTROLLER DISCONNECTED";chirky_console_block(c);
+    }
+    if(c->controller_selecting && (!c->controller_count || frame->cancel ||
+       input->button_pressed[CHIRKY_BUTTON_MENU] || input->button_pressed[CHIRKY_BUTTON_SECONDARY])) {
+        c->controller_selecting=false;chirky_console_block(c);return false;
     }
     if(c->ui_wait_release && !frame->cancel) {
         bool neutral=!frame->keyboard_held && !frame->controller_held;
@@ -168,9 +177,11 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
             }
         }
     } else if(c->controller_selecting) {
-        if(frame->cancel || input->button_pressed[CHIRKY_BUTTON_SECONDARY])c->controller_selecting=false;
+        if(input->button_pressed[CHIRKY_BUTTON_PRIMARY] || input->button_pressed[CHIRKY_BUTTON_START]) {
+            c->controller_selecting=false;chirky_console_block(c);
+        }
     } else if(c->controller_options) {
-        int choice=console_menu_update(&c->controller_option,4,input,frame->cancel);
+        int choice=console_menu_update(&c->controller_option,4,input,frame->cancel || input->button_pressed[CHIRKY_BUTTON_MENU]);
         if(choice==-2 || choice==3)c->controller_options=false;
         else if(choice==0) {
             enum mapping_save_result result=c->services.save_controller?
@@ -218,12 +229,12 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
         if(frame->cancel || c->controller_menu_chord_frames>=60){c->input_test=false;c->controller_menu_chord_frames=0;}
     } else if(c->controller_settings) {
         int previous=c->selected_option;
-        int choice=console_menu_update(&c->selected_option,5,input,frame->cancel);
+        int choice=console_menu_update(&c->selected_option,5,input,frame->cancel || input->button_pressed[CHIRKY_BUTTON_MENU]);
         c->menu_offset+=c->selected_option-previous;
         if(choice==-2 || choice==4)c->controller_settings=false;
-        else if(choice==2){c->input_test=true;c->controller_menu_chord_frames=0;}
-        else if(choice==0){c->controller_selecting=true;c->settings_message="";}
-        else if(choice==1 || choice==3){setup_begin(&c->setup,true);c->setup.keyboard_profile=choice==3?2:1;
+        else if(choice==0){c->input_test=true;c->controller_menu_chord_frames=0;}
+        else if(choice==1){c->controller_selecting=c->controller_count>0;c->settings_message=c->controller_count?"":"NO USB CONTROLLER/JOYSTICK";}
+        else if(choice==2 || choice==3){setup_begin(&c->setup,true);c->setup.keyboard_profile=(unsigned)choice-1;
             c->settings_message="";c->controller_menu_chord_frames=0;}
     } else if(c->settings_menu) {
         int previous=c->settings_option;
@@ -256,21 +267,24 @@ void chirky_console_draw_display(const struct chirky_console *c,const struct chi
     console_menu_text(api,12,34,c->settings_message && *c->settings_message?c->settings_message:hint,1,201,191,173);
     console_menu_footer(api,true);
 }
-void chirky_console_render(struct chirky_console *c,const struct chirky_host_api *api,struct splash_art *art,unsigned pad,unsigned key,const char *pad_names,const char *key_names)
+void chirky_console_render(struct chirky_console *c,const struct chirky_host_api *api,struct splash_art *art,const struct chirky_input *input,const char *pad_names,const char *key_names)
 {
     switch(chirky_console_screen(c)) {
     case SCREEN_PAUSE:console_draw_pause_menu(api,c->pause_option);break;
     case SCREEN_GAME:break;
     case SCREEN_DISPLAY:console_page(api,art,"Display area");chirky_console_draw_display(c,api);break;
-    case SCREEN_INPUT:case SCREEN_SETUP:case SCREEN_TEST:
-        console_page(api,art,c->controller_selecting?"Choose controller":c->controller_options && !c->setup.active?"Controller setup":c->setup.active?(c->setup.keyboard?
-            (c->setup.keyboard_profile==2?"Map keyboard P2":"Map keyboard P1"):
-            "Map controller"):c->input_test?"Test buttons":"Input settings");
+    case SCREEN_TEST:
+        console_draw_live_inputs(api,input,pad_names,key_names);
+        console_draw_controller_settings(api,&c->setup,true,c->selected_option,c->settings_message,c->menu_offset,c->controller_count>0);
+        break;
+    case SCREEN_INPUT:case SCREEN_SETUP:
+        console_page(api,art,c->controller_selecting?"Choose USB device":c->controller_options && !c->setup.active?"USB setup":c->setup.active?(c->setup.keyboard?
+            (c->setup.keyboard_profile==2?"Map keyboard 2":"Map keyboard 1"):
+            "Map USB device"):"Input settings");
         if(c->controller_selecting)console_draw_controller_selection(api,c->settings_message);
         else if(c->controller_options && !c->setup.active)
             console_draw_controller_profile(api,c->controller_name,c->controller_option,c->settings_message);
-        else console_draw_controller_settings(api,&c->setup,c->input_test,c->selected_option,c->settings_message,c->menu_offset);
-        if(c->input_test)console_draw_live_inputs(api,pad,key,pad_names,key_names);
+        else console_draw_controller_settings(api,&c->setup,c->input_test,c->selected_option,c->settings_message,c->menu_offset,c->controller_count>0);
         break;
     case SCREEN_SETTINGS:console_page(api,art,"Settings");console_draw_settings_menu(api,&c->launcher,c->settings_option,c->menu_offset);break;
     default:console_draw_launcher(api,art,&c->launcher,c->selected_game,c->menu_offset);break;

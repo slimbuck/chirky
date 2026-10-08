@@ -156,13 +156,14 @@ static inline void console_draw_icon(const struct chirky_host_api *api,const str
         col=end;
     }
 }
-static inline void console_scroll_list(const struct chirky_host_api *api,const char *const *labels,const char *const *ids,int count,int selected,float offset,int low,int high)
+static inline void console_scroll_list_disabled(const struct chirky_host_api *api,const char *const *labels,const char *const *ids,int count,int selected,float offset,int low,int high,int disabled)
 {
     int width=api->screen_width-24,centre=(low+high)/2,middle=(int)-offset;
+    struct launcher_colour highlight=selected==disabled?console_card:launcher_gold;
     for(int pass=0;pass<2;pass++) {
         if(pass==1) {
             launcher_round(api,12,centre-16,width,26,console_shadow,low,high);
-            launcher_round(api,12,centre-13,width,26,launcher_gold,low,high);
+            launcher_round(api,12,centre-13,width,26,highlight,low,high);
         }
         for(int row=middle-3;row<=middle+3 && count>0;row++) {
             float distance=(row+offset)*30;
@@ -175,16 +176,19 @@ static inline void console_scroll_list(const struct chirky_host_api *api,const c
             else {
                 int curve=magnitude*magnitude/400;if(curve>5)curve=5;
                 int text_x=23+curve;
+                int font=launcher_text_width(labels[index],1)>width-22?0:1;
                 const struct launcher_icon *icon=console_icon(ids?ids[index]:NULL);
                 if(icon){console_draw_icon(api,icon,text_x,y-10,alpha,low,high);text_x+=26;}
-                struct launcher_colour ink=launcher_mix(launcher_cream,launcher_navy,alpha);
-                launcher_text(api,text_x,y+8,labels[index],1,ink,card,api->screen_width-20,low,centre-13);
-                launcher_text(api,text_x,y+8,labels[index],1,ink,card,api->screen_width-20,centre+13,high);
-                launcher_text(api,text_x,y+8,labels[index],1,launcher_navy,launcher_gold,api->screen_width-20,centre-13,centre+13);
+                struct launcher_colour ink=launcher_mix(index==disabled?console_muted:launcher_cream,launcher_navy,alpha);
+                launcher_text(api,text_x,y+8,labels[index],font,ink,card,api->screen_width-20,low,centre-13);
+                launcher_text(api,text_x,y+8,labels[index],font,ink,card,api->screen_width-20,centre+13,high);
+                launcher_text(api,text_x,y+8,labels[index],font,index==disabled?console_muted:launcher_navy,highlight,api->screen_width-20,centre-13,centre+13);
             }
         }
     }
 }
+static inline void console_scroll_list(const struct chirky_host_api *api,const char *const *labels,const char *const *ids,int count,int selected,float offset,int low,int high)
+{ console_scroll_list_disabled(api,labels,ids,count,selected,offset,low,high,-1); }
 static inline void console_draw_launcher(const struct chirky_host_api *api,const struct splash_art *art,const struct launcher_config *launcher,int selected,float offset)
 {
     console_page(api,art,NULL);
@@ -204,10 +208,12 @@ static inline void console_draw_settings_menu(const struct chirky_host_api *api,
 static inline void console_draw_controller_selection(const struct chirky_host_api *api,const char *message)
 {
     int h=api->screen_height;
-    launcher_text(api,12,h-88,"Press a button on the",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,h-110,"controller to configure",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
-    if(message && *message)launcher_text(api,12,h-140,message,0,console_muted,launcher_navy,api->screen_width-12,0,h);
-    console_menu_footer(api,false);
+    launcher_text(api,12,h-84,"Press a button on your",0,launcher_cream,launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,h-98,"USB controller/joystick",0,launcher_cream,launcher_navy,api->screen_width-12,0,h);
+    if(message && *message)launcher_text(api,12,h-116,message,0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    launcher_round(api,12,34,api->screen_width-24,26,launcher_gold,0,h);
+    launcher_text(api,23,54,"Back",1,launcher_navy,launcher_gold,api->screen_width-12,0,h);
+    console_menu_footer(api,true);
 }
 static inline void console_draw_controller_profile(const struct chirky_host_api *api,const char *name,int selected,const char *message)
 {
@@ -216,25 +222,41 @@ static inline void console_draw_controller_profile(const struct chirky_host_api 
     console_scroll_list(api,labels,NULL,4,selected,0,28,api->screen_height-78);
     console_menu_footer(api,true);
 }
-static inline void console_draw_live_inputs(const struct chirky_host_api *api,unsigned pad_mask,unsigned key_mask,const char *pad_line,const char *key_line)
+static inline struct launcher_colour console_device_colour(unsigned row)
 {
-    int h=api->screen_height,cell=(api->screen_width-24)/4;
-    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        bool pad=(pad_mask&(1u<<i))!=0,key=(key_mask&(1u<<i))!=0;
-        int x=12+(i%4)*cell,y=h-108-(i/4)*32;
-        launcher_round(api,x,y,cell-3,30,console_card,0,h);
-        char label[24];chirky_input_label(api,(enum chirky_button)i,label,sizeof(label));
-        char *split=launcher_text_width(label,0)>cell-9?strrchr(label,' '):NULL;
-        if(split)*split++=0;
-        launcher_text(api,x+3,y+27,label,0,pad||key?launcher_cream:console_muted,console_card,x+cell-4,0,h);
-        if(split)launcher_text(api,x+3,y+15,split,0,pad||key?launcher_cream:console_muted,console_card,x+cell-4,0,h);
-        launcher_rect(api,x+3,y+3,(cell-9)/2,3,pad?(struct launcher_colour){93,220,153}:launcher_navy,0,h);
-        launcher_rect(api,x+cell/2,y+3,(cell-9)/2,3,key?launcher_gold:launcher_navy,0,h);
-    }
-    launcher_text(api,12,h-152,pad_line,0,(struct launcher_colour){93,220,153},launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,h-164,key_line,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
+    const struct launcher_colour colours[]={{244,184,69},{239,121,106},{93,220,153},{112,184,255},
+        {215,155,255},{255,168,98},{112,223,224},{238,166,203}};
+    return colours[row%CHIRKY_INPUT_DEVICES];
 }
-static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset)
+static inline void console_draw_live_inputs(const struct chirky_host_api *api,const struct chirky_input *input,const char *pad_line,const char *key_line)
+{
+    int h=api->screen_height;unsigned keyboards=0,controllers=0;
+    launcher_rect(api,0,0,api->screen_width,h,launcher_navy,0,h);
+    launcher_text(api,12,h-12,"Test inputs",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,h-33,"USB = controller/joystick",0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    int count=(int)input->device_count,row_height=count?(h-104)/count:24;
+    if(row_height>24)row_height=24;
+    for(unsigned row=0;row<input->device_count;row++) {
+        const struct chirky_device_input *device=&input->devices[row];
+        struct launcher_colour colour=console_device_colour(row);
+        char name[24],held[256]="";
+        if(device->kind==CHIRKY_DEVICE_KEYBOARD)snprintf(name,sizeof(name),"KB %u",++keyboards);
+        else if(device->kind==CHIRKY_DEVICE_CONTROLLER)snprintf(name,sizeof(name),"USB %u",++controllers);
+        else snprintf(name,sizeof(name),"Touch");
+        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)if(device->buttons[b] || device->button_pressed[b]) {
+            size_t used=strlen(held);snprintf(held+used,sizeof(held)-used,"%s%s",used?" ":"",device->labels[b]);
+        }
+        bool active=*held;int y=h-49-(int)row*row_height;
+        launcher_rect(api,12,y-row_height+3,api->screen_width-24,row_height-1,console_card,0,h);
+        launcher_rect(api,12,y-row_height+3,3,row_height-1,colour,0,h);
+        launcher_text(api,20,y,name,0,colour,console_card,78,0,h);
+        launcher_text(api,80,y,active?held:"-",0,active?colour:console_muted,console_card,api->screen_width-16,0,h);
+    }
+    if(!count)launcher_text(api,12,h-60,"No input devices",0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,47,pad_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,35,key_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
+}
+static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset,bool controller_available)
 {
     int h=api->screen_height;
     if(setup->active) {
@@ -254,8 +276,8 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         snprintf(hint,sizeof(hint),"Hold %s to go back",label);
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
-        const char *labels[]={"Map controller","Map keyboard P1","Test buttons","Map keyboard P2","Back"};
-        console_scroll_list(api,labels,NULL,5,selected,offset,28,h-78);
+        const char *labels[]={"Test inputs",controller_available?"Map USB controller/joystick":"USB controller/joystick (none)","Map keyboard 1","Map keyboard 2","Back"};
+        console_scroll_list_disabled(api,labels,NULL,5,selected,offset,28,h-78,controller_available?-1:1);
         if(message && *message)launcher_text(api,12,h-65,message,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
         console_menu_footer(api,true);
     }

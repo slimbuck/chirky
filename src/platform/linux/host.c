@@ -1153,7 +1153,7 @@ static void append_input_name(char *line, size_t capacity, const char *name)
 /* Poll the device states, including unmapped inputs, without consuming events. */
 static void held_input_names(const struct host *host, bool keyboard, char *line, size_t capacity)
 {
-    copy_text(line,capacity,keyboard?"KEY":"PAD");
+    copy_text(line,capacity,keyboard?"KEY":"USB");
     bool any=false;
     for (unsigned int code=0;code<=KEY_MAX;code++) {
         bool held=false;
@@ -1777,13 +1777,9 @@ static void draw_host(struct host *host)
         chirky_scope(&host->api,host->active_game->id,false);
     }
     struct chirky_host_api ui=console_api(host);
-    unsigned pad=0,key=0;char pad_names[96],key_names[96];
-    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        if(controller_mask(host)&(1u<<i))pad|=1u<<i;
-        if(keyboard_binding_down(&host->inputs,&host->keyboard_bindings[i]))key|=1u<<i;
-    }
+    char pad_names[96],key_names[96];
     held_input_names(host,false,pad_names,sizeof(pad_names));held_input_names(host,true,key_names,sizeof(key_names));
-    chirky_console_render(&host->console,&ui,&host->launcher_art,pad,key,pad_names,key_names);
+    chirky_console_render(&host->console,&ui,&host->launcher_art,&host->inputs.state,pad_names,key_names);
     chirky_scope(&host->api,"overlay",true);
     if (host->frame_timing_enabled) draw_frame_timing(host);
     chirky_scope(&host->api,"overlay",false);

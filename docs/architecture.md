@@ -186,6 +186,11 @@ connected devices once per second, and clears unplugged state. Both platforms
 keep profiles by model and input state by connection ID. Identical pads share a
 profile but have separate inputs. Touch is one additional browser source.
 
+Input settings derives USB availability and separate test rows from the same
+per-device snapshots that games receive. Both hosts render this through the
+shared console UI; colours supplement source labels rather than identifying
+players. Raw device readings remain diagnostic text below the rows.
+
 The shared console owns controller selection, SNES/Generic choice, remapping,
 release/cancel gates and disconnect recovery. Platform callbacks resolve a
 connection to its model, apply the platform-specific raw SNES preset and persist

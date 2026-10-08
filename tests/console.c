@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-struct fixture {struct chirky_console console;int loads,unloads,saves,actions;unsigned profile;bool conflict;bool save_ok,load_ok;};
+struct fixture {struct chirky_console console;int loads,unloads,saves,actions;unsigned controllers;unsigned profile;bool conflict;bool save_ok,load_ok;};
 static bool load(void *context,int index){struct fixture *f=context;assert(index==0 || index==1);f->loads++;return f->load_ok;}
 static void unload(void *context){((struct fixture *)context)->unloads++;}
 static enum mapping_save_result save(void *context,unsigned profile,const struct controller_binding *bindings)
@@ -12,14 +12,15 @@ static enum mapping_save_result save(void *context,unsigned profile,const struct
 static void action(void *context,enum console_action action){(void)action;((struct fixture *)context)->actions++;}
 static void init(struct fixture *f,unsigned caps)
 {
-    *f=(struct fixture){.save_ok=true,.load_ok=true};
+    *f=(struct fixture){.save_ok=true,.load_ok=true,.controllers=1};
     f->console.services=(struct console_services){.context=f,.load=load,.unload=unload,.save_keyboard=save,.action=action};
     const struct console_game games[]={{"game","Game",false},{"diagnostic","Diagnostic",true}};
     chirky_console_catalog(&f->console,games,2,caps);
 }
 static bool tick(struct fixture *f,int button,bool pressed,bool cancel)
 {
-    struct chirky_input input={0};
+    struct chirky_input input={.device_count=f->controllers};
+    if(f->controllers)input.devices[0]=(struct chirky_device_input){.id=9,.kind=CHIRKY_DEVICE_CONTROLLER};
     if(button>=0){input.buttons[button]=true;input.button_pressed[button]=pressed;}
     return chirky_console_update(&f->console,&(struct console_input){.logical=&input,.cancel=cancel});
 }
@@ -33,7 +34,7 @@ static void controller_profiles(unsigned capabilities)
 {
     struct fixture f;init(&f,capabilities);struct chirky_console *c=&f.console;
     c->services.controller_info=controller_info;c->services.save_controller=controller_save;
-    c->controller_settings=true;
+    c->controller_settings=true;c->selected_option=1;
     tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->controller_selecting);
     chirky_console_controller_press(c,8);assert(c->controller_selecting);
     chirky_console_controller_press(c,9);assert(c->controller_options && !c->controller_selecting);
@@ -62,7 +63,7 @@ static void shared_trace(unsigned caps)
     tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);
     assert(chirky_console_screen(c)==SCREEN_SETTINGS);
     tap(&f,CHIRKY_BUTTON_PRIMARY);assert(chirky_console_screen(c)==SCREEN_INPUT);
-    tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->setup.active && c->setup.keyboard);
+    tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->setup.active && c->setup.keyboard);
     for(unsigned i=0;i<8;i++) {
         chirky_console_capture(c,(struct controller_binding){BINDING_KEY,100+i,0});
         tick(&f,-1,false,false);
@@ -77,7 +78,7 @@ static void shared_trace(unsigned caps)
     for(unsigned i=0;i<8;i++){chirky_console_capture(c,(struct controller_binding){BINDING_KEY,100+i,0});tick(&f,-1,false,false);}
     assert(f.saves==2 && !strcmp(c->settings_message,"SAVE FAILED - NOTHING CHANGED"));
     for(unsigned profile=1;profile<=2;profile++) {
-        c->selected_option=profile==1?1:3;f.conflict=profile==2;f.save_ok=true;
+        c->selected_option=profile+1;f.conflict=profile==2;f.save_ok=true;
         tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->setup.keyboard_profile==profile);
         for(unsigned i=0;i<8;i++){chirky_console_capture(c,(struct controller_binding){BINDING_KEY,100+i,0});tick(&f,-1,false,false);}
         assert(f.profile==profile);
@@ -106,6 +107,31 @@ static void shared_trace(unsigned caps)
         chord.button_pressed[CHIRKY_BUTTON_MENU]=false;
     }
     assert(!c->game_active && !c->paused && chirky_console_screen(c)==SCREEN_LAUNCHER);
+}
+static void input_menu_devices(void)
+{
+    struct fixture f;init(&f,0);struct chirky_console *c=&f.console;
+    f.controllers=0;chirky_console_open(c,CONSOLE_INPUT);settle(&f);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->input_test);
+    tick(&f,-1,false,true);settle(&f);tap(&f,CHIRKY_BUTTON_DOWN);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);
+    assert(!c->controller_selecting && !c->setup.active && c->selected_option==1);
+    assert(!strcmp(c->settings_message,"NO USB CONTROLLER/JOYSTICK"));
+    tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);
+    assert(c->setup.keyboard && c->setup.keyboard_profile==1);
+    tick(&f,-1,false,true);settle(&f);
+    tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);
+    assert(c->setup.keyboard && c->setup.keyboard_profile==2);
+    tick(&f,-1,false,true);settle(&f);
+    tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);assert(!c->controller_settings);
+    chirky_console_open(c,CONSOLE_INPUT);settle(&f);f.controllers=1;tap(&f,CHIRKY_BUTTON_DOWN);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->controller_selecting);
+    tap(&f,CHIRKY_BUTTON_MENU);assert(!c->controller_selecting && c->controller_settings);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->controller_selecting);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(!c->controller_selecting);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->controller_selecting);
+    f.controllers=0;tick(&f,-1,false,false);assert(!c->controller_selecting);
+    tap(&f,CHIRKY_BUTTON_MENU);assert(!c->controller_settings);
 }
 static int pause_text_bottom,pause_selection_top;
 static void pause_rect(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
@@ -211,14 +237,20 @@ static void shared_menu_layouts(void)
         struct chirky_host_api api={.screen_width=sizes[size][0],.screen_height=sizes[size][1],.fill_rect=launcher_paint,.draw_sprite=mascot_draw};api.context=&api;
         for(int page=0;page<3;page++) {
             chirky_console_open(c,pages[page]);c->menu_offset=-.6f;
-            chirky_console_render(c,&api,&art,0,0,"PAD NONE","KEY NONE");
+            chirky_console_render(c,&api,&art,&(struct chirky_input){0},"PAD NONE","KEY NONE");
         }
         chirky_console_open(c,CONSOLE_INPUT);c->input_test=true;
-        chirky_console_render(c,&api,&art,255,255,"PAD BTN SOUTH","KEY LEFT");
+        struct chirky_input devices={.device_count=CHIRKY_INPUT_DEVICES};
+        for(unsigned i=0;i<CHIRKY_INPUT_DEVICES;i++) {
+            devices.devices[i].id=i+1;devices.devices[i].kind=i<2?CHIRKY_DEVICE_KEYBOARD:CHIRKY_DEVICE_CONTROLLER;
+            devices.devices[i].buttons[CHIRKY_BUTTON_PRIMARY]=true;
+            snprintf(devices.devices[i].labels[CHIRKY_BUTTON_PRIMARY],CHIRKY_INPUT_LABEL_SIZE,"B");
+        }
+        chirky_console_render(c,&api,&art,&devices,"PAD BTN SOUTH","KEY LEFT");
         c->input_test=false;setup_begin(&c->setup,true);
         for(int step=0;step<8;step++) {
             c->setup.step=step;
-            chirky_console_render(c,&api,&art,0,0,"PAD NONE","KEY NONE");
+            chirky_console_render(c,&api,&art,&(struct chirky_input){0},"PAD NONE","KEY NONE");
         }
     }
 }
@@ -254,6 +286,7 @@ int main(void)
     assert(pause_selection_top>=0 && pause_text_bottom-(pause_selection_top+1)>=3);
     shared_trace(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     shared_trace(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
+    input_menu_devices();
     controller_profiles(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     controller_profiles(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     struct fixture web;init(&web,CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);

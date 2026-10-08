@@ -43,6 +43,7 @@ struct chirky_console {
     struct binding_setup setup;
     bool controller_selecting,controller_options;
     uint32_t controller_id;
+    unsigned controller_count;
     int controller_option;
     char controller_name[96];
     struct chirky_input_gate transition_gate;
@@ -73,6 +74,6 @@ void chirky_console_timing(struct chirky_console *,bool,uint64_t);
 /* True permits one game update. Rendering and I/O stay with the host. */
 bool chirky_console_update(struct chirky_console *,const struct console_input *);
 void chirky_console_render(struct chirky_console *,const struct chirky_host_api *,
-    struct splash_art *,unsigned,unsigned,const char *,const char *);
+    struct splash_art *,const struct chirky_input *,const char *,const char *);
 void chirky_console_draw_display(const struct chirky_console *,const struct chirky_host_api *);
 #endif

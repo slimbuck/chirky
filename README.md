@@ -173,7 +173,7 @@ New controllers default to SNES bindings and labels on both platforms. Saved
 profiles, including Generic joystick mappings, take precedence.
 
 Both platforms offer the same controller setup: **Settings > Input Settings >
-Map controller**, then press a button on the controller to select it.
+Map USB controller/joystick**, then press a button on the controller to select it.
 Choose **SNES preset** for B/Y, Start/Select and arrow labels with default bindings,
 or **Generic joystick** to map all eight inputs with neutral button/axis labels.
 **Remap buttons** changes bindings while retaining the selected label profile.
@@ -200,7 +200,7 @@ Existing Pi SNES/Pico bindings and browser controller mappings remain usable.
 - F1 is native recovery/cancel, F12 captures a Pi snapshot. The physical
   Start + Select recovery chord remains available outside input setup.
 
-Choose **Settings > Input Settings**, then **Map controller**, **Map keyboard P1**, or **Map keyboard P2**.
+Choose **Settings > Input Settings**, then **Map USB controller/joystick**, **Map keyboard 1**, or **Map keyboard 2**.
 Keyboard setup and the Generic joystick/Remap buttons wizards capture the eight
 Chirky inputs in the order above, with Primary before Secondary. Release inputs between prompts. Duplicate bindings are
 rejected; completed mappings save atomically. F1 cancels keyboard setup; holding
@@ -213,8 +213,15 @@ layout: changing P1 also changes menu and single-player controls. Player layouts
 must use distinct keys except matching Start/Menu bindings. Prompts and
 keyboard help follow the saved mappings.
 
-Green controller and gold keyboard indicators show both sources independently.
-**Test buttons** suspends navigation; hold the displayed back control (the
+USB setup is disabled until a controller/joystick is connected. The menu order is
+Test inputs, USB controller/joystick, keyboard 1, keyboard 2, Back. Controller
+selection has a visible Back option; Esc/Menu, the mapped Back button or F1 also
+return to input settings. Disconnecting the last controller leaves selection.
+
+**Test inputs** gives each connected source a separate labelled, coloured row,
+including both keyboard layouts, each USB controller and browser touch. Rows show
+the physical labels of held or newly pressed inputs; raw USB/key readings remain
+available below. This screen suspends navigation; hold the displayed back control (the
 Secondary binding) for one second or press F1
 to return. Screen transitions consume the opening press and wait for two neutral
 updates before accepting input on the next screen.

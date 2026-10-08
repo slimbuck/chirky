@@ -295,7 +295,7 @@ function controllerMask(){return pads().reduce((value,pad)=>value|padMask(pad),0
 function mask(){let value=keyboardMask()|controllerMask();for(const buttons of touch.values())value|=buttons;return value;}
 function onRawNames(keyboard){
   if(keyboard)return "KEY "+([...keys].map(keyName).join(" ") || "NONE");
-  return "PAD "+(pads().flatMap(p=>rawPad(p).map(v=>v.kind===1?`B${v.code}`:`AX${v.code}${v.direction<0?"NEG":"POS"}`)).join(" ") || "NONE");
+  return "USB "+(pads().flatMap(p=>rawPad(p).map(v=>v.kind===1?`B${v.code}`:`AX${v.code}${v.direction<0?"NEG":"POS"}`)).join(" ") || "NONE");
 }
 function onSaveKeyboard(values,profile=1){
   try{

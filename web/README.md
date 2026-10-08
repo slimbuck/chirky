@@ -145,14 +145,17 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   The guide wraps in narrow windows and stays hidden in touch layouts and fullscreen.
   Its Fredoka 500–600 character subset and SIL Open Font License are embedded in
   `style.css`, so the guide needs no external font request.
-- **Settings → Input Settings** runs the same portable console code as the Pi: Map Controller,
-  Map Keyboard P1/P2 and Test Buttons. Map Controller first asks for a button press
+- **Settings → Input Settings** runs the same portable console code as the Pi: Test inputs,
+  Map USB controller/joystick, Map keyboard 1, Map keyboard 2, Back. USB setup is disabled when no
+  controller is connected. Selection has a Back option and accepts Esc/Menu or F1.
+  USB setup first asks for a button press
   on the chosen device, then offers SNES preset, Generic joystick and Remap buttons.
   SNES applies default bindings and legends; Generic opens the mapping wizard;
   Remap retains the existing legend profile. The wizard captures all eight inputs and saves
   after the last release. Duplicate inputs are rejected. F1 cancels a draft;
-  holding two controller buttons also cancels controller setup. In Test Buttons,
-  hold Secondary for one second to return. Cancel or a storage failure preserves
+  holding two controller buttons also cancels controller setup. In Test inputs, each source has its own labelled, coloured row showing its
+  physical button labels; both keyboard layouts, each USB controller and touch
+  remain distinct. Hold Secondary for one second to return. Cancel or a storage failure preserves
   the old mapping. Pi and browser mappings are stored independently.
 - Menu opens the shared pause menu: Continue Game or Return to Launcher.
   Primary selects and Secondary goes back. Hardware Test lives in Settings and
@@ -161,7 +164,7 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
 - Default SNES bindings on standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
   and Start/Select for Start/Menu. Raw adapters default to the SNES/Pico layout;
   other USB devices can map their
-  raw buttons and axes in Map Controller; use the keyboard to get there first.
+  raw buttons and axes in Map USB controller/joystick; use the keyboard to get there first.
   Both platforms save profiles per model, independently of player connection IDs.
   Browser profiles use `chirky.controllers.v2` in localStorage; existing v1 maps
   migrate as generic profiles. Identical controllers share a profile. Selecting

@@ -18,20 +18,11 @@ static void draw_launcher(struct host *host)
 static void draw_settings_menu(struct host *host)
 { struct chirky_host_api ui=console_api(host); clear_screen();ensure_launcher(host);console_page(&ui,&host->launcher_art,"Settings");console_draw_settings_menu(&ui,&host->console.launcher,host->console.settings_option,host->console.menu_offset); }
 
-static void draw_live_inputs(struct host *host)
-{ struct chirky_host_api ui=console_api(host);
-    unsigned pad=controller_mask(host),key=0;char pad_line[96],key_line[96];
-    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        if(keyboard_binding_down(&host->inputs,&host->keyboard_bindings[i]))key|=1u<<i;
-    }
-    held_input_names(host,false,pad_line,sizeof(pad_line));held_input_names(host,true,key_line,sizeof(key_line));
-    console_draw_live_inputs(&ui,pad,key,pad_line,key_line);
-}
-
 static void draw_controller_settings(struct host *host)
-{ struct chirky_host_api ui=console_api(host);
-    clear_screen();console_page(&ui,&host->launcher_art,host->console.input_test?"Test buttons":"Input settings");console_draw_controller_settings(&ui,&host->console.setup,host->console.input_test,host->console.selected_option,host->console.settings_message,host->console.menu_offset);
-    if(host->console.input_test)draw_live_inputs(host);
+{
+    struct chirky_host_api ui=console_api(host);char pad[96],key[96];
+    held_input_names(host,false,pad,sizeof(pad));held_input_names(host,true,key,sizeof(key));
+    clear_screen();chirky_console_render(&host->console,&ui,&host->launcher_art,&host->inputs.state,pad,key);
 }
 
 static void draw_display_settings(struct host *host)
@@ -253,6 +244,7 @@ static void check_transition_gates(void)
     event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);assert(!h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_settings && !h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
+    tap(&h,1,KEY_DOWN);
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_selecting);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
     tap(&h,0,BTN_EAST);assert(h.console.controller_options);
@@ -291,8 +283,8 @@ static void check_uninitialized_controller_axes(void)
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_SETTINGS);
     assert(!h.console.ui_wait_release);
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_INPUT);
-    char held[128];held_input_names(&h,false,held,sizeof(held));assert(!strcmp(held,"PAD NONE"));
-    tap(&h,0,BTN_EAST);assert(h.console.controller_selecting);
+    char held[128];held_input_names(&h,false,held,sizeof(held));assert(!strcmp(held,"USB NONE"));
+    tap(&h,1,KEY_DOWN);tap(&h,0,BTN_EAST);assert(h.console.controller_selecting);
     tap(&h,0,BTN_EAST);h.console.controller_option=2;tap(&h,0,BTN_EAST);
     assert(current_screen(&h)==SCREEN_SETUP && !h.console.setup.wait_release);
     event(&h,0,EV_ABS,ABS_X,0);update_host(&h);assert(h.console.setup.step==0);
@@ -404,7 +396,7 @@ static void check_migration(void)
 static void check_live_inputs(struct host *host,const char *output_dir)
 {
     assert(CHIRKY_BUTTON_COUNT==8);
-    host->console.controller_settings=true;host->console.selected_option=2;
+    host->console.controller_settings=true;host->console.selected_option=0;
     tap(host,1,KEY_N);assert(host->console.input_test);
     /* Every keyboard key addresses one Chirky button, independent of UI behavior. */
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
@@ -448,17 +440,20 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     held_input_names(host,true,name,sizeof(name));assert(strstr(name," R") && strstr(name," T"));
     draw_controller_settings(host);
     char output[512];snprintf(output,sizeof(output),"%s/input-test.ppm",output_dir);write_preview(output);
-    /* Physical legends wrap above the independent controller/key indicators. */
-    int cell=(host->api.screen_width-24)/4,x=host->safe_x+12+cell;
-    int indicator_y=host->safe_y+host->api.screen_height-105-(CHIRKY_BUTTON_SECONDARY/4)*32;
-    assert(framebuffer[indicator_y][x+3][1]==220);
-    assert(framebuffer[indicator_y][x+cell/2][0]==244);
+    /* Each connected source has its own coloured row, including both keyboard layouts. */
+    assert(host->inputs.state.device_count==3);
+    for(unsigned row=0;row<3;row++) {
+        struct launcher_colour colour=console_device_colour(row);
+        int y=host->safe_y+host->api.screen_height-52-(int)row*24,x=host->safe_x+13;
+        assert(framebuffer[y][x][0]==colour.r && framebuffer[y][x][1]==colour.g && framebuffer[y][x][2]==colour.b);
+    }
     event(host,1,EV_KEY,KEY_R,0);update_host(host);draw_controller_settings(host);
     assert(host->inputs.state.buttons[CHIRKY_BUTTON_SECONDARY]);
-    assert(framebuffer[indicator_y][x+cell/2][0]==37);
+    assert(!host->inputs.state.devices[0].buttons[CHIRKY_BUTTON_SECONDARY]);
+    assert(host->inputs.state.devices[2].buttons[CHIRKY_BUTTON_SECONDARY]);
     event(host,0,EV_KEY,BTN_SOUTH,0);event(host,0,EV_KEY,BTN_MODE,0);event(host,1,EV_KEY,KEY_T,0);
     event(host,0,EV_ABS,ABS_HAT0X,0);update_host(host);
-    held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"PAD NONE"));
+    held_input_names(host,false,name,sizeof(name));assert(!strcmp(name,"USB NONE"));
     held_input_names(host,true,name,sizeof(name));assert(!strcmp(name,"KEY NONE"));
     tap(host,0,BTN_TR2);tap(host,0,BTN_TL2);assert(host->console.input_test);
     event(host,1,EV_KEY,KEY_R,1);for(int i=0;i<59;i++) update_host(host);assert(host->console.input_test);
@@ -627,7 +622,7 @@ int main(int argc,char **argv)
     tap(&host,0,BTN_SOUTH);assert(!host.console.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.console.settings_menu && !host.console.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.console.controller_settings);
-    tap(&host,0,BTN_EAST);assert(host.console.controller_selecting);
+    tap(&host,1,KEY_DOWN);tap(&host,0,BTN_EAST);assert(host.console.controller_selecting);
     tap(&host,0,BTN_EAST);assert(host.console.controller_options);
     host.console.controller_option=2;tap(&host,0,BTN_EAST);
     assert(host.console.setup.active && !host.console.setup.keyboard);
@@ -651,7 +646,7 @@ int main(int argc,char **argv)
     assert(device_bindings(&host,&host.inputs.devices[0])[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     update_host(&host);
     /* Keyboard setup captures Escape as a mapping; only F1 cancels. */
-    host.console.controller_options=false;host.console.selected_option=1;tap(&host,1,KEY_N);update_host(&host);
+    host.console.controller_options=false;host.console.selected_option=2;tap(&host,1,KEY_N);update_host(&host);
     assert(host.console.setup.active && host.console.setup.keyboard);
     const int keyboard[]={KEY_H,KEY_L,KEY_I,KEY_K,KEY_N,KEY_R,KEY_ENTER,KEY_ESC};
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) tap(&host,1,keyboard[i]);
@@ -738,7 +733,7 @@ int main(int argc,char **argv)
     host.safe_x=32;host.safe_y=24;update_safe_area(&host);host.game_count=6;host.console.selected_game=7;
     for(int i=0;i<6;i++) snprintf(host.games[i].name,sizeof(host.games[i].name),"GAME %d",i+1);
     draw_launcher(&host);char output[512];snprintf(output,sizeof(output),"%s/launcher.ppm",argv[1]);write_preview(output);
-    host.console.settings_message="";host.console.selected_option=2;
+    host.console.settings_message="";host.console.selected_option=0;
     draw_controller_settings(&host);snprintf(output,sizeof(output),"%s/input-settings.ppm",argv[1]);write_preview(output);
     setup_begin(&host.console.setup,false);host.console.setup.controller_id=host.console.controller_id=3;host.console.setup.step=6;host.console.setup.wait_release=false;
     memcpy(host.console.setup.pending,host.bindings,sizeof(host.bindings));

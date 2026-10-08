@@ -478,10 +478,20 @@ async function main() {
         for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowDown','ArrowDown',40);
         await key('KeyN','n',78);assert.equal((await state()).screen,1);
         await key('KeyN','n',78);assert.equal((await state()).screen,2);
+        await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');await delay(150);
+        await key('KeyN','n',78);assert.equal((await state()).screen,3);
+        await key('F1','F1',112);await key('ArrowDown','ArrowDown',40);
+        await key('KeyN','n',78);assert.equal((await state()).capture,-1);
+        await capture('no-usb-controller');
+        await key('Escape','Escape',27);assert.equal((await state()).screen,1);
+        await key('KeyN','n',78);assert.equal((await state()).screen,2);
+        await key('ArrowDown','ArrowDown',40);
         await key('ArrowDown','ArrowDown',40);await key('KeyN','n',78);assert.equal((await state()).capture,1);
         // Cancel a partial draft. It must not reach browser storage.
         await key('KeyA','a',65);await key('F1','F1',112);assert.equal((await state()).capture,-1);
         assert.equal(await page.eval('localStorage.getItem("chirky.inputs.v1")'),null);
+        await key('ArrowDown','ArrowDown',40);await key('KeyN','n',78);assert.equal((await state()).capture,1);
+        await key('F1','F1',112);await key('ArrowUp','ArrowUp',38);
         await key('KeyN','n',78);
         await key('ArrowLeft','ArrowLeft',37);await key('ArrowLeft','ArrowLeft',37); // duplicate rejected
         for(const [code,k,v] of [['ArrowRight','ArrowRight',39],['ArrowUp','ArrowUp',38],['ArrowDown','ArrowDown',40],['KeyQ','q',81],['KeyM','m',77],['Enter','Enter',13],['Escape','Escape',27]])await key(code,k,v);
@@ -491,8 +501,11 @@ async function main() {
         const settingsShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}-settings.png`),Buffer.from(settingsShot.data,'base64'));
         // Raw USB gamepad: map button AND axis events through the actual C wizard.
-        await key('ArrowUp','ArrowUp',38);await key('KeyQ','q',81);assert.equal((await state()).capture,-1);
         await page.eval(`globalThis.__pad={id:'USB SNES test adapter',index:0,connected:true,mapping:'',buttons:Array.from({length:10},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__pad]});`);
+        await delay(150);
+        await key('ArrowUp','ArrowUp',38);await key('KeyQ','q',81);assert.equal((await state()).capture,-1);
+        await capture('choose-usb-controller');
+        await key('Escape','Escape',27);await key('KeyQ','q',81);
         await page.eval('__pad.buttons[1]={pressed:true,value:1}');await delay(150);
         await page.eval('__pad.buttons[1]={pressed:false,value:0}');await delay(150);
         await capture('controller-profile');
@@ -511,8 +524,20 @@ async function main() {
         assert.equal((await state()).capture,-1);
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].bindings.length'),8);
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].type'),'generic');
+        await key('KeyM','m',77); // Profile options -> input settings.
+        await key('ArrowUp','ArrowUp',38);
+        await key('KeyQ','q',81);assert.equal((await state()).screen,3);
+        await page.eval(`globalThis.__pad2={...__pad,index:1,buttons:Array.from({length:10},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__pad,__pad2]});__pad.buttons[1]={pressed:true,value:1};__pad2.axes[0]=-1;`);
+        await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyQ',key:'q',windowsVirtualKeyCode:81});
+        await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyF',key:'f',windowsVirtualKeyCode:70});await delay(150);
+        await capture('all-input-devices');
+        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyQ',key:'q',windowsVirtualKeyCode:81});
+        await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyF',key:'f',windowsVirtualKeyCode:70});
+        await page.eval('__pad.buttons[1]={pressed:false,value:0};Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[__pad]})');await delay(150);
+        await capture('input-device-disconnected');
+        await key('F1','F1',112);assert.equal((await state()).screen,2);
         // Secondary on this otherwise-unrecognized adapter returns through menus.
-        for(let i=0;i<3;i++){
+        for(let i=0;i<2;i++){
           await page.eval('__pad.buttons[0]={pressed:true,value:1}');await delay(130);
           await page.eval('__pad.buttons[0]={pressed:false,value:0}');await delay(130);
         }

@@ -1,7 +1,6 @@
 /* DOM, catalog and persistence transport. All console decisions live in src/console.c. */
 #include "console.h"
 static struct chirky_console console;
-static unsigned pad_mask,key_mask;
 _Static_assert(sizeof(struct controller_binding)==12,"Browser binding transport layout");
 EM_JS(int,catalog_count,(void),{return Module.onLauncherCount();});
 EM_JS(int,catalog_diagnostic,(int index),{return Module.onDiagnostic(index)?1:0;});
@@ -66,7 +65,7 @@ EMSCRIPTEN_KEEPALIVE void web_console_launch(int index)
 EMSCRIPTEN_KEEPALIVE void web_console_pause(void){chirky_console_pause(&console);}
 EMSCRIPTEN_KEEPALIVE int web_console_tick(unsigned mask,unsigned keyboard,unsigned pad,int key_held,int pad_held,int cancel,int pad_buttons)
 {
-    key_mask=keyboard;pad_mask=pad;
+    (void)keyboard;(void)pad;
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         input.buttons[i]=(mask&(1u<<i))!=0;
         input.button_pressed[i]=input.buttons[i] && !(previous&(1u<<i));
@@ -79,5 +78,5 @@ EMSCRIPTEN_KEEPALIVE int web_console_tick(unsigned mask,unsigned keyboard,unsign
 static void console_render(void)
 {
     char pad[96],key[96];raw_names(0,pad,sizeof(pad));raw_names(1,key,sizeof(key));
-    chirky_console_render(&console,&api,&art,pad_mask,key_mask,pad,key);
+    chirky_console_render(&console,&api,&art,&input,pad,key);
 }
