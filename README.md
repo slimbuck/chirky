@@ -16,7 +16,7 @@ it is not a fleet-management or multiplayer server.
 
 There are four unfinished games: Phosphor Run, Rosey Chop, Bramble Hollow and
 Circuit Clash, a local two-player fighter prototype.
-Hardware Test is an additional diagnostic module. Each playable game has
+Each playable game has
 dashboard settings editing; level and sprite editors are available where the
 game supplies an editor description. Bramble currently has settings editing,
 without a registered level/sprite editor.
@@ -197,7 +197,6 @@ Existing Pi SNES/Pico bindings and browser controller mappings remain usable.
 - Phosphor Run: Primary jumps, Secondary dashes, Start uses a life to retry.
 - Bramble Hollow: Primary interacts/closes dialogue, Secondary cycles or uses
   a dialogue service, Start opens/closes world controls.
-- Hardware Test: Primary toggles motion, Secondary plays sound, Menu leaves.
 - Start, Primary or Secondary begins a title screen after inputs are released.
 - F1 is native recovery/cancel, F12 captures a Pi snapshot. The physical
   Start + Select recovery chord remains available outside input setup.
@@ -270,16 +269,10 @@ and `input` groups on the configured test Pi.
 
 ## Games, configuration, and assets
 
-Each game owns one inspectable directory under `games/`. The first example is
-`games/hardware-test/`:
-
-- `game.conf` contains plain `key=value` settings
-- `assets/colour-bars.ppm` is a plain-text image
-- `assets/edge-beep.wav` is ordinary uncompressed audio
-
-The WAV can be regenerated with `python tools/generate_test_assets.py`, or
-replaced with any compatible WAV. Restart the program after changing config or
-assets. The host also accepts a different config path as its first argument.
+Each game owns one inspectable directory under `games/`. For example,
+`games/rosey-chop/` contains `game.conf` with plain `key=value` settings and
+ordinary WAV sound files under `assets/`. Restart the program after changing
+config or assets. The host also accepts a different config path as its first argument.
 
 Snapshots are written as lossless PPM files under `snapshots/`. Press `F12`, or
 send `SIGUSR1` to the running process. The latter is the dashboard integration
@@ -307,8 +300,7 @@ a dedicated editing page for each.
 **Edit launcher** changes menu names, order, and visibility. **Apply to console**
 saves `config/launcher.conf` on both the laptop and Pi and reloads the menu without
 restarting the running game. Each section must retain at least one visible item. Settings always includes a Back row,
-selected with Primary; Secondary also goes back. Hardware Test uses Primary for
-motion, Secondary for sound, and Menu to return.
+selected with Primary; Secondary also goes back.
 Names support up to 24 characters using the CRT font. Cancel discards the draft.
 Deployment preserves the Pi’s existing launcher configuration; use Apply to console
 to change it. Missing or invalid configuration falls back to the default menu.
@@ -333,7 +325,6 @@ results and the asynchronous audio-startup follow-up.
   rainstorm, with sweeping chops, jumping, chasing wasps and a complete first level
 - `circuit-clash`: two-player local fighter prototype with separate device joining,
   movement, jumping, punching, health and rematches; see [controls](games/circuit-clash/README.md)
-- `hardware-test`: moving colour, motion, audio, input, and capture checks
 - `phosphor-run`: a scrolling CRT-native platformer with wall-jumps, air dash,
   checkpoints, hazards, particles, collectible signal shards, and a complete
   win/death loop

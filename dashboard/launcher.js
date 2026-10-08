@@ -2,7 +2,8 @@
 function defaults(games) {
   return [...games.filter(g=>g.role!=="diagnostic").sort((a,b)=>(a.order??1000)-(b.order??1000)||a.name.localeCompare(b.name)).map(g=>({section:"root",id:g.id,label:g.name.slice(0,24),visible:true})),
     {section:"root",id:"settings",label:"Settings",visible:true},{section:"root",id:"power",label:"Power Down",visible:true},
-    {section:"settings",id:"input",label:"Input Settings",visible:true},{section:"settings",id:"display",label:"Display Area",visible:true},{section:"settings",id:"hardware",label:"Hardware Test",visible:true}];
+    {section:"settings",id:"input",label:"Input Settings",visible:true},{section:"settings",id:"display",label:"Display Area",visible:true},
+    ...games.filter(g=>g.role==="diagnostic").map(g=>({section:"settings",id:g.id,label:g.name.slice(0,24),visible:true}))];
 }
 function validate(items,games) {
   const expected=defaults(games);const keys=new Set(expected.map(e=>`${e.section}/${e.id}`));

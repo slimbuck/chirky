@@ -521,14 +521,11 @@ static void test_cancel(struct asset_store *s)
 
 static void test_shipped(struct asset_store *s)
 {
-    if (access("games/hardware-test/assets/edge-beep.wav", R_OK)) return;
+    if (access("games/rosey-chop/assets/chop.wav", R_OK)) return;
     assert(asset_store_prefetch(s, "games"));
     assert(wait_prefetch(s) == CHIRKY_ASSET_READY);
-    chirky_asset h = asset_store_request(s, "games/hardware-test/assets/edge-beep.wav", CHIRKY_ASSET_SOUND);
+    chirky_asset h = asset_store_request(s, "games/rosey-chop/assets/chop.wav", CHIRKY_ASSET_SOUND);
     struct chirky_asset_view v = ready(s, h);
-    assert(v.rate == 48000 && v.channels == 2 && v.size);
-    h = asset_store_request(s, "games/rosey-chop/assets/chop.wav", CHIRKY_ASSET_SOUND);
-    v = ready(s, h);
     assert(v.rate == 22050 && v.channels == 1 && v.size);
     h = asset_store_request(s, "games/phosphor-run/assets/artwork/splash.ppm", CHIRKY_ASSET_IMAGE);
     v = ready(s, h);

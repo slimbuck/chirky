@@ -163,8 +163,7 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   controller remain distinct; fixed touch controls are omitted. Hold Menu for one second to return. Cancel or a storage failure preserves
   the old mapping. Pi and browser mappings are stored independently.
 - Menu opens the shared pause menu: Continue Game or Return to Launcher.
-  Primary selects and Secondary goes back. Hardware Test lives in Settings and
-  Menu returns there. Relaunching a game starts a fresh run. F1 provides keyboard
+  Primary selects and Secondary goes back. Relaunching a game starts a fresh run. F1 provides keyboard
   recovery even if the saved mapping is inconvenient.
 - Default SNES bindings on standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
   and Start/Select for Start/Menu. Saving the SNES preset retains left-stick support. Remapped directions and

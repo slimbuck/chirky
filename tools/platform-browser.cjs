@@ -130,8 +130,8 @@ async function main() {
     assert.equal(catalog.version,1);assert(catalog.games.length>0);
     // Keep the same physical pixel grid before/after loading and across games,
     // including fractional OS scale and narrow windows.
-    const diagnostic=catalog.games.findIndex(game=>game.role==='diagnostic');
-    assert(diagnostic>=0);
+    const layoutGame=catalog.games.find(game=>game.role==='game');
+    assert(layoutGame);
     for(const [width,height,density,touch=false] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1],[844,390,3,true],[667,375,2,true],[390,844,3,true],[390,844,2.625,true],[412,915,2.625,true],[360,640,3,true],[320,568,2,true],[1024,768,2,true]])){
       const label=`layout-${width}-${density}${touch?'-touch':''}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
       const page=new CDP(target.webSocketDebuggerUrl);await page.open;
@@ -187,11 +187,11 @@ async function main() {
         const launcher=await checkLoading('Launcher');
         assert.deepEqual(launcher,firstPaint,'First paint must already have the final launcher layout before player JavaScript downloads');
         await page.eval('document.querySelector("#screen").focus()');
-        for(const [code,key,value] of [...catalog.games.filter(g=>g.role==='game').map(()=>['ArrowDown','ArrowDown',40]),['KeyN','n',78],['ArrowDown','ArrowDown',40],['KeyN','n',78]]){
+        for(const [code,key,value] of [['KeyN','n',78]]){
           await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(100);
           await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(100);
         }
-        const game=await checkLoading(catalog.games[diagnostic].name);
+        const game=await checkLoading(layoutGame.name);
         report.screen=game;
         await page.eval('document.fonts.ready');
         if(!touch)assert(await page.eval(`document.fonts.check('600 20px "Chirky Keys"')`),'Bundled keycap lettering must load');

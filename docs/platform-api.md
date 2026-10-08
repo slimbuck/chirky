@@ -214,8 +214,7 @@ active, and buffered audio and acknowledges that sample references are no
 longer in use. Only then may sample storage be released. Host exit also stops
 and joins the audio worker and destroys the asset store before graphics teardown.
 
-`play_sound(context, device, path)` remains in the ABI for compatibility,
-including Hardware Test. When the native host has an asset store, this callback
+`play_sound(context, device, path)` remains in the ABI for compatibility. When the native host has an asset store, this callback
 requests the path as SOUND, forwards the handle to `sound_play`, and releases
 the temporary caller reference. The playback pin keeps ready sample data alive
 until mixer reset. This route uses the same persistent mixer and its configured

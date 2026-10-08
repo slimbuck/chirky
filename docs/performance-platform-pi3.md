@@ -67,7 +67,8 @@ frame used 7.510 ms CPU and presented after 33.322 ms. Audio setup is already
 performed by its own worker, but startup still waits for that worker. Making
 startup readiness asynchronous is the clearest remaining loading improvement.
 
-Hardware Test exercises the same native mixer through its legacy adapter. Its
+An earlier diagnostic module exercised the same native mixer through its legacy
+adapter. Its
 300-frame capture (`api9-audio-hardware.json`) had eight enqueue calls at
 16-26 microseconds of main CPU each, update maximum 0.142 ms, and no missed
 refreshes. A subsequent 350-sample device check observed 12 RUNNING-to-idle-XRUN

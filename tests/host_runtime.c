@@ -194,7 +194,7 @@ static void check_launcher_menu(void)
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
     h.inputs.count=2;h.inputs.devices[0].controller=true;h.inputs.devices[0].snes_adapter=true;h.inputs.devices[0].connection_id=3;
     h.game_count=3;
-    strcpy(h.games[0].id,"hardware-test");strcpy(h.games[0].name,"Hardware Test");h.games[0].diagnostic=true;
+    strcpy(h.games[0].id,"diagnostic-fixture");strcpy(h.games[0].name,"Diagnostic fixture");h.games[0].diagnostic=true;
     strcpy(h.games[1].id,"rosey-chop");strcpy(h.games[1].name,"Rosey Chop");
     strcpy(h.games[2].id,"phosphor-run");strcpy(h.games[2].name,"Phosphor Run");
     qsort(h.games,h.game_count,sizeof(h.games[0]),compare_games);

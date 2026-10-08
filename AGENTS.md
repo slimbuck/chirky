@@ -9,8 +9,7 @@ runtime, game code and game-facing ABI. Mobile currently means the browser
 player, including Home Screen launch, not a separate native app.
 
 There are four unfinished games (Phosphor Run, Rosey Chop, Bramble Hollow and
-the local two-player Circuit Clash prototype) plus Hardware Test, a platform
-diagnostic. `games/*/game.conf` remains the authoritative catalog; this overview
+the local two-player Circuit Clash prototype). `games/*/game.conf` remains the authoritative catalog; this overview
 is not a runtime registration list.
 
 The local Node dashboard edits working-tree game data and controls one

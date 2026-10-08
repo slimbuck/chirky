@@ -21,11 +21,8 @@ void chirky_console_catalog(struct chirky_console *c,const struct console_game *
     if(caps&CONSOLE_CAN_POWER)launcher_add(&c->launcher,"power","Power Down",CONSOLE_POWER,false);
     launcher_add(&c->launcher,"input","Input Settings",CONSOLE_INPUT,true);
     if(caps&CONSOLE_CAN_DISPLAY)launcher_add(&c->launcher,"display","Display Area",CONSOLE_DISPLAY,true);
-    bool first=true;
-    for(int i=0;i<count;i++)if(games[i].diagnostic) {
-        /* Preserve the original launcher configuration's diagnostic key. */
-        launcher_add(&c->launcher,first?"hardware":games[i].id,games[i].name,i,true);first=false;
-    }
+    for(int i=0;i<count;i++)if(games[i].diagnostic)
+        launcher_add(&c->launcher,games[i].id,games[i].name,i,true);
     if(caps&CONSOLE_CAN_FULLSCREEN)launcher_add(&c->launcher,"fullscreen","Full Screen",CONSOLE_FULLSCREEN,true);
     if(caps&CONSOLE_CAN_SOUND)launcher_add(&c->launcher,"sound","Mute / Unmute",CONSOLE_SOUND,true);
     c->selected_game=c->settings_option=0;
