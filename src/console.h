@@ -13,6 +13,8 @@ enum console_action { CONSOLE_SETTINGS=-1, CONSOLE_POWER=-2, CONSOLE_INPUT=-3,
     CONSOLE_DISPLAY=-4, CONSOLE_FULLSCREEN=-6, CONSOLE_SOUND=-7, CONSOLE_TIMING=-8 };
 enum console_capability { CONSOLE_CAN_POWER=1, CONSOLE_CAN_DISPLAY=2,
     CONSOLE_CAN_FULLSCREEN=4, CONSOLE_CAN_SOUND=8, CONSOLE_CAN_TIMING=16 };
+/* Host presentation hints; device snapshots and game controls stay unchanged. */
+enum console_input_option { CONSOLE_HIDE_KEYBOARD_MAPPING=1, CONSOLE_HIDE_KEYBOARD_TEST=2 };
 struct console_game { const char *id, *name; bool diagnostic; };
 struct console_display { int x,y,offset_x,offset_y; };
 enum mapping_save_result { MAPPING_CONFLICT=-1, MAPPING_FAILED=0, MAPPING_SAVED=1 };
@@ -34,6 +36,7 @@ struct console_services {
 struct chirky_console {
     struct console_services services;
     unsigned capabilities;
+    unsigned input_options;
     struct launcher_config launcher;
     int selected_game,settings_option,selected_option,pause_option,display_option;
     /* Presentation only: rows displaced from the fixed selection in shared menus. */
@@ -55,6 +58,7 @@ struct chirky_console {
 };
 struct console_input {
     const struct chirky_input *logical;
+    unsigned options;
     bool keyboard_held,controller_held,cancel,recovery;
     unsigned controller_buttons;
     uint64_t now_us;

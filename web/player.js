@@ -130,7 +130,14 @@ let inputSettings=initialSettings,bindings={};
 let playerKeys=[inputSettings.keys,inputSettings.p2Keys];
 // Presentation follows the most recently pressed device. Held pads and noisy
 // axes must not continually steal labels back from keyboard/touch users.
-let labelSource=typeof matchMedia==="function" && matchMedia("(any-pointer: coarse)").matches?"touch":"keyboard";
+const coarsePointer=typeof matchMedia==="function"?matchMedia("(any-pointer: coarse)"):null;
+let labelSource=coarsePointer?.matches?"touch":"keyboard",keyboardUsed=false;
+function consoleInputOptions(){
+  const touchLayout=inputSettings.touch==="show" || (inputSettings.touch!=="hide" && coarsePointer?.matches);
+  // console_input_option flags: hide keyboard mapping (1) and test rows (2).
+  // Both keyboard sources remain available to games.
+  return touchLayout?1|(keyboardUsed?0:2):0;
+}
 let labelPad=null;
 // Physical connection IDs are distinct from mapping profiles: two identical
 // controllers may share a profile but must never share a player slot.
@@ -371,12 +378,13 @@ function consoleGesture(){
     const connected=pads();
     if(shell._web_input_begin)feedLocalInputs();
     shell._web_console_tick(mask()|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
-      connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
+      connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)),consoleInputOptions());
     pending=0;dpadPending=0;cancelPressed=false;
   }
   if(fullscreenQueued)void toggleFullscreen();
 }
 window.addEventListener("keydown",event=>{
+  if(event.code && event.code!=="Unidentified")keyboardUsed=true;
   const capturing=shell?._web_capture_keyboard()===1;
   if(event.code==="F1"){
     labelSource="keyboard";event.preventDefault();if(!event.repeat)cancelPressed=true;unlock();return;
@@ -478,7 +486,7 @@ function frame(now){
     {
       feedLocalInputs();
       const gameTick=shell._web_console_tick(current|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
-        observed.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...observed.map(p=>p.buttons.filter(b=>b.pressed).length)));
+        observed.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...observed.map(p=>p.buttons.filter(b=>b.pressed).length)),consoleInputOptions());
       if(gameTick)runtime._web_tick(current|pending|dpadPending);
     }
     pending=0;dpadPending=0;cancelPressed=false;accumulator-=1000/60;

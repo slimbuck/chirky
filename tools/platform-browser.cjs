@@ -87,7 +87,7 @@ const instrumentation = `(() => {
 const attachProbe = `(() => {
   const probe=globalThis.__platformProbe ||= {ticks:0,masks:[],assetPlays:0,seen:new WeakSet()};
   probe.runtime=runtime;probe.shell=shell;
-  probe.state=()=>({ready,paused,muted,leaving,loading,id,status:status.textContent,screen:shell._web_console_state(),capture:shell._web_capture_keyboard(),assetSounds:assetSounds.size,
+  probe.state=()=>({ready,paused,muted,leaving,loading,id,inputOptions:consoleInputOptions(),status:status.textContent,screen:shell._web_console_state(),capture:shell._web_capture_keyboard(),assetSounds:assetSounds.size,
     callbacks:['onSound','onAssetReady','onAssetSound'].map(key=>[key,typeof runtime[key]]),
     audioState:audio?.state,activeSounds:sources.size,ticks:probe.ticks,masks:probe.masks,inputs:mask(),heldKeys:[...keys],heldTouches:[...touch.values()],assetPlays:probe.assetPlays,
     audit:{...__platformAudit,contexts:__platformAudit.contexts.map(context=>context.state)}});
@@ -424,6 +424,22 @@ async function main() {
         console.log(`Checking ${label}`);
         await page.call('Storage.clearDataForOrigin',{origin:base.origin,storageTypes:'local_storage'});
         await page.call('Page.navigate',{url:new URL(`?game=${game}`,base).href});await ready();
+        if(mobile){
+          const tap=async selector=>{await click(selector);await delay(160);};
+          assert.equal((await state()).inputOptions,3);
+          await page.eval('__platformProbe.shell._web_console_launch(-1)');await delay(200);
+          for(const entry of catalog.games.filter(g=>g.role==='game'))await tap('[data-button="3"]');
+          await tap('[data-button="4"]');await tap('[data-button="4"]');
+          assert.equal((await state()).screen,2);await capture('touch-input-settings');
+          await tap('[data-button="4"]');assert.equal((await state()).screen,3);
+          await capture('touch-input-test');
+          await key('KeyN','n',78);assert.equal((await state()).inputOptions,1);
+          await capture('touch-keyboard-detected');
+          await key('F1','F1',112);
+          await tap('[data-button="3"]');await tap('[data-button="3"]');await tap('[data-button="4"]');
+          assert.equal((await state()).screen,1,'Third touch input-menu entry is Back, even after keyboard use');
+          await page.call('Page.navigate',{url:new URL(`?game=${game}`,base).href});await ready();
+        }
         report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?8:7);
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
         const title=await capture('title');assert.equal(title.touchVisible,mobile);
@@ -475,6 +491,8 @@ async function main() {
         report.checks.push('in-console return keeps canvas, WebGL context and fullscreen alive');
         await key('Escape','Escape',27);assert.equal((await state()).screen,0,'Menu must not bypass the launcher Settings entry');
         const launchGames=catalog.games.filter(g=>g.role==='game');
+        // Exercise keyboard mapping in the desktop layout, including a live layout change.
+        if(mobile){await page.call('Emulation.setTouchEmulationEnabled',{enabled:false});await delay(150);assert.equal((await state()).inputOptions,0);}
         for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowDown','ArrowDown',40);
         await key('KeyN','n',78);assert.equal((await state()).screen,1);
         await key('KeyN','n',78);assert.equal((await state()).screen,2);
@@ -543,6 +561,7 @@ async function main() {
         }
         assert.equal((await state()).screen,0);
         await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');
+        if(mobile){await page.call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});await delay(150);assert.equal((await state()).inputOptions,1);}
         // Settings includes browser capabilities, without Pi display placement.
         await key('KeyQ','q',81);
         const diagnostics=catalog.games.filter(g=>g.role==='diagnostic').length;

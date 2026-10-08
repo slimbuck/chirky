@@ -21,6 +21,18 @@ function player(saved,controllers={}){
   run(fs.readFileSync(require.resolve('../web/player.js'),'utf8').replace('start().catch(startupFailed);',''));
   return {run,element,touch,events,storage,document,localStorage};
 }
+test('touch layout hides keyboard setup and diagnostics until keyboard use without removing input sources',()=>{
+  const p=player();
+  assert.equal(p.run('consoleInputOptions()'),0);
+  p.run('inputSettings.touch="show"');assert.equal(p.run('consoleInputOptions()'),3);
+  assert.equal(p.run('localDevices().filter(d=>d.kind===0).length'),2);
+  p.events.keydown({code:'KeyN',preventDefault(){}});
+  assert.equal(p.run('consoleInputOptions()'),1,'keyboard use reveals diagnostics but keeps the touch menu compact');
+  assert.equal(p.run('mask()'),16,'physical keyboard gameplay still works');
+  p.events.keyup({code:'KeyN'});
+  p.run('inputSettings.touch="hide"');assert.equal(p.run('consoleInputOptions()'),0);
+});
+
 test('cancelled browser loads cannot activate after a newer request, and errors return to the console',async()=>{
   const p=player();
   p.run(`

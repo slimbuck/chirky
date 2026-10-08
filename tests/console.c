@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-struct fixture {struct chirky_console console;int loads,unloads,saves,actions;unsigned controllers;unsigned profile;bool conflict;bool save_ok,load_ok;};
+struct fixture {struct chirky_console console;int loads,unloads,saves,actions;unsigned controllers,options;unsigned profile;bool conflict;bool save_ok,load_ok;};
 static bool load(void *context,int index){struct fixture *f=context;assert(index==0 || index==1);f->loads++;return f->load_ok;}
 static void unload(void *context){((struct fixture *)context)->unloads++;}
 static enum mapping_save_result save(void *context,unsigned profile,const struct controller_binding *bindings)
@@ -22,7 +22,7 @@ static bool tick(struct fixture *f,int button,bool pressed,bool cancel)
     struct chirky_input input={.device_count=f->controllers};
     if(f->controllers)input.devices[0]=(struct chirky_device_input){.id=9,.kind=CHIRKY_DEVICE_CONTROLLER};
     if(button>=0){input.buttons[button]=true;input.button_pressed[button]=pressed;}
-    return chirky_console_update(&f->console,&(struct console_input){.logical=&input,.cancel=cancel});
+    return chirky_console_update(&f->console,&(struct console_input){.logical=&input,.options=f->options,.cancel=cancel});
 }
 static void settle(struct fixture *f){for(int i=0;i<3;i++)tick(f,-1,false,false);}
 static void tap(struct fixture *f,int button){settle(f);tick(f,button,true,false);settle(f);}
@@ -134,6 +134,22 @@ static void input_menu_devices(void)
     tap(&f,CHIRKY_BUTTON_MENU);assert(!c->controller_settings);
 }
 static int pause_text_bottom,pause_selection_top;
+static void touch_input_menu(void)
+{
+    struct fixture f;init(&f,0);struct chirky_console *c=&f.console;
+    f.options=CONSOLE_HIDE_KEYBOARD_MAPPING|CONSOLE_HIDE_KEYBOARD_TEST;
+    chirky_console_open(c,CONSOLE_INPUT);settle(&f);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->input_test);
+    tick(&f,-1,false,true);settle(&f);
+    tap(&f,CHIRKY_BUTTON_DOWN);tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->controller_selecting);
+    tap(&f,CHIRKY_BUTTON_MENU);tap(&f,CHIRKY_BUTTON_DOWN);
+    assert(c->selected_option==2);tap(&f,CHIRKY_BUTTON_PRIMARY);assert(!c->controller_settings && !c->setup.active);
+    chirky_console_open(c,CONSOLE_INPUT);settle(&f);
+    c->selected_option=2;f.options=0;settle(&f);assert(c->selected_option==4);
+    tap(&f,CHIRKY_BUTTON_UP);tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->setup.active && c->setup.keyboard_profile==2);
+    f.options=CONSOLE_HIDE_KEYBOARD_MAPPING;settle(&f);
+    assert(!c->setup.active && c->selected_option==2 && f.saves==0);
+}
 static void pause_rect(void *unused,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {
     (void)unused;(void)x;(void)w;(void)h;
@@ -247,6 +263,11 @@ static void shared_menu_layouts(void)
             snprintf(devices.devices[i].labels[CHIRKY_BUTTON_PRIMARY],CHIRKY_INPUT_LABEL_SIZE,"B");
         }
         chirky_console_render(c,&api,&art,&devices,"PAD BTN SOUTH","KEY LEFT");
+        c->input_options=CONSOLE_HIDE_KEYBOARD_MAPPING|CONSOLE_HIDE_KEYBOARD_TEST;
+        chirky_console_render(c,&api,&art,&devices,"USB NONE","KEY NONE");
+        c->input_test=false;c->selected_option=2;
+        chirky_console_render(c,&api,&art,&devices,"USB NONE","KEY NONE");
+        c->input_options=0;
         c->input_test=false;setup_begin(&c->setup,true);
         for(int step=0;step<8;step++) {
             c->setup.step=step;
@@ -287,6 +308,7 @@ int main(void)
     shared_trace(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     shared_trace(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     input_menu_devices();
+    touch_input_menu();
     controller_profiles(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     controller_profiles(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     struct fixture web;init(&web,CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);

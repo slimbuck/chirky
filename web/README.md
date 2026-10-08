@@ -148,6 +148,10 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
 - **Settings → Input Settings** runs the same portable console code as the Pi: Test inputs,
   Map USB controller/joystick, Map keyboard 1, Map keyboard 2, Back. USB setup is disabled when no
   controller is connected. Selection has a Back option and accepts Esc/Menu or F1.
+  The touch layout hides both keyboard mapping entries and hides keyboard test
+  rows until keyboard use in the current page session. Physical keyboards still
+  work in games. Switching back to the desktop layout restores keyboard setup;
+  switching to touch during a keyboard mapping draft cancels it without saving.
   USB setup first asks for a button press
   on the chosen device, then offers SNES preset, Generic joystick and Remap buttons.
   SNES applies default bindings and legends; Generic opens the mapping wizard;

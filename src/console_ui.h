@@ -228,16 +228,19 @@ static inline struct launcher_colour console_device_colour(unsigned row)
         {215,155,255},{255,168,98},{112,223,224},{238,166,203}};
     return colours[row%CHIRKY_INPUT_DEVICES];
 }
-static inline void console_draw_live_inputs(const struct chirky_host_api *api,const struct chirky_input *input,const char *pad_line,const char *key_line)
+static inline void console_draw_live_inputs(const struct chirky_host_api *api,const struct chirky_input *input,const char *pad_line,const char *key_line,bool hide_keyboard)
 {
     int h=api->screen_height;unsigned keyboards=0,controllers=0;
     launcher_rect(api,0,0,api->screen_width,h,launcher_navy,0,h);
     launcher_text(api,12,h-12,"Test inputs",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
     launcher_text(api,12,h-33,"USB = controller/joystick",0,console_muted,launcher_navy,api->screen_width-12,0,h);
-    int count=(int)input->device_count,row_height=count?(h-104)/count:24;
+    int count=0,visible_row=0;
+    for(unsigned i=0;i<input->device_count;i++)count+=!hide_keyboard || input->devices[i].kind!=CHIRKY_DEVICE_KEYBOARD;
+    int row_height=count?(h-104)/count:24;
     if(row_height>24)row_height=24;
     for(unsigned row=0;row<input->device_count;row++) {
         const struct chirky_device_input *device=&input->devices[row];
+        if(hide_keyboard && device->kind==CHIRKY_DEVICE_KEYBOARD)continue;
         struct launcher_colour colour=console_device_colour(row);
         char name[24],held[256]="";
         if(device->kind==CHIRKY_DEVICE_KEYBOARD)snprintf(name,sizeof(name),"KB %u",++keyboards);
@@ -246,7 +249,7 @@ static inline void console_draw_live_inputs(const struct chirky_host_api *api,co
         for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)if(device->buttons[b] || device->button_pressed[b]) {
             size_t used=strlen(held);snprintf(held+used,sizeof(held)-used,"%s%s",used?" ":"",device->labels[b]);
         }
-        bool active=*held;int y=h-49-(int)row*row_height;
+        bool active=*held;int y=h-49-visible_row++*row_height;
         launcher_rect(api,12,y-row_height+3,api->screen_width-24,row_height-1,console_card,0,h);
         launcher_rect(api,12,y-row_height+3,3,row_height-1,colour,0,h);
         launcher_text(api,20,y,name,0,colour,console_card,78,0,h);
@@ -254,9 +257,9 @@ static inline void console_draw_live_inputs(const struct chirky_host_api *api,co
     }
     if(!count)launcher_text(api,12,h-60,"No input devices",0,console_muted,launcher_navy,api->screen_width-12,0,h);
     launcher_text(api,12,47,pad_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,35,key_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    if(!hide_keyboard)launcher_text(api,12,35,key_line,0,console_muted,launcher_navy,api->screen_width-12,0,h);
 }
-static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset,bool controller_available)
+static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset,bool controller_available,bool hide_keyboard)
 {
     int h=api->screen_height;
     if(setup->active) {
@@ -277,7 +280,8 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
         const char *labels[]={"Test inputs",controller_available?"Map USB controller/joystick":"USB controller/joystick (none)","Map keyboard 1","Map keyboard 2","Back"};
-        console_scroll_list_disabled(api,labels,NULL,5,selected,offset,28,h-78,controller_available?-1:1);
+        if(hide_keyboard)labels[2]="Back";
+        console_scroll_list_disabled(api,labels,NULL,hide_keyboard?3:5,selected,offset,28,h-78,controller_available?-1:1);
         if(message && *message)launcher_text(api,12,h-65,message,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
         console_menu_footer(api,true);
     }

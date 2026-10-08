@@ -63,7 +63,7 @@ EMSCRIPTEN_KEEPALIVE void web_console_launch(int index)
     else if(index<catalog_count())chirky_console_launch(&console,index,catalog_diagnostic(index)!=0);
 }
 EMSCRIPTEN_KEEPALIVE void web_console_pause(void){chirky_console_pause(&console);}
-EMSCRIPTEN_KEEPALIVE int web_console_tick(unsigned mask,unsigned keyboard,unsigned pad,int key_held,int pad_held,int cancel,int pad_buttons)
+EMSCRIPTEN_KEEPALIVE int web_console_tick(unsigned mask,unsigned keyboard,unsigned pad,int key_held,int pad_held,int cancel,int pad_buttons,unsigned options)
 {
     (void)keyboard;(void)pad;
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
@@ -71,7 +71,7 @@ EMSCRIPTEN_KEEPALIVE int web_console_tick(unsigned mask,unsigned keyboard,unsign
         input.button_pressed[i]=input.buttons[i] && !(previous&(1u<<i));
     }
     previous=mask;
-    struct console_input frame={.logical=&input,.keyboard_held=key_held!=0,.controller_held=pad_held!=0,
+    struct console_input frame={.logical=&input,.options=options,.keyboard_held=key_held!=0,.controller_held=pad_held!=0,
         .cancel=cancel!=0,.controller_buttons=(unsigned)pad_buttons,.now_us=(uint64_t)(emscripten_get_now()*1000)};
     return chirky_console_update(&console,&frame);
 }
