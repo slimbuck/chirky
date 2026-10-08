@@ -4,7 +4,7 @@ let id=params.get("game") || "launcher";
 const canvas=$("#screen"),status=$("#status");
 let catalog=[],ids=[],titles={launcher:"Launcher"};
 let runtime,shell,displayContext,audio,muted=false,paused=false,leaving=false,last=0,accumulator=0,pending=0,ready=false,loading=false;
-let files,configs,loadSequence=0,cancelPressed=false,mappingPad=null;
+let files,configs,loadSequence=0,cancelPressed=false;
 let navigation={push:true,level:null};
 let returnNavigation=null;
 const keys=new Set(),touch=new Map(),sounds=new Map(),sources=new Set();
@@ -125,20 +125,22 @@ function playAssetSound(handle){
   const source=audio.createBufferSource();source.buffer=buffer;source.connect(audio.destination);
   sources.add(source);source.onended=()=>sources.delete(source);source.start();
 }
-const {inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer}=window.ChirkyShell;
+const {playerKeysConflict,inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer}=window.ChirkyShell;
 let inputSettings=initialSettings,bindings={};
+let playerKeys=[inputSettings.keys,inputSettings.p2Keys];
 // Presentation follows the most recently pressed device. Held pads and noisy
 // axes must not continually steal labels back from keyboard/touch users.
 let labelSource=typeof matchMedia==="function" && matchMedia("(any-pointer: coarse)").matches?"touch":"keyboard";
 let labelPad=null;
 // Physical connection IDs are distinct from mapping profiles: two identical
 // controllers may share a profile but must never share a player slot.
-let nextDeviceId=2,localKeyPending=0,localTouchPending=0;
+let nextDeviceId=3,localKeyPending=[0,0],localTouchPending=0;
 const localPads=new Map();
 window.addEventListener("gamepaddisconnected",event=>{localPads.delete(event.gamepad.index);});
 function localDevices(connected=pads()){
   const present=new Set();
-  const result=[{id:1,kind:0,mask:keyboardMask(),pending:localKeyPending},
+  const result=[{id:1,kind:0,mask:playerKeyboardMask(0),pending:localKeyPending[0]},
+    {id:3,kind:0,mask:playerKeyboardMask(1),pending:localKeyPending[1]},
     {id:2,kind:2,mask:[...touch.values()].reduce((a,b)=>a|b,0),pending:localTouchPending|dpadPending}];
   for(const pad of connected){
     const index=pad.index ?? 0,identity=padIdentity(pad);present.add(index);
@@ -151,18 +153,16 @@ function localDevices(connected=pads()){
   return result.slice(0,8);
 }
 function onDeviceLabel(id,action){
-  if(id===1)return keyName(inputSettings.keys[action]).toUpperCase();
+  if(id===1 || id===3)return keyName(playerKeys[id===1?0:1][action]).toUpperCase();
   if(id===2)return ["←","→","↑","↓","A","B","START","MENU"][action];
   const device=[...localPads.values()].find(d=>d.id===id);
   if(!device)return "UNBOUND";
-  const pad=device.pad,saved=padSettings[padIdentity(pad)];
-  return padBindingLabel(pad,validPadMap(saved)?saved[action]:pad.mapping==="standard"?
-    {kind:1,code:[14,15,12,13,0,2,9,8][action],direction:0}:null);
+  return controllerLabel(device.pad,action);
 }
 function feedLocalInputs(){
   shell._web_input_begin();
   for(const d of localDevices())shell._web_input_device(d.id,d.kind,d.mask,d.pending);
-  shell._web_input_end();localKeyPending=0;localTouchPending=0;
+  shell._web_input_end();localKeyPending.fill(0);localTouchPending=0;
 }
 const labelPadHeld=new Map();
 function updateLabelDevice(connected=pads()){
@@ -171,14 +171,24 @@ function updateLabelDevice(connected=pads()){
     const identity=`${pad.index ?? 0}|${padIdentity(pad)}`;present.add(identity);
     const held=new Set(rawPad(pad).map(v=>`${v.kind}:${v.code}:${v.direction}`));
     const previous=labelPadHeld.get(identity) || new Set();
-    if([...held].some(v=>!previous.has(v))){labelSource="controller";labelPad=identity;}
+    if([...held].some(v=>!previous.has(v))){
+      labelSource="controller";labelPad=identity;
+      const device=[...localPads.values()].find(d=>d.pad===pad);
+      if(device)shell?._web_controller_press?.(device.id);
+    }
     labelPadHeld.set(identity,held);
   }
   for(const identity of labelPadHeld.keys())if(!present.has(identity))labelPadHeld.delete(identity);
   if(labelSource==="controller" && !present.has(labelPad)){labelSource="keyboard";labelPad=null;}
 }
-function padBindingLabel(pad,binding){
+function padBindingLabel(pad,binding,profile="generic"){
   if(!binding)return "UNBOUND";
+  if(profile==="snes"){
+    if(binding.kind===2 && binding.code<2)return ["←","→","↑","↓"][binding.code*2+(binding.direction>0?1:0)];
+    const names=pad.mapping==="standard"?["B","A","Y","X","L","R",null,null,"SELECT","START",null,null,"↑","↓","←","→"]:
+      ["Y","B","X","A","L","R",null,null,"SELECT","START",null,null,"↑","↓","←","→"];
+    if(binding.kind===1 && names[binding.code])return names[binding.code];
+  }
   if(binding.kind===2){
     if(pad.mapping==="standard" && binding.code<4)
       return `${binding.code<2?"L":"R"} STICK ${binding.code%2?(binding.direction<0?"UP":"DOWN"):(binding.direction<0?"LEFT":"RIGHT")}`;
@@ -197,12 +207,7 @@ function onButtonLabel(action){
   if(labelSource==="touch")return ["←","→","↑","↓","A","B","START","MENU"][action];
   if(labelSource==="controller"){
     const pad=pads().find(p=>`${p.index ?? 0}|${padIdentity(p)}`===labelPad);
-    if(pad){
-      const saved=padSettings[padIdentity(pad)];
-      const binding=validPadMap(saved)?saved[action]:pad.mapping==="standard"?
-        {kind:1,code:[14,15,12,13,0,2,9,8][action],direction:0}:null;
-      return padBindingLabel(pad,binding);
-    }
+    if(pad)return controllerLabel(pad,action);
   }
   return keyName(inputSettings.keys[action]).toUpperCase();
 }
@@ -210,8 +215,47 @@ const keyCodes=[...new Set([...defaultKeys,...Array.from({length:26},(_,i)=>"Key
   ...Array.from({length:10},(_,i)=>"Digit"+i),...Array.from({length:10},(_,i)=>"Numpad"+i),
   "Space","ShiftLeft","ShiftRight","ControlLeft","ControlRight","AltLeft","AltRight","Backspace","Tab",
   "Comma","Period","Slash","Semicolon","Quote","BracketLeft","BracketRight","Backslash","Minus","Equal","Backquote"])];
+const controllerSettingsKey="chirky.controllers.v2";
 let padSettings={};
-try{const saved=JSON.parse(localStorage.getItem("chirky.controllers.v1"));if(saved && typeof saved==="object" && !Array.isArray(saved))padSettings=saved;}catch{}
+try{
+  const saved=JSON.parse(localStorage.getItem(controllerSettingsKey));
+  if(saved && typeof saved==="object" && !Array.isArray(saved))padSettings=saved;
+  else {
+    const legacy=JSON.parse(localStorage.getItem("chirky.controllers.v1"));
+    if(legacy && typeof legacy==="object")for(const [model,bindings] of Object.entries(legacy))
+      if(validPadMap(bindings))padSettings[model]={type:"generic",bindings};
+  }
+}catch{}
+const buttonBinding=code=>({kind:1,code,direction:0});
+function snesPreset(pad){
+  const directions=pad.mapping==="standard" || pad.buttons.length>=16?[14,15,12,13].map(buttonBinding):
+    [{kind:2,code:0,direction:-1},{kind:2,code:0,direction:1},{kind:2,code:1,direction:-1},{kind:2,code:1,direction:1}];
+  return [...directions,...(pad.mapping==="standard"?[0,2,9,8]:[1,0,9,8]).map(buttonBinding)];
+}
+function padProfile(pad){
+  const saved=padSettings[padIdentity(pad)];
+  if(saved && ["snes","generic"].includes(saved.type) && validPadMap(saved.bindings))return saved;
+  return {type:"snes",bindings:snesPreset(pad),automatic:true};
+}
+function controllerLabel(pad,action){
+  const profile=padProfile(pad);return padBindingLabel(pad,profile.bindings[action],profile.type);
+}
+function connectedController(id){
+  const device=[...localPads.values()].find(d=>d.id===id);
+  return device && pads().find(p=>(p.index ?? 0)===(device.pad.index ?? 0) && padIdentity(p)===device.identity);
+}
+function onControllerInfo(id){
+  const pad=connectedController(id);
+  return pad?{name:pad.id,profile:padProfile(pad).type==="snes"?1:0}:null;
+}
+function onSaveController(id,profile,values){
+  const pad=connectedController(id);
+  if(!pad || ![0,1].includes(profile))return false;
+  const bindings=values || snesPreset(pad);
+  if(!validPadMap(bindings))return false;
+  const next={...padSettings,[padIdentity(pad)]:{type:profile===1?"snes":"generic",bindings}};
+  try{localStorage.setItem(controllerSettingsKey,JSON.stringify(next));padSettings=next;return true;}catch{return false;}
+}
 function refreshKeyFeedback(){
   inputSettings.keys.forEach((code,index)=>$("#key-help-"+index).dataset.pressed=String(keys.has(code)));
 }
@@ -233,41 +277,39 @@ function rawPad(pad){
   return held;
 }
 function padMask(pad){
-  const saved=padSettings[padIdentity(pad)],held=rawPad(pad);
-  if(validPadMap(saved))return saved.reduce((mask,b,i)=>mask|(held.some(v=>v.kind===b.kind && v.code===b.code && v.direction===b.direction)?1<<i:0),0);
-  let result=0;
-  // Standard pads work immediately. Raw USB adapters can be mapped using the
-  // keyboard; there is no universal button order for unrecognized SNES pads.
-  if(pad.mapping==="standard"){
-    const mapping=[4,-1,5,-1,-1,-1,-1,-1,7,6,-1,-1,2,3,0,1];
-    pad.buttons.forEach((button,index)=>{if(button.pressed && mapping[index]>=0)result|=1<<mapping[index];});
+  const profile=padProfile(pad),held=rawPad(pad);
+  let result=profile.bindings.reduce((mask,b,i)=>mask|(held.some(v=>v.kind===b.kind && v.code===b.code && v.direction===b.direction)?1<<i:0),0);
+  if(profile.automatic && pad.mapping==="standard"){
     if(pad.axes[0]<-.55)result|=1;if(pad.axes[0]>.55)result|=2;
     if(pad.axes[1]<-.55)result|=4;if(pad.axes[1]>.55)result|=8;
   }
   return result;
 }
 function pads(){return Array.from(navigator.getGamepads?.() || []).filter(Boolean);}
-function keyboardMask(){let value=0;for(const key of keys)if(key in bindings)value|=1<<bindings[key];return value;}
+function playerKeyboardMask(player){return playerKeys[player].reduce((value,key,b)=>value|(keys.has(key)?1<<b:0),0);}
+function keyboardMask(){
+  let value=0;for(const key of keys)if(key in bindings)value|=1<<bindings[key];
+  return value|((playerKeyboardMask(0)|playerKeyboardMask(1))&192);
+}
 function controllerMask(){return pads().reduce((value,pad)=>value|padMask(pad),0);}
 function mask(){let value=keyboardMask()|controllerMask();for(const buttons of touch.values())value|=buttons;return value;}
 function onRawNames(keyboard){
   if(keyboard)return "KEY "+([...keys].map(keyName).join(" ") || "NONE");
   return "PAD "+(pads().flatMap(p=>rawPad(p).map(v=>v.kind===1?`B${v.code}`:`AX${v.code}${v.direction<0?"NEG":"POS"}`)).join(" ") || "NONE");
 }
-function onSaveMapping(keyboard,values){
+function onSaveKeyboard(values,profile=1){
   try{
-    if(keyboard){
-      const next={...inputSettings,keys:values.map(v=>keyCodes[v.code])};
-      if(!validKeys(next.keys))return false;
-      localStorage.setItem(settingsKey,JSON.stringify(next));inputSettings=next;refreshInputSettings();
-    }else{
-      if(!mappingPad || !validPadMap(values))return false;
-      const next={...padSettings,[mappingPad]:values};
-      localStorage.setItem("chirky.controllers.v1",JSON.stringify(next));padSettings=next;
-    }
+    if(profile<0 || profile>2)return false;
+    const mapped=values.map(v=>keyCodes[v.code]),player=profile===2?1:0;
+    if(!validKeys(mapped))return false;
+    if(playerKeysConflict(mapped,playerKeys[1-player]))return -1;
+    const next={...inputSettings,[player?"p2Keys":"keys"]:mapped};
+    localStorage.setItem(settingsKey,JSON.stringify(next));inputSettings=next;
+    playerKeys=[next.keys,next.p2Keys];refreshInputSettings();
     return true;
   }catch{return false;}
 }
+
 refreshInputSettings();
 function stopSounds(){for(const source of sources)source.stop();sources.clear();}
 function unlock(){if(!audio)audio=new AudioContext();audio.resume().catch(()=>{});}
@@ -282,7 +324,7 @@ async function playSound(path){
   }catch(error){console.warn("Sound unavailable",path,error);}
 }
 function setPaused(value){
-  localKeyPending=localTouchPending=0;
+  localKeyPending.fill(0);localTouchPending=0;
   paused=value;keys.clear();touch.clear();dpadPointer=null;dpadBounds=null;dpadPending=0;fullscreenQueued=false;refreshTouchFeedback();pending=0;last=0;accumulator=0;
   refreshKeyFeedback();
   if(value){shell?._web_console_pause();stopSounds();}
@@ -339,11 +381,18 @@ window.addEventListener("keydown",event=>{
   if(event.code==="F1"){
     labelSource="keyboard";event.preventDefault();if(!event.repeat)cancelPressed=true;unlock();return;
   }
-  if(capturing || event.code in bindings){
+  if(capturing || event.code in bindings || playerKeys.some(map=>map.includes(event.code))){
     event.preventDefault();if(event.repeat)return;
     labelSource="keyboard";keys.add(event.code);refreshKeyFeedback();unlock();
     if(capturing){const code=keyCodes.indexOf(event.code);if(code>=0)shell._web_capture(1,code,0);}
-    else {pending|=1<<bindings[event.code];localKeyPending|=1<<bindings[event.code];consoleGesture();}
+    else {
+      if(event.code in bindings)pending|=1<<bindings[event.code];
+      playerKeys.forEach((map,p)=>{
+        const b=map.indexOf(event.code);if(b<0)return;
+        localKeyPending[p]|=1<<b;if(b>=6)pending|=1<<b;
+      });
+      consoleGesture();
+    }
   }
 });
 window.addEventListener("keyup",event=>{keys.delete(event.code);refreshKeyFeedback();});
@@ -417,24 +466,19 @@ document.querySelectorAll("[data-button]").forEach(button=>{
 });
 function frame(now){
   if(leaving)return;
-  const current=mask(),connected=pads();
-  updateLabelDevice(connected);
-  const capturing=shell._web_capture_keyboard();
-  if(capturing!==0)mappingPad=null;
-  if(capturing===0){
-    for(const pad of connected){
-      const held=rawPad(pad),identity=padIdentity(pad);
-      if(!mappingPad && held.length)mappingPad=identity;
-      if(mappingPad===identity && held.length){const v=held[0];shell._web_capture(v.kind,v.code,v.direction);break;}
-    }
-    if(mappingPad && !connected.some(p=>padIdentity(p)===mappingPad))cancelPressed=true;
+  const connected=pads();localDevices(connected);updateLabelDevice(connected);
+  const current=mask(),target=shell._web_mapping_controller();
+  const mapping=target?connectedController(target):null;
+  if(mapping){
+    const held=rawPad(mapping);if(held.length){const v=held[0];shell._web_capture_controller(target,v.kind,v.code,v.direction);}
   }
+  const observed=target?(mapping?[mapping]:[]):connected;
   if(last)accumulator+=Math.min(now-last,100);
   while(accumulator>=1000/60){
     {
       feedLocalInputs();
       const gameTick=shell._web_console_tick(current|pending|dpadPending,keyboardMask(),controllerMask(),keys.size,
-        connected.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...connected.map(p=>p.buttons.filter(b=>b.pressed).length)));
+        observed.some(p=>rawPad(p).length),cancelPressed,Math.max(0,...observed.map(p=>p.buttons.filter(b=>b.pressed).length)));
       if(gameTick)runtime._web_tick(current|pending|dpadPending);
     }
     pending=0;dpadPending=0;cancelPressed=false;accumulator-=1000/60;
@@ -493,7 +537,7 @@ async function createModule({default:create},wasmBinary){
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
-    onButtonLabel,onDeviceLabel,onSaveMapping,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
+    onButtonLabel,onDeviceLabel,onSaveKeyboard,onControllerInfo,onSaveController,onRawNames,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();

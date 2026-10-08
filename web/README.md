@@ -128,15 +128,16 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
 `launcher_icon` points to a native 20x20 picture built by
 `python tools/build-launcher-art.py`; see `assets/launcher/README.md`.
 
-- Arrows move; X is Primary, Z is Secondary, Enter is Start, Escape is Menu.
+- P1/default: arrows, N/M. P2: WASD, F/G. Both use Enter for Start and Esc for Menu.
 - Console and game prompts resolve those internal actions to current physical
   controls. The last pressed device selects keyboard, touch or controller
   labels; a held pad does not override a subsequent keyboard/touch press.
   Keyboard remaps are reflected immediately; touch shows A/B and Menu/Start.
   Arrow keys and D-pad directions use `← → ↑ ↓`; letter bindings keep their letters.
-  Standard gamepads use positional face labels (South/East/West/North), since
-  standard mapping does not identify the printed legends. Raw adapters use
-  button/axis identifiers. Disconnecting the active pad restores keyboard labels.
+  New controllers default to the SNES profile: B/Y/A/X, Start/Select and arrow labels.
+  Explicitly saved profiles take precedence. Generic standard
+  gamepads use positional face labels (South/East/West/North); generic raw adapters
+  use button/axis identifiers. Disconnecting the active pad restores keyboard labels.
 - The desktop keyboard guide uses chunky keycaps: an inverted-T movement cluster,
   coral Primary, turquoise Secondary, and cream Start/Menu keys. Labels follow
   saved keyboard mappings and depress while the corresponding key is held.
@@ -145,7 +146,10 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   Its Fredoka 500–600 character subset and SIL Open Font License are embedded in
   `style.css`, so the guide needs no external font request.
 - **Settings → Input Settings** runs the same portable console code as the Pi: Map Controller,
-  Map Keyboard and Test Buttons. The wizard captures all eight inputs and saves
+  Map Keyboard P1/P2 and Test Buttons. Map Controller first asks for a button press
+  on the chosen device, then offers SNES preset, Generic joystick and Remap buttons.
+  SNES applies default bindings and legends; Generic opens the mapping wizard;
+  Remap retains the existing legend profile. The wizard captures all eight inputs and saves
   after the last release. Duplicate inputs are rejected. F1 cancels a draft;
   holding two controller buttons also cancels controller setup. In Test Buttons,
   hold Secondary for one second to return. Cancel or a storage failure preserves
@@ -154,10 +158,15 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   Primary selects and Secondary goes back. Hardware Test lives in Settings and
   Menu returns there. Relaunching a game starts a fresh run. F1 provides keyboard
   recovery even if the saved mapping is inconvenient.
-- Standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
-  and Start/Select for Start/Menu. Unrecognized USB/SNES adapters can map their
+- Default SNES bindings on standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
+  and Start/Select for Start/Menu. Raw adapters default to the SNES/Pico layout;
+  other USB devices can map their
   raw buttons and axes in Map Controller; use the keyboard to get there first.
-  Each controller identity keeps its own mapping. Pi's SNES defaults remain native.
+  Both platforms save profiles per model, independently of player connection IDs.
+  Browser profiles use `chirky.controllers.v2` in localStorage; existing v1 maps
+  migrate as generic profiles. Identical controllers share a profile. Selecting
+  SNES preset installs the tested raw SNES/Pico or browser-standard bindings.
+  Setup captures only the chosen connection; disconnecting discards its draft.
 - Touch devices get a controller-shaped D-pad, A (Primary) and B (Secondary) face
   buttons, and smaller Menu/Start buttons above the two control groups. The A/B labels
   use [Fredoka Bold](https://fonts.google.com/specimen/Fredoka) (weight 700), by the Fredoka

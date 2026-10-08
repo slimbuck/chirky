@@ -42,7 +42,7 @@ enum chirky_button {
 #define CHIRKY_INPUT_LABEL_SIZE 24
 enum chirky_device_kind { CHIRKY_DEVICE_KEYBOARD, CHIRKY_DEVICE_CONTROLLER, CHIRKY_DEVICE_TOUCH };
 /* Connection-scoped opaque IDs, never player numbers. Missing IDs are disconnected.
-   Keyboard interfaces form one source; each gamepad is a separate source. */
+   Keyboard interfaces feed two layouts; each gamepad is a separate source. */
 struct chirky_device_input {
     uint32_t id;
     enum chirky_device_kind kind;

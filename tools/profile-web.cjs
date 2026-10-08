@@ -60,8 +60,8 @@ async function run(index){
    if(index===1&&cache==='cold'){const cpu=await page.call('Profiler.stop');fs.writeFileSync(out+'/startup.cpuprofile',JSON.stringify(cpu.profile));}
    if(!process.argv.includes('--games'))continue;
    await page.eval('globalThis.__loadProfile.gameRequested=performance.now()');
-   await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyX',key:'x',windowsVirtualKeyCode:88});await delay(90);
-   await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyX',key:'x',windowsVirtualKeyCode:88});
+   await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyN',key:'n',windowsVirtualKeyCode:78});await delay(90);
+   await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyN',key:'n',windowsVirtualKeyCode:78});
    await ready('Phosphor Run');await delay(120);await capture(index+'-'+cache+'-game');
   }
  }finally{page?.close();child.kill();}

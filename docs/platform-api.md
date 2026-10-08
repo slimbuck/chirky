@@ -71,7 +71,7 @@ Use `button_label` when
 showing controls: it resolves the logical action to the mapped physical control
 on the most recently used device. Query it during rendering so remapping and
 device changes are reflected immediately. Examples are `B` / `SELECT` on the
-configured SNES/Pico, `X` / `ESC` on the default keyboard, and `A` / `MENU` on
+configured SNES/Pico, `N` / `ESC` on the default keyboard, and `A` / `MENU` on
 touch. Unknown controls use button/axis identifiers, and missing bindings return
 `UNBOUND`. With nonzero capacity the callback writes a NUL-terminated label.
 `include/input_labels.h` also groups direction labels without assuming arrow keys.
@@ -311,15 +311,18 @@ only for the current update; copy any state needed for rendering. Array position
 can change. Use IDs, never array positions or kinds, to assign players.
 
 A missing ID means disconnected; reconnecting a pad gets a new ID even at the same
-USB/Gamepad index. Keyboard interfaces form one logical source (browser APIs
-cannot distinguish physical keyboards); browser touch is one source. IDs are
+USB/Gamepad index. Keyboard interfaces feed two logical sources with independently saved player
+layouts (browser APIs cannot distinguish physical keyboards). Both have keyboard
+kind and distinct opaque IDs; browser touch is one source. IDs are
 local to this host session, not persistent identities or network player IDs.
 
 A press edge can be true while held is false for a tap between ticks. Hosts
 consume these edges every console tick, including pause/loading, rather than
 queuing stale actions for the game. Opposite directions may both be held; games
 choose their conflict rule. Combined controls and console pause remain available
-from all devices, including unassigned ones. No network service is introduced.
+from unassigned sources too. P1 keyboard movement/actions also drive combined input for menus and solo
+games; P2 adds only its Start/Menu bindings to combined input. Start/Menu may share keys across player layouts; other keys cannot overlap.
+No network service is introduced.
 
 Player assignment, joining and disconnect policy belong to the consuming game.
 Rebuild the host and all modules together for ABI 16.

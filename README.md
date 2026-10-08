@@ -164,19 +164,31 @@ immediately without changing game logic. Setup asks for action roles such as
 | Chirky input | Default SNES controller | Default keyboard |
 | --- | --- | --- |
 | Arrows | D-pad | Arrow keys |
-| Primary | B | X |
-| Secondary | Y | Z |
+| Primary | B | N |
+| Secondary | Y | M |
 | Start | Start | Enter |
 | Menu | Select | Escape |
 
-The Pi defaults match the tested SNES/Pico adapter. See the
-[controller wiring guide](docs/snes-pico-usb-controller.md) for that hardware.
-`controller_labels=snes-pico` in `config/host.conf` selects its physical legends,
-with directions labelled `← → ↑ ↓`. Keyboard arrow keys use the same symbols;
-remapped letter keys retain their letters. This is also the compatibility
-default for existing Pi configurations. For other
-adapters use `controller_labels=generic` to display raw button/axis identifiers
-until a matching legend profile is added. This setting does not change bindings.
+New controllers default to SNES bindings and labels on both platforms. Saved
+profiles, including Generic joystick mappings, take precedence.
+
+Both platforms offer the same controller setup: **Settings > Input Settings >
+Map controller**, then press a button on the controller to select it.
+Choose **SNES preset** for B/Y, Start/Select and arrow labels with default bindings,
+or **Generic joystick** to map all eight inputs with neutral button/axis labels.
+**Remap buttons** changes bindings while retaining the selected label profile.
+Directions and keyboard arrow keys use `← → ↑ ↓`; letter keys keep their letters.
+Use a keyboard or an already configured controller to navigate setup for an
+unmapped joystick.
+
+The SNES preset matches the tested [SNES/Pico adapter](docs/snes-pico-usb-controller.md)
+and browser-standard gamepad positions. Other USB adapters can expose different
+button numbers; use Generic joystick to configure those devices. Remap buttons
+lets you customize the bindings within an existing profile.
+Profiles are saved per controller model on both platforms. Two identical
+controllers share a profile but remain independent input devices; different models
+can use different profiles. Settings are local to each Pi or browser, not synced.
+Existing Pi SNES/Pico bindings and browser controller mappings remain usable.
 
 - Primary selects menu items; Secondary goes back. Menu pauses gameplay.
 - Rosey Chop: Primary chops and Secondary jumps.
@@ -188,12 +200,18 @@ until a matching legend profile is added. This setting does not change bindings.
 - F1 is native recovery/cancel, F12 captures a Pi snapshot. The physical
   Start + Select recovery chord remains available outside input setup.
 
-Choose **Settings > Input Settings**, then **Map controller** or **Map keyboard**.
-Both wizards capture the eight Chirky inputs in the order above, with Primary
-before Secondary. Release inputs between prompts. Duplicate bindings are
+Choose **Settings > Input Settings**, then **Map controller**, **Map keyboard P1**, or **Map keyboard P2**.
+Keyboard setup and the Generic joystick/Remap buttons wizards capture the eight
+Chirky inputs in the order above, with Primary before Secondary. Release inputs between prompts. Duplicate bindings are
 rejected; completed mappings save atomically. F1 cancels keyboard setup; holding
 two controller buttons for one second cancels controller setup. F1/F12 remain
 reserved. Cancellation and failed saves preserve the previous mapping.
+
+P1 is the default keyboard layout everywhere: arrow keys with N/M. P2 uses
+WASD with F/G. Enter (Start) and Esc (Menu) are shared. There is no separate solo
+layout: changing P1 also changes menu and single-player controls. Player layouts
+must use distinct keys except matching Start/Menu bindings. Prompts and
+keyboard help follow the saved mappings.
 
 Green controller and gold keyboard indicators show both sources independently.
 **Test buttons** suspends navigation; hold the displayed back control (the
@@ -219,8 +237,11 @@ size and position; Back or Secondary restores both. Old configurations are centr
 by default. Position is saved as `safe_offset_x` / `safe_offset_y`; drawing adds
 these offsets to the existing margins, with no scaling or additional render pass.
 
-`input_version=4` saves `bind_primary`, `key_primary`, `bind_secondary`,
-`bind_start`, `bind_menu` and directional bindings. Existing SNES B/Y/Select
+Pi controller profiles live in `config/controllers.conf`, keyed by USB identity
+and device name. `config/host.conf` retains legacy `bind_*` and
+`controller_labels` values as a fallback for the tested SNES/Pico model until
+that model has a saved profile. `input_version=5` keyboard settings use `key_*` for P1 and
+`p2_key_*` for P2. The former arrow/X/Z default migrates to arrow/N/M. Existing SNES B/Y/Select
 bindings migrate to Primary/Secondary/Menu; earlier action mappings still migrate.
 Explicit new names take precedence. Conflicting new defaults are left unbound.
 Retired A/X/L/R bindings are removed when saving. Host and all games must be

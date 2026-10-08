@@ -187,7 +187,7 @@ async function main() {
         const launcher=await checkLoading('Launcher');
         assert.deepEqual(launcher,firstPaint,'First paint must already have the final launcher layout before player JavaScript downloads');
         await page.eval('document.querySelector("#screen").focus()');
-        for(const [code,key,value] of [...catalog.games.filter(g=>g.role==='game').map(()=>['ArrowDown','ArrowDown',40]),['KeyX','x',88],['ArrowDown','ArrowDown',40],['KeyX','x',88]]){
+        for(const [code,key,value] of [...catalog.games.filter(g=>g.role==='game').map(()=>['ArrowDown','ArrowDown',40]),['KeyN','n',78],['ArrowDown','ArrowDown',40],['KeyN','n',78]]){
           await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:value});await delay(100);
           await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:value});await delay(100);
         }
@@ -318,10 +318,10 @@ async function main() {
         await page.eval('document.querySelector("#screen").focus()');
         if(game.role==='diagnostic'){
           for(const entry of catalog.games.filter(g=>g.role==='game'))await press('ArrowDown','ArrowDown',40);
-          await press('KeyX','x',88);
+          await press('KeyN','n',78);
           for(let i=0;i<=catalog.games.filter(g=>g.role==='diagnostic').findIndex(g=>g.id===game.id);i++)await press('ArrowDown','ArrowDown',40);
         }else for(let i=0;i<catalog.games.filter(g=>g.role==='game').findIndex(g=>g.id===game.id);i++)await press('ArrowDown','ArrowDown',40);
-        await press('KeyX','x',88);
+        await press('KeyN','n',78);
         await waitFor(`document.querySelector('#status')?.textContent===${JSON.stringify(game.name)} && new URL(location.href).searchParams.get('game')===${JSON.stringify(game.id)}`);
         assert.equal(await page.eval('document.querySelector("#status").textContent'),game.name);
         for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,assetBase).href),200);
@@ -427,7 +427,7 @@ async function main() {
         report.initial=await state();assert.equal(report.initial.assetSounds,game==='phosphor-run'?8:7);
         assert(report.initial.callbacks.every(([,type])=>type==='function'));
         const title=await capture('title');assert.equal(title.touchVisible,mobile);
-        if(mobile)await click('[data-button="4"]');else{await click('#screen');await key('KeyX','x',88);}
+        if(mobile)await click('[data-button="4"]');else{await click('#screen');await key('KeyN','n',78);}
         if(game==='phosphor-run') {
           // The level introduction lasts 130 simulation ticks and consumes input.
           // Allow it to finish and the player to land before testing jump/dash audio.
@@ -441,14 +441,14 @@ async function main() {
         assert.equal(playingPrograms,game==='phosphor-run'?3:2,
           'The robot lazily creates exactly one mesh program on its first draw');
         if(mobile){await click('[data-button="1"]',350);await click('[data-button="4"]');await click('[data-button="5"]');}
-        else{await key('ArrowRight','ArrowRight',39,350);await key('KeyZ','z',90);await key('KeyX','x',88);}
+        else{await key('ArrowRight','ArrowRight',39,350);await key('KeyM','m',77);await key('KeyN','n',78);}
         await delay(200);await capture('input');report.afterInput=await state();
         assert(report.afterInput.masks.some(mask=>mask&2));assert(report.afterInput.masks.some(mask=>mask&(1<<4)));
         assert.equal(report.afterInput.audioState,'running');assert(report.afterInput.assetPlays>0 && report.afterInput.audit.starts>0);
         report.checks.push('title, gameplay, directional/action input, decoded asset sounds played');
         await click('#screen');await key('Escape','Escape',27);
         assert((await state()).paused);const ticks=(await state()).ticks;await delay(250);assert.equal((await state()).ticks,ticks);
-        await key('KeyZ','z',90);await delay(150);assert(!(await state()).paused && (await state()).ticks>ticks);
+        await key('KeyM','m',77);await delay(150);assert(!(await state()).paused && (await state()).ticks>ticks);
         report.checks.push('shared pause menu freezes updates and Secondary resumes');
         // Fullscreen is requested inside the shared Settings menu below. Enter
         // it here with the screen gesture to verify pause/return preserve it.
@@ -462,11 +462,11 @@ async function main() {
         await delay(200);
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
         const original=await page.eval('globalThis.__originalCanvas=document.querySelector("#screen");globalThis.__originalGL=__originalCanvas.getContext("webgl");true');assert(original);
-        if((await state()).screen===5)await key('KeyZ','z',90);
+        if((await state()).screen===5)await key('KeyM','m',77);
         await page.eval(`globalThis.__menuPad={id:'Standard test pad',mapping:'standard',buttons:Array.from({length:16},(_,i)=>({pressed:i===8})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__menuPad]});`);await delay(130);
         await page.eval('__menuPad.buttons[8].pressed=false');await delay(130);
         assert.equal((await state()).screen,5);
-        await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);await delay(250);
+        await key('ArrowDown','ArrowDown',40);await key('KeyN','n',78);await delay(250);
         assert.equal((await state()).screen,0);assert.equal((await state()).id,'launcher');
         const unloaded=await state();
         assert.equal(unloaded.audit.texturesCreated-unloaded.audit.texturesDeleted,persistentTextureCount(unloaded.audit),'Only launcher and cached font textures should remain');
@@ -476,31 +476,43 @@ async function main() {
         await key('Escape','Escape',27);assert.equal((await state()).screen,0,'Menu must not bypass the launcher Settings entry');
         const launchGames=catalog.games.filter(g=>g.role==='game');
         for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowDown','ArrowDown',40);
-        await key('KeyX','x',88);assert.equal((await state()).screen,1);
-        await key('KeyX','x',88);assert.equal((await state()).screen,2);
-        await key('ArrowDown','ArrowDown',40);await key('KeyX','x',88);assert.equal((await state()).capture,1);
+        await key('KeyN','n',78);assert.equal((await state()).screen,1);
+        await key('KeyN','n',78);assert.equal((await state()).screen,2);
+        await key('ArrowDown','ArrowDown',40);await key('KeyN','n',78);assert.equal((await state()).capture,1);
         // Cancel a partial draft. It must not reach browser storage.
         await key('KeyA','a',65);await key('F1','F1',112);assert.equal((await state()).capture,-1);
         assert.equal(await page.eval('localStorage.getItem("chirky.inputs.v1")'),null);
-        await key('KeyX','x',88);
+        await key('KeyN','n',78);
         await key('ArrowLeft','ArrowLeft',37);await key('ArrowLeft','ArrowLeft',37); // duplicate rejected
-        for(const [code,k,v] of [['ArrowRight','ArrowRight',39],['ArrowUp','ArrowUp',38],['ArrowDown','ArrowDown',40],['KeyQ','q',81],['KeyZ','z',90],['Enter','Enter',13],['Escape','Escape',27]])await key(code,k,v);
+        for(const [code,k,v] of [['ArrowRight','ArrowRight',39],['ArrowUp','ArrowUp',38],['ArrowDown','ArrowDown',40],['KeyQ','q',81],['KeyM','m',77],['Enter','Enter',13],['Escape','Escape',27]])await key(code,k,v);
         assert.equal((await state()).capture,-1);
-        assert.deepEqual(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys'),['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyZ','Enter','Escape']);
+        assert.deepEqual(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys'),['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyM','Enter','Escape']);
         assert.equal(await page.eval('document.querySelector("#key-help-4").textContent'),'Q','Keyboard guide must reflect a remapped Primary key');
         const settingsShot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}-settings.png`),Buffer.from(settingsShot.data,'base64'));
         // Raw USB gamepad: map button AND axis events through the actual C wizard.
-        await key('ArrowUp','ArrowUp',38);await key('KeyQ','q',81);assert.equal((await state()).capture,0);
+        await key('ArrowUp','ArrowUp',38);await key('KeyQ','q',81);assert.equal((await state()).capture,-1);
         await page.eval(`globalThis.__pad={id:'USB SNES test adapter',index:0,connected:true,mapping:'',buttons:Array.from({length:10},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__pad]});`);
+        await page.eval('__pad.buttons[1]={pressed:true,value:1}');await delay(150);
+        await page.eval('__pad.buttons[1]={pressed:false,value:0}');await delay(150);
+        await capture('controller-profile');
+        await key('KeyQ','q',81);
+        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].type'),'snes');
+        assert.equal(await page.eval('__platformProbe.shell.onButtonLabel(4)'), 'Q');
+        await key('KeyQ','q',81);
+        await page.eval('__pad.buttons[1]={pressed:true,value:1}');await delay(150);
+        await page.eval('__pad.buttons[1]={pressed:false,value:0}');await delay(150);
+        assert.equal(await page.eval('__platformProbe.shell.onButtonLabel(4)'), 'B');
+        await key('ArrowDown','ArrowDown',40);await key('KeyQ','q',81);assert.equal((await state()).capture,0);
         for(const [kind,code,direction] of [[2,0,-1],[2,0,1],[2,1,-1],[2,1,1],[1,1,0],[1,0,0],[1,9,0],[1,8,0]]){
           await page.eval(kind===2?`__pad.axes[${code}]=${direction}`:`__pad.buttons[${code}]={pressed:true,value:1}`);await delay(130);
           await page.eval(kind===2?`__pad.axes[${code}]=0`:`__pad.buttons[${code}]={pressed:false,value:0}`);await delay(130);
         }
         assert.equal((await state()).capture,-1);
-        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v1")))[0].length'),8);
+        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].bindings.length'),8);
+        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].type'),'generic');
         // Secondary on this otherwise-unrecognized adapter returns through menus.
-        for(let i=0;i<2;i++){
+        for(let i=0;i<3;i++){
           await page.eval('__pad.buttons[0]={pressed:true,value:1}');await delay(130);
           await page.eval('__pad.buttons[0]={pressed:false,value:0}');await delay(130);
         }
@@ -523,7 +535,7 @@ async function main() {
         }
         await key('ArrowDown','ArrowDown',40);await key('KeyQ','q',81);assert((await state()).muted);
         assert.equal((await state()).activeSounds,0);await key('KeyQ','q',81);assert(!(await state()).muted);
-        await key('KeyZ','z',90);
+        await key('KeyM','m',77);
         // Leaving Settings preserves its launcher row; scroll back to the game.
         for(let i=launchGames.findIndex(g=>g.id===game);i<launchGames.length;i++)await key('ArrowUp','ArrowUp',38);
         await key('KeyQ','q',81);
@@ -623,7 +635,7 @@ async function main() {
         await page.call('Page.reload');await delay(200);await ready();
         assert.equal(await page.eval('JSON.parse(localStorage.getItem("chirky.inputs.v1")).keys[4]'),'KeyQ');
         assert.equal(await page.eval('document.querySelector("#key-help-4").textContent'),'Q','Keyboard guide must restore the saved mapping');
-        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v1"))).length'),1);
+        assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2"))).length'),1);
         await capture('restarted');
         report.lifecycle=await page.eval('JSON.parse(sessionStorage.getItem("platform-browser-lifecycle")||"[]")');
         assert(report.lifecycle.filter(e=>e.event==='destroy-end').length>=2);

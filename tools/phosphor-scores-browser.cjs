@@ -31,7 +31,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
       await page.eval('globalThis.__previousScorePage=true');
       await page.call('Page.navigate',{url:new URL('?game=phosphor-run',base).href});
       await wait(`!globalThis.__previousScorePage && document.querySelector('#status')?.textContent==='Phosphor Run' && document.querySelector('#startup').hidden`);
-      await delay(250);await key('KeyX','x',88);
+      await delay(250);await key('KeyN','n',78);
       // The close-up hold and zoom consume 130 ticks (2.17 seconds at 60 Hz).
       // Finish that introduction before walking the tiny test level.
       await delay(2700);await key('ArrowRight','ArrowRight',39,500);
@@ -59,7 +59,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
     assert.match(saved,/^CHIRKY-SCORES-1\n[1-9]\d* BAZ\n$/);await shot('score-saved');
     // A fresh document/main module must load the saved BAZ row into the table.
     await launch();await shot('scores-after-reload');
-    await key('KeyX','x',88);await key('KeyX','x',88);await key('KeyX','x',88);
+    await key('KeyN','n',78);await key('KeyN','n',78);await key('KeyN','n',78);
     const restored=await page.eval(`atob(localStorage.getItem('${storageKey}'))`);
     assert.match(restored,/ BAZ\n/);assert.match(restored,/ AAA\n/);assert.equal(restored.trim().split('\n').length,3);
     await key('Escape','Escape',27);await shot('pause-divider');

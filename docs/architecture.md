@@ -83,10 +83,11 @@ sticks fixed at their minimum; those must not block console navigation. Explicit
 axis bindings still use the current device value for logical input.
 
 The existing `button_label` callback resolves a logical action through the
-current physical binding for the last-used input source. Linux keeps the tested
-SNES/Pico legends in a configurable host profile; unknown layouts can use raw
-button/axis identifiers. Browser labels follow keyboard, touch or the active
-gamepad and its saved mapping. Games query labels during rendering and never
+current physical binding for the last-used input source. Both platforms support
+SNES legends and generic button/axis identifiers through per-model profiles.
+Controllers without a saved profile default to SNES bindings and labels on both hosts.
+Browser generic standard pads use positional legends. Labels follow keyboard,
+touch or the active gamepad and its saved mapping. Games query labels during rendering and never
 interpret raw device identities. `include/input_labels.h` provides portable prompt
 helpers without changing the input ABI or game update logic.
 
@@ -177,11 +178,22 @@ shares edge tracking between adapters; games never see evdev or Gamepad codes.
 Games own device-to-player assignment and their response to a disconnected
 source. The host reports devices without assigning player slots.
 
-Linux groups keyboard interfaces, keeps gamepads separate, scans for newly
-connected devices once per second, and clears unplugged state. Its existing
-controller mapping/legend profile is still shared by pads; this first slice
-targets two compatible SNES adapters or a SNES adapter plus keyboard. Browser
-connection IDs distinguish identical pads at different indices, while mappings
-remain saved by device model identity. Touch is one additional source.
+Both hosts expose two keyboard layouts. P1 also supplies the combined keyboard
+input used by menus and solo games; there is no separate solo mapping.
+Player layouts have independent movement/actions and may share Start/Menu keys.
+Linux groups keyboard interfaces into these layouts, keeps gamepads separate, scans for newly
+connected devices once per second, and clears unplugged state. Both platforms
+keep profiles by model and input state by connection ID. Identical pads share a
+profile but have separate inputs. Touch is one additional browser source.
+
+The shared console owns controller selection, SNES/Generic choice, remapping,
+release/cancel gates and disconnect recovery. Platform callbacks resolve a
+connection to its model, apply the platform-specific raw SNES preset and persist
+bindings. Capture and release detection use only the selected connection.
+Linux stores profiles atomically in `config/controllers.conf`, keyed by USB
+bus/vendor/product/version plus a device-name hash. Old global `bind_*` and
+legend settings remain a migration fallback for the tested Pico model only.
+Browser `chirky.controllers.v2` uses the reported gamepad ID and mapping mode;
+old v1 arrays load as Generic profiles. Storage remains local to each host.
 Both hosts keep tracking per-source edges while the console is paused/loading,
 so a menu press does not become a gameplay press on resume.

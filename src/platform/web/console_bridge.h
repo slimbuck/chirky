@@ -10,16 +10,29 @@ EM_JS(void,catalog_id,(int index,char *out,int size),{stringToUTF8(Module.onLaun
 EM_JS(void,launch,(int index),{Module.onLaunch(index);});
 EM_JS(void,stopped,(void),{Module.onStopped();});
 EM_JS(void,platform_option,(int option),{Module.onOption(option);});
-EM_JS(int,save_mapping,(int keyboard,const struct controller_binding *bindings),{
+EM_JS(int,save_keyboard,(unsigned profile,const struct controller_binding *bindings),{
     const values=[];
     for(let i=0;i<8;i++)values.push({kind:HEAP32[(bindings+i*12)>>2],code:HEAPU32[(bindings+i*12+4)>>2],direction:HEAP32[(bindings+i*12+8)>>2]});
-    return Module.onSaveMapping(!!keyboard,values)?1:0;
+    return Number(Module.onSaveKeyboard(values,profile));
 });
 EM_JS(void,raw_names,(int keyboard,char *out,int size),{stringToUTF8(Module.onRawNames(!!keyboard),out,size);});
 static bool load_service(void *unused,int index){(void)unused;launch(index);return true;}
 static void unload_service(void *unused){(void)unused;web_unload();stopped();}
-static bool mapping_service(void *unused,bool keyboard,const struct controller_binding *bindings)
-{(void)unused;return save_mapping(keyboard,bindings)!=0;}
+static enum mapping_save_result mapping_service(void *unused,unsigned profile,const struct controller_binding *bindings)
+{(void)unused;return (enum mapping_save_result)save_keyboard(profile,bindings);}
+EM_JS(int,controller_info,(unsigned id,char *name,size_t size),{
+    const info=Module.onControllerInfo(id);if(!info)return -1;
+    stringToUTF8(info.name,name,size);return info.profile;
+});
+EM_JS(int,save_controller,(unsigned id,int profile,const struct controller_binding *bindings),{
+    let values=null;
+    if(bindings){values=[];for(let i=0;i<8;i++)values.push({kind:HEAP32[(bindings+i*12)>>2],code:HEAPU32[(bindings+i*12+4)>>2],direction:HEAP32[(bindings+i*12+8)>>2]});}
+    return Module.onSaveController(id,profile,values)?1:0;
+});
+static int controller_info_service(void *unused,uint32_t id,char *name,size_t size)
+{(void)unused;return controller_info(id,name,size);}
+static enum mapping_save_result save_controller_service(void *unused,uint32_t id,enum controller_profile profile,const struct controller_binding *bindings)
+{(void)unused;return (enum mapping_save_result)save_controller(id,profile,bindings);}
 static void option_service(void *unused,enum console_action action){(void)unused;platform_option(action);}
 static void console_init(void)
 {
@@ -29,7 +42,7 @@ static void console_init(void)
         catalog_name(i,names[i],sizeof(names[i]));catalog_id(i,ids[i],sizeof(ids[i]));
         games[i]=(struct console_game){ids[i],names[i],catalog_diagnostic(i)!=0};
     }
-    console.services=(struct console_services){.load=load_service,.unload=unload_service,.save_mapping=mapping_service,.action=option_service};
+    console.services=(struct console_services){.load=load_service,.unload=unload_service,.save_keyboard=mapping_service,.action=option_service,.controller_info=controller_info_service,.save_controller=save_controller_service};
     chirky_console_catalog(&console,games,count,CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
 }
 /* Stable browser diagnostics; internal screen ordinals are not an ABI. */
@@ -40,7 +53,11 @@ EMSCRIPTEN_KEEPALIVE int web_console_state(void)
 EMSCRIPTEN_KEEPALIVE int web_capture_keyboard(void)
 {return console.setup.active?(console.setup.keyboard?1:0):-1;}
 EMSCRIPTEN_KEEPALIVE void web_capture(int kind,unsigned code,int direction)
-{chirky_console_capture(&console,(struct controller_binding){kind,code,direction});}
+{if(console.setup.keyboard)chirky_console_capture(&console,(struct controller_binding){kind,code,direction});}
+EMSCRIPTEN_KEEPALIVE void web_controller_press(unsigned id){chirky_console_controller_press(&console,id);}
+EMSCRIPTEN_KEEPALIVE unsigned web_mapping_controller(void){return console.setup.active && !console.setup.keyboard?console.setup.controller_id:0;}
+EMSCRIPTEN_KEEPALIVE void web_capture_controller(unsigned id,int kind,unsigned code,int direction)
+{chirky_console_capture_controller(&console,id,(struct controller_binding){kind,code,direction});}
 EMSCRIPTEN_KEEPALIVE void web_console_launch(int index)
 {
     if(index<0)chirky_console_home(&console,false);

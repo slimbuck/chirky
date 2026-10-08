@@ -4,16 +4,16 @@
 #include <stdio.h>
 #include <string.h>
 
-struct fixture {struct chirky_console console;int loads,unloads,saves,actions;bool save_ok,load_ok;};
+struct fixture {struct chirky_console console;int loads,unloads,saves,actions;unsigned profile;bool conflict;bool save_ok,load_ok;};
 static bool load(void *context,int index){struct fixture *f=context;assert(index==0 || index==1);f->loads++;return f->load_ok;}
 static void unload(void *context){((struct fixture *)context)->unloads++;}
-static bool save(void *context,bool keyboard,const struct controller_binding *bindings)
-{struct fixture *f=context;assert(keyboard);assert(bindings[7].code==107);f->saves++;return f->save_ok;}
+static enum mapping_save_result save(void *context,unsigned profile,const struct controller_binding *bindings)
+{struct fixture *f=context;assert(profile<=2);assert(bindings[7].code==107);f->saves++;f->profile=profile;return f->conflict?MAPPING_CONFLICT:f->save_ok;}
 static void action(void *context,enum console_action action){(void)action;((struct fixture *)context)->actions++;}
 static void init(struct fixture *f,unsigned caps)
 {
     *f=(struct fixture){.save_ok=true,.load_ok=true};
-    f->console.services=(struct console_services){.context=f,.load=load,.unload=unload,.save_mapping=save,.action=action};
+    f->console.services=(struct console_services){.context=f,.load=load,.unload=unload,.save_keyboard=save,.action=action};
     const struct console_game games[]={{"game","Game",false},{"diagnostic","Diagnostic",true}};
     chirky_console_catalog(&f->console,games,2,caps);
 }
@@ -25,6 +25,36 @@ static bool tick(struct fixture *f,int button,bool pressed,bool cancel)
 }
 static void settle(struct fixture *f){for(int i=0;i<3;i++)tick(f,-1,false,false);}
 static void tap(struct fixture *f,int button){settle(f);tick(f,button,true,false);settle(f);}
+static int controller_info(void *context,uint32_t id,char *name,size_t size)
+{struct fixture *f=context;snprintf(name,size,"Test pad");return id==9?(int)f->profile:-1;}
+static enum mapping_save_result controller_save(void *context,uint32_t id,enum controller_profile profile,const struct controller_binding *map)
+{struct fixture *f=context;assert(id==9);assert(map || profile==CONTROLLER_SNES);f->saves++;if(f->save_ok)f->profile=profile;return f->save_ok?MAPPING_SAVED:MAPPING_FAILED;}
+static void controller_profiles(unsigned capabilities)
+{
+    struct fixture f;init(&f,capabilities);struct chirky_console *c=&f.console;
+    c->services.controller_info=controller_info;c->services.save_controller=controller_save;
+    c->controller_settings=true;
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->controller_selecting);
+    chirky_console_controller_press(c,8);assert(c->controller_selecting);
+    chirky_console_controller_press(c,9);assert(c->controller_options && !c->controller_selecting);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(f.saves==1 && f.profile==CONTROLLER_SNES && !c->controller_options);
+    tap(&f,CHIRKY_BUTTON_PRIMARY);chirky_console_controller_press(c,9);settle(&f);
+    c->controller_option=2;tap(&f,CHIRKY_BUTTON_PRIMARY);
+    assert(c->setup.active && c->setup.controller_profile==CONTROLLER_SNES);
+    chirky_console_capture_controller(c,8,(struct controller_binding){BINDING_KEY,100,0});
+    tick(&f,-1,false,false);assert(c->setup.step==0 && !c->setup.ready);
+    for(unsigned i=0;i<8;i++){chirky_console_capture_controller(c,9,(struct controller_binding){BINDING_KEY,100+i,0});tick(&f,-1,false,false);}
+    assert(f.saves==2 && f.profile==CONTROLLER_SNES && !c->setup.active);
+    c->controller_option=1;tap(&f,CHIRKY_BUTTON_PRIMARY);
+    assert(c->setup.controller_profile==CONTROLLER_GENERIC);
+    f.save_ok=false;
+    for(unsigned i=0;i<8;i++){chirky_console_capture_controller(c,9,(struct controller_binding){BINDING_KEY,100+i,0});tick(&f,-1,false,false);}
+    assert(f.saves==3 && f.profile==CONTROLLER_SNES && !strcmp(c->settings_message,"SAVE FAILED - NOTHING CHANGED"));
+    tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->setup.active);
+    c->controller_id=8;tick(&f,-1,false,false);
+    assert(!c->setup.active && !c->controller_options && c->controller_selecting);
+    assert(!strcmp(c->settings_message,"CONTROLLER DISCONNECTED"));
+}
 static void shared_trace(unsigned caps)
 {
     struct fixture f;init(&f,caps);struct chirky_console *c=&f.console;
@@ -46,6 +76,13 @@ static void shared_trace(unsigned caps)
     f.save_ok=false;settle(&f);tap(&f,CHIRKY_BUTTON_PRIMARY);
     for(unsigned i=0;i<8;i++){chirky_console_capture(c,(struct controller_binding){BINDING_KEY,100+i,0});tick(&f,-1,false,false);}
     assert(f.saves==2 && !strcmp(c->settings_message,"SAVE FAILED - NOTHING CHANGED"));
+    for(unsigned profile=1;profile<=2;profile++) {
+        c->selected_option=profile==1?1:3;f.conflict=profile==2;f.save_ok=true;
+        tap(&f,CHIRKY_BUTTON_PRIMARY);assert(c->setup.keyboard_profile==profile);
+        for(unsigned i=0;i<8;i++){chirky_console_capture(c,(struct controller_binding){BINDING_KEY,100+i,0});tick(&f,-1,false,false);}
+        assert(f.profile==profile);
+        assert(!strcmp(c->settings_message,f.conflict?"KEY USED BY OTHER PLAYER":"BUTTONS SAVED"));
+    }
     chirky_console_home(c,false);settle(&f);tap(&f,CHIRKY_BUTTON_UP);tap(&f,CHIRKY_BUTTON_PRIMARY);
     assert(c->loading && !c->game_active && f.loads==1);
     assert(!tick(&f,CHIRKY_BUTTON_PRIMARY,true,false));
@@ -149,7 +186,7 @@ static void shared_menu_layouts(void)
 {
     struct fixture f;init(&f,CONSOLE_CAN_DISPLAY);
     const enum console_action pages[]={CONSOLE_SETTINGS,CONSOLE_INPUT,CONSOLE_DISPLAY};
-    const int counts[]={4,4,6};
+    const int counts[]={4,5,6};
     struct chirky_console *c=&f.console;
     for(int page=0;page<3;page++) {
         chirky_console_open(c,pages[page]);settle(&f);
@@ -217,6 +254,8 @@ int main(void)
     assert(pause_selection_top>=0 && pause_text_bottom-(pause_selection_top+1)>=3);
     shared_trace(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     shared_trace(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
+    controller_profiles(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
+    controller_profiles(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     struct fixture web;init(&web,CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     chirky_console_open(&web.console,CONSOLE_DISPLAY);assert(chirky_console_screen(&web.console)==SCREEN_LAUNCHER);
     chirky_console_timing(&web.console,true,0);chirky_console_timing(&web.console,true,3000000);assert(!web.actions);

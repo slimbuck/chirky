@@ -4,11 +4,15 @@
 #include <string.h>
 
 /* Platform adapters assign raw codes; the capture workflow is portable. */
+enum controller_profile { CONTROLLER_GENERIC, CONTROLLER_SNES };
 enum binding_kind { BINDING_NONE, BINDING_KEY, BINDING_ABS };
 struct controller_binding { enum binding_kind kind; unsigned int code; int direction; };
 struct binding_setup {
     bool active, keyboard, wait_release, ready, complete;
     int step;
+    uint32_t controller_id;
+    enum controller_profile controller_profile;
+    unsigned keyboard_profile; /* 1/2: keyboard player; 0 uses P1 for legacy callers. */
     struct controller_binding candidate, pending[CHIRKY_BUTTON_COUNT];
     const char *message;
 };

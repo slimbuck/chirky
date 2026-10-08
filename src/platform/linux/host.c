@@ -1,5 +1,6 @@
 #include "chirky.h"
 #include "input_bindings.h"
+#include "controller_profiles.h"
 #include "rect_renderer.h"
 #include "frame_timing.h"
 #include "gpu_timing.h"
@@ -215,6 +216,8 @@ struct input_device {
     int fd;
     int event_index;
     uint32_t connection_id;
+    char model[40];
+    bool snes_adapter;
     unsigned pending;
     bool controller;
     char name[128];
@@ -233,17 +236,14 @@ struct input_set {
     int count;
     bool previous_buttons[CHIRKY_BUTTON_COUNT];
     bool pending_buttons[CHIRKY_BUTTON_COUNT];
-    bool controller_up_pressed;
-    bool controller_down_pressed;
     bool keys[KEY_MAX + 1];
     bool pressed[KEY_MAX + 1];
-    bool controller_pressed;
     struct chirky_input state;
     struct local_input_bank local;
     uint32_t next_connection_id;
     uint64_t next_scan;
     bool hotplug;
-    unsigned keyboard_pending;
+    unsigned keyboard_pending[2];
 };
 
 struct game_record {
@@ -303,11 +303,57 @@ struct host {
     char boot_game_id[64];
     struct controller_binding bindings[CHIRKY_BUTTON_COUNT];
     struct controller_binding keyboard_bindings[CHIRKY_BUTTON_COUNT];
+    struct controller_binding keyboard2_bindings[CHIRKY_BUTTON_COUNT];
+    struct controller_profiles controller_profiles;
+    uint32_t last_controller_id;
     bool last_keyboard;
-    enum controller_label_profile controller_labels;
+    enum controller_profile controller_labels;
     int safe_x,safe_y,safe_offset_x,safe_offset_y;
 
 };
+
+static struct input_device *controller_by_id(struct host *host,uint32_t id)
+{
+    for(int i=0;i<host->inputs.count;i++) {
+        struct input_device *d=&host->inputs.devices[i];
+        if(d->fd>=0 && d->controller && d->connection_id==id)return d;
+    }
+    return NULL;
+}
+static const struct saved_controller *device_saved_profile(const struct host *host,const struct input_device *d)
+{
+    for(unsigned i=0;i<host->controller_profiles.count;i++)
+        if(!strcmp(host->controller_profiles.items[i].model,d->model))return &host->controller_profiles.items[i];
+    return NULL;
+}
+static const struct controller_binding *device_bindings(const struct host *host,const struct input_device *d)
+{
+    const struct saved_controller *saved=device_saved_profile(host,d);
+    if(saved)return saved->bindings;
+    /* Preserve the installed Pico's old config, without applying it to unrelated models. */
+    return d->snes_adapter?host->bindings:snes_bindings;
+}
+static enum controller_profile device_label_profile(const struct host *host,const struct input_device *d)
+{
+    const struct saved_controller *saved=device_saved_profile(host,d);
+    return saved?saved->profile:(d->snes_adapter?host->controller_labels:CONTROLLER_SNES);
+}
+static int controller_info_service(void *context,uint32_t id,char *name,size_t size)
+{
+    struct host *host=context;struct input_device *d=controller_by_id(host,id);
+    if(!d)return -1;
+    snprintf(name,size,"%s",d->name);
+    return device_label_profile(host,d);
+}
+static enum mapping_save_result save_controller_service(void *context,uint32_t id,
+    enum controller_profile profile,const struct controller_binding *bindings)
+{
+    struct host *host=context;struct input_device *d=controller_by_id(host,id);
+    if(!d)return MAPPING_FAILED;
+    struct controller_binding preset[CHIRKY_BUTTON_COUNT];
+    if(!bindings){default_bindings(preset);bindings=preset;}
+    return controller_profiles_save(&host->controller_profiles,d->model,profile,bindings)?MAPPING_SAVED:MAPPING_FAILED;
+}
 
 static volatile sig_atomic_t stop_requested;
 static volatile sig_atomic_t snapshot_requested;
@@ -422,6 +468,14 @@ static int binding_button_for_key(const char *key)
     return -1;
 }
 
+static int player_binding_for_key(const char *key)
+{
+    if (strncmp(key,"p1_",3) && strncmp(key,"p2_",3)) return -1;
+    for (int b=0;b<CHIRKY_BUTTON_COUNT;b++)
+        if (!strcmp(key+3,keyboard_config_keys[b])) return (key[1]-'1')*CHIRKY_BUTTON_COUNT+b;
+    return -1;
+}
+
 /* Read old action mappings once, then save only Chirky input names. */
 static int legacy_binding_for_key(const char *key)
 {
@@ -462,17 +516,19 @@ static bool save_bindings(const struct host *host)
         char *key=trim(parsed), *separator=strchr(key,'=');
         if (separator) *separator=0;
         key=trim(key);
-        if (binding_button_for_key(key)<0 && legacy_binding_for_key(key)<0 && snes_binding_for_key(key)==-1 && strcmp(key,"safe_x") && strcmp(key,"safe_y") && strcmp(key,"safe_offset_x") && strcmp(key,"safe_offset_y") && strcmp(key,"input_version"))
+        if (player_binding_for_key(key)<0 && binding_button_for_key(key)<0 && legacy_binding_for_key(key)<0 && snes_binding_for_key(key)==-1 && strcmp(key,"safe_x") && strcmp(key,"safe_y") && strcmp(key,"safe_offset_x") && strcmp(key,"safe_offset_y") && strcmp(key,"input_version"))
             fputs(line,target);
     }
     bool failed=source && ferror(source);
     if (source) fclose(source);
-    fputs("\ninput_version=4\n",target);
+    fputs("\ninput_version=5\n",target);
     fprintf(target,"safe_x=%d\nsafe_y=%d\n",host->safe_x,host->safe_y);
     fprintf(target,"safe_offset_x=%d\nsafe_offset_y=%d\n",host->safe_offset_x,host->safe_offset_y);
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         write_binding(target,button_config_keys[i],&host->bindings[i]);
         write_binding(target,keyboard_config_keys[i],&host->keyboard_bindings[i]);
+        char key[64];snprintf(key,sizeof(key),"p2_%s",keyboard_config_keys[i]);
+        write_binding(target,key,&host->keyboard2_bindings[i]);
     }
     if (fflush(target)!=0 || fsync(fileno(target))!=0) failed=true;
     if (fclose(target)!=0) failed=true;
@@ -526,14 +582,13 @@ static void button_label(void *context, enum chirky_button button,
 {
     struct host *host=context;
     if(button<0 || button>=CHIRKY_BUTTON_COUNT){copy_text(text,capacity,"UNBOUND");return;}
-    bool keyboard=host->last_keyboard;
-    if(!keyboard) {
-        bool controller=false;
-        for(int i=0;i<host->inputs.count;i++)controller|=host->inputs.devices[i].controller;
-        keyboard=!controller;
-    }
-    if(keyboard)keyboard_name(&host->keyboard_bindings[button],text,capacity);
-    else controller_binding_label(&host->bindings[button],host->controller_labels,text,capacity);
+    struct input_device *device=controller_by_id(host,host->last_controller_id);
+    if(!device && !host->last_keyboard)
+        for(int i=0;i<host->inputs.count;i++)if(host->inputs.devices[i].controller && host->inputs.devices[i].fd>=0){device=&host->inputs.devices[i];break;}
+    if(!host->last_keyboard && device && device_bindings(host,device)[button].kind!=BINDING_NONE)
+        controller_binding_label(&device_bindings(host,device)[button],device_label_profile(host,device),text,capacity);
+    else keyboard_name(&host->keyboard_bindings[button],text,capacity);
+
 }
 
 static bool draw_mesh(void *context,const struct chirky_mesh_vertex *v,size_t count,float ambient)
@@ -696,16 +751,27 @@ static bool same_binding(struct controller_binding a, struct controller_binding 
     return a.kind!=BINDING_NONE && a.kind==b.kind && a.code==b.code && a.direction==b.direction;
 }
 
+static bool player_maps_conflict(const struct controller_binding *a,const struct controller_binding *b)
+{
+    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) for (int j=0;j<CHIRKY_BUTTON_COUNT;j++)
+        if (same_binding(a[i],b[j]) && !(i==j && i>=CHIRKY_BUTTON_START)) return true;
+    return false;
+}
+
 static void load_host_config(struct host *host)
 {
+    controller_profiles_load(&host->controller_profiles);
     default_bindings(host->bindings);
     default_keyboard_bindings(host->keyboard_bindings);
-    host->controller_labels=CONTROLLER_LABEL_SNES_PICO;
+    default_player_keyboard_bindings(host->keyboard2_bindings,1);
+    host->controller_labels=CONTROLLER_SNES;
     host->safe_x=CHIRKY_SAFE_X; host->safe_y=CHIRKY_SAFE_Y;
     host->safe_offset_x=host->safe_offset_y=0;
     host->frame_timing_enabled=false;
     host->console.timing_start_held=host->console.timing_start_toggled=false;
     int input_version=0;
+    struct controller_binding player2[CHIRKY_BUTTON_COUNT];
+    default_player_keyboard_bindings(player2,1);
     struct controller_binding legacy[8]={0}, snes[2*CHIRKY_BUTTON_COUNT]={0};
     bool snes_supplied[2*CHIRKY_BUTTON_COUNT]={0};
     bool supplied[2*CHIRKY_BUTTON_COUNT]={0}, old_supplied[8]={0};
@@ -723,12 +789,15 @@ static void load_host_config(struct host *host)
         else if (!strcmp(key,"safe_offset_y")) { int n=atoi(value); if(n>=-24 && n<=24)host->safe_offset_y=n; }
         else if (!strcmp(key,"input_version")) input_version=atoi(value);
         else if (!strcmp(key,"controller_labels")) host->controller_labels=
-            !strcmp(value,"snes-pico")?CONTROLLER_LABEL_SNES_PICO:CONTROLLER_LABEL_GENERIC;
+            !strcmp(value,"snes-pico")?CONTROLLER_SNES:CONTROLLER_GENERIC;
         else {
             int button=binding_button_for_key(key), old=legacy_binding_for_key(key), previous=snes_binding_for_key(key);
             struct controller_binding parsed;
             if (!parse_binding(value,&parsed)) continue;
-            if (button>=0 && (button<CHIRKY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
+            int player=player_binding_for_key(key);
+            if (player>=0 && keyboard_binding_valid(parsed)) {
+                if(player>=CHIRKY_BUTTON_COUNT)player2[player-CHIRKY_BUTTON_COUNT]=parsed;
+            } else if (button>=0 && (button<CHIRKY_BUTTON_COUNT || keyboard_binding_valid(parsed))) {
                 if (button<CHIRKY_BUTTON_COUNT) host->bindings[button]=parsed;
                 else host->keyboard_bindings[button-CHIRKY_BUTTON_COUNT]=parsed;
                 supplied[button]=true;
@@ -773,6 +842,20 @@ static void load_host_config(struct host *host)
                 for (int j=0;j<CHIRKY_BUTTON_COUNT;j++)
                     if (explicit[j] && same_binding(map[i],map[j])) map[i]=(struct controller_binding){0};
         }
+    }
+    if(input_version>=5)memcpy(host->keyboard2_bindings,player2,sizeof(player2));
+    if(input_version<5) {
+        const unsigned old[]={KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_X,KEY_Z,KEY_ENTER,KEY_ESC};
+        bool old_default=true;
+        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)old_default &= host->keyboard_bindings[b].kind==BINDING_KEY && host->keyboard_bindings[b].code==old[b];
+        if(old_default)default_keyboard_bindings(host->keyboard_bindings);
+    }
+    bool invalid=player_maps_conflict(host->keyboard_bindings,host->keyboard2_bindings);
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)for(int j=0;j<i;j++)
+        invalid |= same_binding(host->keyboard2_bindings[i],host->keyboard2_bindings[j]);
+    if(invalid) {
+        default_keyboard_bindings(host->keyboard_bindings);
+        default_player_keyboard_bindings(host->keyboard2_bindings,1);
     }
     clamp_safe_position(host);
     host->console.display=(struct console_display){host->safe_x,host->safe_y,host->safe_offset_x,host->safe_offset_y};
@@ -916,14 +999,16 @@ static void poll_audio(struct host *host)
 }
 
 static void unload_service(void *context) { unload_game(context); }
-static bool save_mapping_service(void *context,bool keyboard,const struct controller_binding *bindings)
+static enum mapping_save_result save_keyboard_service(void *context,unsigned profile,const struct controller_binding *bindings)
 {
     struct host *host=context;
-    struct controller_binding *target=keyboard?host->keyboard_bindings:host->bindings;
+    if(profile>2)return MAPPING_FAILED;
+    if(player_maps_conflict(bindings,profile==2?host->keyboard_bindings:host->keyboard2_bindings))return MAPPING_CONFLICT;
+    struct controller_binding *target=profile==2?host->keyboard2_bindings:host->keyboard_bindings;
     struct controller_binding original[CHIRKY_BUTTON_COUNT];
     memcpy(original,target,sizeof(original));memcpy(target,bindings,sizeof(original));
-    if(save_bindings(host))return true;
-    memcpy(target,original,sizeof(original));return false;
+    if(save_bindings(host))return MAPPING_SAVED;
+    memcpy(target,original,sizeof(original));return MAPPING_FAILED;
 }
 static void action_service(void *context,enum console_action action)
 {
@@ -942,7 +1027,7 @@ static bool save_display_service(void *context) { return save_bindings(context);
 static void configure_console(struct host *host)
 {
     host->console.services=(struct console_services){host,load_game_platform,unload_service,
-        save_mapping_service,action_service,display_service,save_display_service};
+        save_keyboard_service,action_service,display_service,save_display_service,controller_info_service,save_controller_service};
     host->console.display=(struct console_display){host->safe_x,host->safe_y,host->safe_offset_x,host->safe_offset_y};
 }
 static void open_settings_screen(struct host *host,int option)
@@ -1050,7 +1135,7 @@ static struct chirky_host_api console_api(struct host *host)
 static void menu_text(struct host *host,int x,int y,const char *value,int scale,unsigned char r,unsigned char g,unsigned char b)
 { struct chirky_host_api ui=console_api(host); console_menu_text(&ui,x,y,value,scale,r,g,b); }
 
-static bool binding_down(const struct input_set *inputs, const struct controller_binding *binding, bool keyboard);
+static bool keyboard_binding_down(const struct input_set *inputs, const struct controller_binding *binding);
 static int axis_direction(const struct input_device *device, unsigned int code, int value);
 static bool capture_axis(unsigned int code);
 
@@ -1302,6 +1387,9 @@ static void scan_inputs(struct input_set *inputs)
         device->event_index=index;
         device->connection_id=++inputs->next_connection_id;
         copy_text(device->name, sizeof(device->name), name);
+        struct input_id identity={0};ioctl(fd,EVIOCGID,&identity);
+        controller_model(device->model,sizeof(device->model),&identity,name);
+        device->snes_adapter=identity.vendor==0x10c4 && identity.product==0x82c0 && strcasestr(name,"GP2040");
         for (unsigned int code = 0; code <= KEY_MAX; ++code) {
             if (input_bit(key_bits, code) && controller_button_code(code))
                 device->controller = true;
@@ -1350,11 +1438,11 @@ static bool capture_axis(unsigned int code)
         (code>=ABS_HAT0X && code<=ABS_HAT3Y);
 }
 
-static bool buttons_released(const struct input_set *inputs, bool keyboard)
+static bool buttons_released(const struct input_set *inputs, bool keyboard,uint32_t controller_id)
 {
     for (int i=0;i<inputs->count;i++) {
         const struct input_device *device=&inputs->devices[i];
-        if (device->controller==keyboard) continue;
+        if (device->controller==keyboard || (controller_id && device->connection_id!=controller_id)) continue;
         for (unsigned int code=0;code<=KEY_MAX;code++) if (device->keys[code]) return false;
         if (!keyboard) for (unsigned int code=0;code<=ABS_MAX;code++)
             if (capture_axis(code) && device->abs_centred[code] &&
@@ -1363,40 +1451,47 @@ static bool buttons_released(const struct input_set *inputs, bool keyboard)
     return true;
 }
 
-static int controller_buttons_down(const struct input_set *inputs)
+static int controller_buttons_down(const struct input_set *inputs,uint32_t controller_id)
 {
     int count=0;
     for (int i=0;i<inputs->count;i++) {
         const struct input_device *device=&inputs->devices[i];
-        if (!device->controller) continue;
+        if (!device->controller || (controller_id && device->connection_id!=controller_id)) continue;
         for (unsigned int code=0;code<=KEY_MAX;code++)
             if (device->keys[code] && !controller_direction_code(code)) count++;
     }
     return count;
 }
 
-static bool binding_down(const struct input_set *inputs, const struct controller_binding *binding, bool keyboard)
+static bool keyboard_binding_down(const struct input_set *inputs, const struct controller_binding *binding)
 {
     for (int i=0;i<inputs->count;i++) {
         const struct input_device *device=&inputs->devices[i];
-        if (device->controller==keyboard) continue;
+        if (device->controller || device->fd<0) continue;
         if (binding->kind==BINDING_KEY && binding->code<=KEY_MAX && device->keys[binding->code]) return true;
-        if (!keyboard && binding->kind==BINDING_ABS && binding->code<=ABS_MAX &&
-            axis_direction(device,binding->code,device->abs_values[binding->code])==binding->direction) return true;
     }
     return false;
 }
 
+static unsigned device_mask(const struct host *,const struct input_device *);
+static unsigned controller_mask(const struct host *host)
+{
+    unsigned mask=0;
+    for(int i=0;i<host->inputs.count;i++)if(host->inputs.devices[i].controller && host->inputs.devices[i].fd>=0)
+        mask|=device_mask(host,&host->inputs.devices[i]);
+    return mask;
+}
 static bool button_down(const struct host *host, int action)
 {
-    return binding_down(&host->inputs,&host->bindings[action],false) ||
-        binding_down(&host->inputs,&host->keyboard_bindings[action],true);
+    return (controller_mask(host)&(1u<<action)) ||
+        keyboard_binding_down(&host->inputs,&host->keyboard_bindings[action]) ||
+        (action>=CHIRKY_BUTTON_START && keyboard_binding_down(&host->inputs,&host->keyboard2_bindings[action]));
 }
 
 static unsigned device_mask(const struct host *host,const struct input_device *device)
 {
     unsigned mask=0;
-    const struct controller_binding *map=device->controller?host->bindings:host->keyboard_bindings;
+    const struct controller_binding *map=device->controller?device_bindings(host,device):host->keyboard_bindings;
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         const struct controller_binding *b=&map[i];
         bool down=b->kind==BINDING_KEY && b->code<=KEY_MAX && device->keys[b->code];
@@ -1407,20 +1502,29 @@ static unsigned device_mask(const struct host *host,const struct input_device *d
     return mask;
 }
 
+static unsigned player_keyboard_mask(const struct host *host,int player)
+{
+    unsigned mask=0;
+    const struct controller_binding *map=player?host->keyboard2_bindings:host->keyboard_bindings;
+    for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)
+        if(keyboard_binding_down(&host->inputs,&map[b]))mask|=1u<<b;
+    return mask;
+}
+
 static void update_device_inputs(struct host *host)
 {
     struct input_set *in=&host->inputs;
     in->state.device_count=0;
-    unsigned keyboard=0;bool has_keyboard=false;
+    bool has_keyboard=false;
     for(int i=0;i<in->count;i++)if(in->devices[i].fd>=0 && !in->devices[i].controller) {
-        has_keyboard=true;keyboard|=device_mask(host,&in->devices[i]);
-        in->keyboard_pending|=in->devices[i].pending;in->devices[i].pending=0;
+        has_keyboard=true;in->devices[i].pending=0;
     }
-    if(has_keyboard) {
-        struct chirky_device_input *out=local_input_add(&in->local,&in->state,1,CHIRKY_DEVICE_KEYBOARD,keyboard,in->keyboard_pending);
-        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)keyboard_name(&host->keyboard_bindings[b],out->labels[b],sizeof(out->labels[b]));
+    if(has_keyboard)for(int p=0;p<2;p++) {
+        struct chirky_device_input *out=local_input_add(&in->local,&in->state,1+p,CHIRKY_DEVICE_KEYBOARD,
+            player_keyboard_mask(host,p),in->keyboard_pending[p]);
+        for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)keyboard_name(p?&host->keyboard2_bindings[b]:&host->keyboard_bindings[b],out->labels[b],sizeof(out->labels[b]));
     }
-    in->keyboard_pending=0;
+    memset(in->keyboard_pending,0,sizeof(in->keyboard_pending));
     for(int i=0;i<in->count;i++) {
         struct input_device *d=&in->devices[i];
         if(d->fd<0 || !d->controller)continue;
@@ -1428,7 +1532,7 @@ static void update_device_inputs(struct host *host)
             CHIRKY_DEVICE_CONTROLLER,device_mask(host,d),d->pending);
         d->pending=0;
         if(out)for(int b=0;b<CHIRKY_BUTTON_COUNT;b++)
-            controller_binding_label(&host->bindings[b],host->controller_labels,out->labels[b],sizeof(out->labels[b]));
+            controller_binding_label(&device_bindings(host,d)[b],device_label_profile(host,d),out->labels[b],sizeof(out->labels[b]));
     }
     local_input_finish(&in->local,&in->state);
 }
@@ -1449,6 +1553,7 @@ static void process_input_event(struct host *host, struct input_device *device, 
     /* Linux autorepeat is not a physical press or release. */
     if(event->type==EV_KEY && event->value==2)return;
     unsigned device_before=device_mask(host,device);
+    unsigned keyboard_before[2]={player_keyboard_mask(host,0),player_keyboard_mask(host,1)};
     bool before[CHIRKY_BUTTON_COUNT];
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) before[i]=button_down(host,i);
     if (event->type==EV_KEY && event->code<=KEY_MAX) {
@@ -1463,14 +1568,12 @@ static void process_input_event(struct host *host, struct input_device *device, 
         }
         if (pressed) {
             host->last_keyboard=!device->controller;
-            if (device->controller) {
-                if (event->code==KEY_UP || event->code==BTN_DPAD_UP) host->inputs.controller_up_pressed=true;
-                if (event->code==KEY_DOWN || event->code==BTN_DPAD_DOWN) host->inputs.controller_down_pressed=true;
-                if (!controller_direction_code(event->code)) host->inputs.controller_pressed=true;
-            }
+            if(device->controller){host->last_controller_id=device->connection_id;chirky_console_controller_press(&host->console,device->connection_id);}
             if (host->console.setup.keyboard!=device->controller &&
-                (!host->console.setup.keyboard || keyboard_binding_valid((struct controller_binding){BINDING_KEY,event->code,0})))
-                chirky_console_capture(&host->console,(struct controller_binding){BINDING_KEY,event->code,0});
+                (!host->console.setup.keyboard || keyboard_binding_valid((struct controller_binding){BINDING_KEY,event->code,0}))) {
+                if(device->controller)chirky_console_capture_controller(&host->console,device->connection_id,(struct controller_binding){BINDING_KEY,event->code,0});
+                else chirky_console_capture(&host->console,(struct controller_binding){BINDING_KEY,event->code,0});
+            }
         }
     } else if (event->type==EV_ABS && event->code<=ABS_MAX) {
         int old=axis_direction(device,event->code,device->abs_values[event->code]);
@@ -1481,16 +1584,15 @@ static void process_input_event(struct host *host, struct input_device *device, 
            gates. Explicit gameplay bindings still honour their current value. */
         if(old==0 || direction==0)device->abs_centred[event->code]=true;
         if (device->controller && old==0 && direction!=0) {
-            host->last_keyboard=false;
-            if (event->code==ABS_Y || event->code==ABS_HAT0Y) {
-                if (direction<0) host->inputs.controller_up_pressed=true;
-                else host->inputs.controller_down_pressed=true;
-            }
+            host->last_keyboard=false;host->last_controller_id=device->connection_id;
+            chirky_console_controller_press(&host->console,device->connection_id);
             if (!host->console.ui_wait_release && !host->console.setup.keyboard && capture_axis(event->code))
-                chirky_console_capture(&host->console,(struct controller_binding){BINDING_ABS,event->code,direction});
+                chirky_console_capture_controller(&host->console,device->connection_id,(struct controller_binding){BINDING_ABS,event->code,direction});
         }
     }
     device->pending|=device_mask(host,device)&~device_before;
+    if(!device->controller)for(int p=0;p<2;p++)
+        host->inputs.keyboard_pending[p]|=player_keyboard_mask(host,p)&~keyboard_before[p];
     for (int i=0;i<CHIRKY_BUTTON_COUNT;i++)
         if (!before[i] && button_down(host,i)) host->inputs.pending_buttons[i]=true;
     /* A release followed by a new press may both arrive between frames. */
@@ -1534,15 +1636,14 @@ static void update_host(struct host *host)
     update_device_inputs(host);
     if(!host->console.setup.active && host->inputs.pressed[KEY_F12])snapshot_requested=1;
     struct console_input frame={.logical=input,
-        .keyboard_held=!buttons_released(&host->inputs,true),
-        .controller_held=!buttons_released(&host->inputs,false),
-        .controller_buttons=controller_buttons_down(&host->inputs),
+        .keyboard_held=!buttons_released(&host->inputs,true,0),
+        .controller_held=!buttons_released(&host->inputs,false,host->console.setup.active?host->console.setup.controller_id:0),
+        .controller_buttons=controller_buttons_down(&host->inputs,host->console.setup.active?host->console.setup.controller_id:0),
         .cancel=host->inputs.pressed[KEY_F1],.recovery=recovery_chord(&host->inputs),.now_us=monotonic_us()};
     if(chirky_console_update(&host->console,&frame))chirky_runtime_update(&host->runtime,input);
     if(current_screen(host)!=before){block_transition_input(host);write_status(host);}
     memset(input->button_pressed,0,sizeof(input->button_pressed));
     memset(host->inputs.pressed,0,sizeof(host->inputs.pressed));
-    host->inputs.controller_pressed=false;host->inputs.controller_up_pressed=false;host->inputs.controller_down_pressed=false;
 }
 
 static uint64_t monotonic_us(void)
@@ -1678,8 +1779,8 @@ static void draw_host(struct host *host)
     struct chirky_host_api ui=console_api(host);
     unsigned pad=0,key=0;char pad_names[96],key_names[96];
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        if(binding_down(&host->inputs,&host->bindings[i],false))pad|=1u<<i;
-        if(binding_down(&host->inputs,&host->keyboard_bindings[i],true))key|=1u<<i;
+        if(controller_mask(host)&(1u<<i))pad|=1u<<i;
+        if(keyboard_binding_down(&host->inputs,&host->keyboard_bindings[i]))key|=1u<<i;
     }
     held_input_names(host,false,pad_names,sizeof(pad_names));held_input_names(host,true,key_names,sizeof(key_names));
     chirky_console_render(&host->console,&ui,&host->launcher_art,pad,key,pad_names,key_names);

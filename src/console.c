@@ -39,6 +39,7 @@ void chirky_console_home(struct chirky_console *c,bool settings)
 {
     leave_display(c);
     c->loading=c->game_active=c->paused=c->setup.active=c->controller_settings=c->input_test=false;
+    c->controller_selecting=c->controller_options=false;c->controller_id=0;
     c->settings_menu=settings;c->pause_option=0;c->controller_menu_chord_frames=0;
     c->menu_offset=c->menu_velocity=0;
     chirky_console_block(c);
@@ -82,6 +83,22 @@ void chirky_console_pause(struct chirky_console *c)
 }
 void chirky_console_capture(struct chirky_console *c,struct controller_binding binding)
 { if(!c->ui_wait_release)chirky_setup_offer(&c->setup,binding); }
+void chirky_console_controller_press(struct chirky_console *c,uint32_t id)
+{
+    if(!c->controller_selecting || c->ui_wait_release || !id || !c->services.controller_info)return;
+    if(c->services.controller_info(c->services.context,id,c->controller_name,sizeof(c->controller_name))<0)return;
+    c->settings_message="";c->controller_id=id;c->controller_selecting=false;c->controller_options=true;c->controller_option=0;
+    c->menu_offset=c->menu_velocity=0;chirky_console_block(c);
+}
+void chirky_console_capture_controller(struct chirky_console *c,uint32_t id,struct controller_binding binding)
+{
+    if(!c->setup.keyboard && c->setup.controller_id==id && id)chirky_console_capture(c,binding);
+}
+static const char *mapping_message(enum mapping_save_result result)
+{
+    return result==MAPPING_SAVED?"BUTTONS SAVED":result==MAPPING_CONFLICT?
+        "KEY USED BY OTHER PLAYER":"SAVE FAILED - NOTHING CHANGED";
+}
 void chirky_console_timing(struct chirky_console *c,bool start,uint64_t now)
 {
     if(!(c->capabilities&CONSOLE_CAN_TIMING))return;
@@ -124,6 +141,11 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
             chirky_console_home(c,c->settings_menu);return false;
         }
     }
+    if((c->controller_options || (c->setup.active && !c->setup.keyboard)) && c->services.controller_info &&
+       c->services.controller_info(c->services.context,c->controller_id,c->controller_name,sizeof(c->controller_name))<0) {
+        c->setup.active=c->controller_options=false;c->controller_selecting=true;c->controller_id=0;
+        c->settings_message="CONTROLLER DISCONNECTED";chirky_console_block(c);
+    }
     if(c->ui_wait_release && !frame->cancel) {
         bool neutral=!frame->keyboard_held && !frame->controller_held;
         for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)neutral &= !input->buttons[i] && !input->button_pressed[i];
@@ -137,9 +159,29 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
         } else {
             setup_release(&c->setup,c->setup.keyboard?!frame->keyboard_held:!frame->controller_held);
             if(c->setup.complete) {
-                bool ok=c->services.save_mapping && c->services.save_mapping(c->services.context,c->setup.keyboard,c->setup.pending);
-                c->settings_message=ok?"BUTTONS SAVED":"SAVE FAILED - NOTHING CHANGED";c->setup.active=false;
+                enum mapping_save_result result=MAPPING_FAILED;
+                if(c->setup.keyboard && c->services.save_keyboard)
+                    result=c->services.save_keyboard(c->services.context,c->setup.keyboard_profile,c->setup.pending);
+                else if(!c->setup.keyboard && c->services.save_controller)
+                    result=c->services.save_controller(c->services.context,c->setup.controller_id,c->setup.controller_profile,c->setup.pending);
+                c->settings_message=mapping_message(result);c->setup.active=false;
             }
+        }
+    } else if(c->controller_selecting) {
+        if(frame->cancel || input->button_pressed[CHIRKY_BUTTON_SECONDARY])c->controller_selecting=false;
+    } else if(c->controller_options) {
+        int choice=console_menu_update(&c->controller_option,4,input,frame->cancel);
+        if(choice==-2 || choice==3)c->controller_options=false;
+        else if(choice==0) {
+            enum mapping_save_result result=c->services.save_controller?
+                c->services.save_controller(c->services.context,c->controller_id,CONTROLLER_SNES,NULL):MAPPING_FAILED;
+            c->settings_message=mapping_message(result);
+            if(result==MAPPING_SAVED)c->controller_options=false;
+        } else if(choice==1 || choice==2) {
+            int profile=c->services.controller_info(c->services.context,c->controller_id,c->controller_name,sizeof(c->controller_name));
+            setup_begin(&c->setup,false);c->setup.controller_id=c->controller_id;
+            c->setup.controller_profile=choice==1?CONTROLLER_GENERIC:(enum controller_profile)profile;
+            c->settings_message="";
         }
     } else if(c->game_active) {
         if(c->diagnostic && input->button_pressed[CHIRKY_BUTTON_MENU])
@@ -176,11 +218,13 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
         if(frame->cancel || c->controller_menu_chord_frames>=60){c->input_test=false;c->controller_menu_chord_frames=0;}
     } else if(c->controller_settings) {
         int previous=c->selected_option;
-        int choice=console_menu_update(&c->selected_option,4,input,frame->cancel);
+        int choice=console_menu_update(&c->selected_option,5,input,frame->cancel);
         c->menu_offset+=c->selected_option-previous;
-        if(choice==-2 || choice==3)c->controller_settings=false;
+        if(choice==-2 || choice==4)c->controller_settings=false;
         else if(choice==2){c->input_test=true;c->controller_menu_chord_frames=0;}
-        else if(choice>=0){setup_begin(&c->setup,choice==1);c->settings_message="";c->controller_menu_chord_frames=0;}
+        else if(choice==0){c->controller_selecting=true;c->settings_message="";}
+        else if(choice==1 || choice==3){setup_begin(&c->setup,true);c->setup.keyboard_profile=choice==3?2:1;
+            c->settings_message="";c->controller_menu_chord_frames=0;}
     } else if(c->settings_menu) {
         int previous=c->settings_option;
         int count=launcher_count(&c->launcher,true),choice=console_menu_update(&c->settings_option,count+1,input,frame->cancel);
@@ -219,8 +263,13 @@ void chirky_console_render(struct chirky_console *c,const struct chirky_host_api
     case SCREEN_GAME:break;
     case SCREEN_DISPLAY:console_page(api,art,"Display area");chirky_console_draw_display(c,api);break;
     case SCREEN_INPUT:case SCREEN_SETUP:case SCREEN_TEST:
-        console_page(api,art,c->setup.active?(c->setup.keyboard?"Map keyboard":"Map controller"):c->input_test?"Test buttons":"Input settings");
-        console_draw_controller_settings(api,&c->setup,c->input_test,c->selected_option,c->settings_message,c->menu_offset);
+        console_page(api,art,c->controller_selecting?"Choose controller":c->controller_options && !c->setup.active?"Controller setup":c->setup.active?(c->setup.keyboard?
+            (c->setup.keyboard_profile==2?"Map keyboard P2":"Map keyboard P1"):
+            "Map controller"):c->input_test?"Test buttons":"Input settings");
+        if(c->controller_selecting)console_draw_controller_selection(api,c->settings_message);
+        else if(c->controller_options && !c->setup.active)
+            console_draw_controller_profile(api,c->controller_name,c->controller_option,c->settings_message);
+        else console_draw_controller_settings(api,&c->setup,c->input_test,c->selected_option,c->settings_message,c->menu_offset);
         if(c->input_test)console_draw_live_inputs(api,pad,key,pad_names,key_names);
         break;
     case SCREEN_SETTINGS:console_page(api,art,"Settings");console_draw_settings_menu(api,&c->launcher,c->settings_option,c->menu_offset);break;

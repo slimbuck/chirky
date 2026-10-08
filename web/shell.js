@@ -4,12 +4,25 @@
 const $=selector=>document.querySelector(selector);
 const canvas=$("#screen");
 const inputNames=["Move left","Move right","Move up","Move down","Confirm / main action","Back / other action","Start action","Pause / menu"];
-const defaultKeys=["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyX","KeyZ","Enter","Escape"];
+const defaultKeys=["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyN","KeyM","Enter","Escape"];
 const settingsKey="chirky.inputs.v1";
 function validKeys(value){return Array.isArray(value) && value.length===8 && new Set(value).size===8 && value.every(code=>typeof code==="string" && /^(Arrow(Left|Right|Up|Down)|Key[A-Z]|Digit[0-9]|Numpad[0-9]|Enter|Escape|Space|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Backspace|Tab|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|Backquote)$/.test(code));}
+const defaultPlayer2Keys=["KeyA","KeyD","KeyW","KeyS","KeyF","KeyG","Enter","Escape"];
+function playerKeysConflict(a,b){
+  return a.some((key,i)=>b.some((other,j)=>key===other && !(i===j && i>=6)));
+}
 function loadInputSettings(){
-  try{const saved=JSON.parse(localStorage.getItem(settingsKey));if(saved?.version===1 && validKeys(saved.keys) && ["auto","show","hide"].includes(saved.touch))return saved;}catch{}
-  return {version:1,keys:[...defaultKeys],touch:"auto"};
+  try{
+    const saved=JSON.parse(localStorage.getItem(settingsKey));
+    if([1,2].includes(saved?.version) && validKeys(saved.keys) && ["auto","show","hide"].includes(saved.touch)){
+      const oldDefault=["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyX","KeyZ","Enter","Escape"];
+      const keys=saved.version===1 && saved.keys.every((key,i)=>key===oldDefault[i])?[...defaultKeys]:saved.keys;
+      const p2Keys=saved.version===2 && validKeys(saved.p2Keys)?saved.p2Keys:[...defaultPlayer2Keys];
+      if(!playerKeysConflict(keys,p2Keys))return {...saved,version:2,keys,p2Keys};
+      return {version:2,keys:[...defaultKeys],p2Keys:[...defaultPlayer2Keys],touch:saved.touch};
+    }
+  }catch{}
+  return {version:2,keys:[...defaultKeys],p2Keys:[...defaultPlayer2Keys],touch:"auto"};
 }
 function keyName(code){return ({ArrowLeft:"←",ArrowRight:"→",ArrowUp:"↑",ArrowDown:"↓"})[code] || code.replace(/^Key|^Digit/,"").replace("Escape","Esc");}
 function keycapName(code){
@@ -77,5 +90,5 @@ function watchPixelDensity(){
 }
 watchPixelDensity();
 resizePlayer();
-window.ChirkyShell={inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer};
+window.ChirkyShell={playerKeysConflict,inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer};
 })();

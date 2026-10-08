@@ -2,8 +2,8 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const test=require('node:test');
-function player(saved){
-  const elements=new Map(),storage=new Map(saved?[['chirky.inputs.v1',saved]]:[]),events={};
+function player(saved,controllers={}){
+  const elements=new Map(),storage=new Map([...Object.entries(controllers),...(saved?[['chirky.inputs.v1',saved]]:[])]),events={};
   function element(selector){
     if(!elements.has(selector))elements.set(selector,{dataset:{},listeners:{},style:{},
       addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(){},focus(){}});
@@ -13,7 +13,7 @@ function player(saved){
   Object.assign(element('.dpad'),{setPointerCapture(){},getBoundingClientRect:()=>({left:10,top:10,width:132,height:132})});
   const document={querySelector:element,querySelectorAll:()=>touch,addEventListener:(name,fn)=>{events[name]=fn;}};
   const window={addEventListener:(name,fn)=>{events[name]=fn;}};
-  const localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)};
+  const localStorage={getItem:key=>storage.get(key) ?? null,setItem:(key,value)=>storage.set(key,value)};
   const context=vm.createContext({document,window,localStorage,location:{search:''},URLSearchParams,console,
     navigator:{getGamepads:()=>[]},fetch:()=>new Promise(()=>{}),URL,TextEncoder,atob,btoa,AudioContext:class{resume(){return Promise.resolve();}}});
   const run=code=>vm.runInContext(code,context);
@@ -52,26 +52,26 @@ test('cancelled browser loads cannot activate after a newer request, and errors 
 });
 test('logical keys, standard gamepads, raw USB axes and buttons',()=>{
   const p=player('{bad json');assert.equal(p.run('Object.keys(bindings).length'),8);
-  assert.equal(p.run('bindings.KeyX'),4);assert.equal(p.run('bindings.KeyZ'),5);
-  p.run('keys.add("Unknown");keys.add("KeyX")');assert.equal(p.run('mask()'),16);
+  assert.equal(p.run('bindings.KeyN'),4);assert.equal(p.run('bindings.KeyM'),5);
+  p.run('keys.add("Unknown");keys.add("KeyN")');assert.equal(p.run('mask()'),16);
   p.run('keys.clear();navigator.getGamepads=()=>[{id:"standard",mapping:"standard",buttons:Array.from({length:16},(_,i)=>({pressed:i===0||i===2||i===9})),axes:[0,0]}]');
   assert.equal(p.run('mask()'),(1<<4)|(1<<5)|(1<<6));
   p.run('navigator.getGamepads=()=>[{id:"USB SNES",mapping:"",buttons:Array.from({length:10},(_,i)=>({pressed:i===1})),axes:[-1,0]}]');
-  assert.equal(p.run('mask()'),0,'unrecognized pads require explicit mapping');
-  p.run('mappingPad="USB SNES|";var mapping=[{kind:2,code:0,direction:-1},{kind:2,code:0,direction:1},{kind:2,code:1,direction:-1},{kind:2,code:1,direction:1},... [1,0,9,8].map(code=>({kind:1,code,direction:0}))]');
-  assert(p.run('onSaveMapping(false,mapping)'));assert.equal(p.run('mask()'),17);
+  assert.equal(p.run('mask()'),17,'new raw controllers use the SNES preset immediately');
+  p.run('localDevices();var controllerId=localDevices()[3].id;var mapping=[{kind:2,code:0,direction:-1},{kind:2,code:0,direction:1},{kind:2,code:1,direction:-1},{kind:2,code:1,direction:1},... [1,0,9,8].map(code=>({kind:1,code,direction:0}))]');
+  assert(p.run('onSaveController(controllerId,0,mapping)'));assert.equal(p.run('mask()'),17);
   p.run('navigator.getGamepads=()=>[]');assert.equal(p.run('mask()'),0,'disconnect releases inputs');
-  assert.match(p.storage.get('chirky.controllers.v1'),/USB SNES/);
+  assert.match(p.storage.get('chirky.controllers.v2'),/USB SNES/);
 });
 test('physical labels follow remaps and the last pressed device without changing logical inputs',()=>{
   const p=player();
-  assert.equal(p.run('onButtonLabel(4)'), 'X');
+  assert.equal(p.run('onButtonLabel(4)'), 'N');
   assert.equal(p.run('onButtonLabel(0)'), '←');
   assert.equal(p.run('onButtonLabel(2)'), '↑');
-  p.run('var values=defaultKeys.map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ");onSaveMapping(true,values)');
+  p.run('var values=defaultKeys.map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ");onSaveKeyboard(values)');
   assert.equal(p.run('onButtonLabel(4)'), 'Q');
   p.run('var pad={index:0,id:"standard",mapping:"standard",buttons:Array.from({length:16},(_,i)=>({pressed:i===0})),axes:[0,0]};navigator.getGamepads=()=>[pad];updateLabelDevice()');
-  assert.equal(p.run('onButtonLabel(4)'), 'SOUTH');
+  assert.equal(p.run('onButtonLabel(4)'), 'B');
   assert.equal(p.run('onButtonLabel(0)'), '←');
   assert.equal(p.run('mask()'),16);
   p.events.keydown({code:'KeyQ',preventDefault(){}});
@@ -81,9 +81,10 @@ test('physical labels follow remaps and the last pressed device without changing
   p.run('updateLabelDevice()');
   assert.equal(p.run('onButtonLabel(4)'), 'A');
   assert.equal(p.run('onButtonLabel(5)'), 'B');
-  p.run('pad.buttons[2].pressed=true;updateLabelDevice();mappingPad=padIdentity(pad);onSaveMapping(false,[14,15,12,13,1,2,9,8].map(code=>({kind:1,code,direction:0})))');
+  p.run('pad.buttons[2].pressed=true;updateLabelDevice();localDevices();onSaveController(localDevices()[3].id,0,[14,15,12,13,1,2,9,8].map(code=>({kind:1,code,direction:0})))');
   assert.equal(p.run('onButtonLabel(4)'), 'EAST', 'remapping changes the physical legend');
-  p.run('pad.id="unknown adapter";pad.mapping="";updateLabelDevice();mappingPad=padIdentity(pad);onSaveMapping(false,[14,15,12,13,1,2,9,8].map(code=>({kind:1,code,direction:0})))');
+  p.run('pad.id="unknown adapter";pad.mapping="";updateLabelDevice();localDevices();onSaveController(localDevices()[3].id,0,[14,15,12,13,1,2,9,8].map(code=>({kind:1,code,direction:0})))');
+  p.run('pad.buttons[1].pressed=true;updateLabelDevice()');
   assert.equal(p.run('onButtonLabel(4)'), 'BTN 1', 'unknown USB legends are not guessed');
   assert.equal(p.run('onButtonLabel(-1)'), 'UNBOUND');
   p.run('navigator.getGamepads=()=>[];updateLabelDevice()');
@@ -94,31 +95,84 @@ test('local players use distinct connection IDs, mapped labels and independent s
   const p=player();
   p.run(`var a={index:0,id:'same',mapping:'standard',buttons:Array.from({length:16},()=>({pressed:false})),axes:[0,0]};
     var b={...a,index:1,buttons:Array.from({length:16},()=>({pressed:false}))};navigator.getGamepads=()=>[a,b];
-    var devices=localDevices();var aid=devices[2].id,bid=devices[3].id;`);
+    var devices=localDevices();var aid=devices[3].id,bid=devices[4].id;`);
   assert.notEqual(p.run('aid'),p.run('bid'));
   p.run('a.buttons[0].pressed=true;b.buttons[14].pressed=true;devices=localDevices()');
-  assert.deepEqual(Array.from(p.run('devices.map(d=>d.mask)')),[0,0,16,1]);
-  assert.equal(p.run('onDeviceLabel(aid,4)'), 'SOUTH');
-  assert.equal(p.run('onDeviceLabel(1,4)'), 'X');
+  assert.deepEqual(Array.from(p.run('devices.map(d=>d.mask)')),[0,0,0,16,1]);
+  assert.equal(p.run('onDeviceLabel(aid,4)'), 'B');
+  assert.equal(p.run('onDeviceLabel(1,4)'), 'N');
   assert.equal(p.run('onDeviceLabel(2,4)'), 'A');
-  p.events.keydown({code:'KeyX',preventDefault(){}});p.events.keyup({code:'KeyX'});
+  p.events.keydown({code:'KeyN',preventDefault(){}});p.events.keyup({code:'KeyN'});
   assert.equal(p.run('localDevices()[0].pending'),16);
   assert.equal(p.run('localDevices()[0].mask'),0);
   p.run('navigator.getGamepads=()=>[b];localDevices();navigator.getGamepads=()=>[a,b];devices=localDevices()');
-  assert.notEqual(p.run('devices[2].id'),p.run('aid'));
-  assert.equal(p.run('devices[3].id'),p.run('bid'));
+  assert.notEqual(p.run('devices[3].id'),p.run('aid'));
+  assert.equal(p.run('devices[4].id'),p.run('bid'));
   p.events.gamepaddisconnected({gamepad:{index:1}});
-  assert.notEqual(p.run('localDevices()[3].id'),p.run('bid'),'reused browser index gets a new connection ID');
+  assert.notEqual(p.run('localDevices()[4].id'),p.run('bid'),'reused browser index gets a new connection ID');
+});
+
+test('controller profiles share by model, isolate connections and preserve SNES legends through remapping',()=>{
+  const p=player();
+  p.run(`var a={index:0,id:'SNES',mapping:'',buttons:Array.from({length:10},()=>({pressed:false})),axes:[0,0]};
+    var b={...a,index:1,axes:[0,0],buttons:Array.from({length:10},()=>({pressed:false}))};
+    var c={...b,index:2,id:'different',axes:[0,0]};navigator.getGamepads=()=>[a,b,c];
+    var controllerIds=localDevices().slice(3).map(d=>d.id);`);
+  assert.equal(p.run('onSaveController(controllerIds[0],1,null)'),true);
+  assert.equal(p.run('onDeviceLabel(controllerIds[1],4)'),'B');
+  assert.equal(p.run('onDeviceLabel(controllerIds[2],4)'),'B');
+  p.run('a.buttons[1].pressed=true;b.axes[0]=-1');
+  assert.deepEqual(Array.from(p.run('localDevices().slice(3).map(d=>d.mask)')),[16,1,0]);
+  p.run('var remap=snesPreset(a);[remap[4],remap[5]]=[remap[5],remap[4]]');
+  assert.equal(p.run('onSaveController(controllerIds[0],1,remap)'),true);
+  assert.equal(p.run('onDeviceLabel(controllerIds[0],4)'),'Y');
+  assert.equal(p.run('onDeviceLabel(controllerIds[1],4)'),'Y');
+  const stored=p.storage.get('chirky.controllers.v2');
+  p.localStorage.setItem=()=>{throw Error('full');};
+  assert.equal(p.run('onSaveController(controllerIds[0],0,snesPreset(a))'),false);
+  assert.equal(p.run('onDeviceLabel(controllerIds[0],4)'),'Y');
+  p.run('navigator.getGamepads=()=>[b,c];localDevices()');
+  assert.equal(p.run('onSaveController(controllerIds[0],1,null)'),false);
+  p.run('navigator.getGamepads=()=>[a,b,c];localDevices()');
+  assert.notEqual(p.run('localDevices()[3].id'),p.run('controllerIds[0]'));
+  assert.equal(p.run('onDeviceLabel(localDevices()[3].id,4)'),'Y');
+  const restored=player(null,{'chirky.controllers.v2':stored});
+  restored.run(`var pad={index:0,id:'SNES',mapping:'',buttons:Array.from({length:10},()=>({pressed:false})),axes:[0,0]};navigator.getGamepads=()=>[pad];localDevices()`);
+  assert.equal(restored.run('onDeviceLabel(localDevices()[3].id,4)'),'Y');
+});
+
+test('standard SNES preset and legacy generic profiles use their respective physical labels',()=>{
+  const map=[14,15,12,13,0,2,9,8].map(code=>({kind:1,code,direction:0}));
+  const p=player(null,{'chirky.controllers.v1':JSON.stringify({'standard|standard':map})});
+  p.run(`var pad={index:0,id:'standard',mapping:'standard',buttons:Array.from({length:16},()=>({pressed:false})),axes:[0,0]};navigator.getGamepads=()=>[pad];localDevices()`);
+  assert.equal(p.run('onDeviceLabel(localDevices()[3].id,4)'),'SOUTH');
+  assert.equal(p.run('onSaveController(localDevices()[3].id,1,null)'),true);
+  assert.equal(p.run('onDeviceLabel(localDevices()[3].id,4)'),'B');
+  assert.equal(p.run('onDeviceLabel(localDevices()[3].id,5)'),'Y');
+  assert.equal(p.run('onDeviceLabel(localDevices()[3].id,0)'),'←');
+  assert.equal(p.run('onSaveController(localDevices()[3].id,0,padProfile(pad).bindings)'),true);
+  assert.equal(p.run('onDeviceLabel(localDevices()[3].id,4)'),'SOUTH');
+});
+
+test('new controllers default to SNES and can be selected before saving any settings',()=>{
+  const p=player();
+  p.run(`var pad={index:0,id:'new adapter',mapping:'',buttons:Array.from({length:16},(_,i)=>({pressed:i===1||i===14})),axes:[0,0]};
+    navigator.getGamepads=()=>[pad];var selected=0;shell={_web_controller_press:id=>selected=id};
+    localDevices();updateLabelDevice()`);
+  assert(p.run('selected>0'));assert.equal(p.run('onButtonLabel(4)'),'B');
+  assert.equal(p.run('onButtonLabel(5)'),'Y');assert.equal(p.run('onButtonLabel(0)'),'←');
+  assert.equal(p.run('mask()'),17);assert.equal(p.run('onControllerInfo(selected).profile'),1);
+  assert.equal(p.storage.has('chirky.controllers.v2'),false);
 });
 
 test('mapping commits atomically, rejects duplicates and preserves old bindings if storage fails',()=>{
   const p=player();
   p.run('var values=defaultKeys.map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ")');
-  assert(p.run('onSaveMapping(true,values)'));assert.equal(p.run('bindings.KeyQ'),4);
+  assert(p.run('onSaveKeyboard(values)'));assert.equal(p.run('bindings.KeyQ'),4);
   const next=player(p.storage.get('chirky.inputs.v1'));assert.equal(next.run('bindings.KeyQ'),4);
-  assert.equal(p.run('onSaveMapping(true,values.map(()=>values[0]))'),false);
+  assert.equal(p.run('onSaveKeyboard(values.map(()=>values[0]))'),false);
   p.localStorage.setItem=()=>{throw Error('blocked');};
-  assert.equal(p.run('values[4].code=keyCodes.indexOf("KeyR");onSaveMapping(true,values)'),false);
+  assert.equal(p.run('values[4].code=keyCodes.indexOf("KeyR");onSaveKeyboard(values)'),false);
   assert.equal(p.run('bindings.KeyQ'),4);assert.equal(p.run('bindings.KeyR'),undefined);
 });
 test('touch, release and focus loss do not leave stuck buttons',()=>{
@@ -131,13 +185,13 @@ test('touch, release and focus loss do not leave stuck buttons',()=>{
   p.touch[4].onpointerdown(down(3));p.touch[4].onpointerdown(down(4));
   p.touch[4].onpointerup({pointerId:3});assert.equal(p.touch[4].dataset.pressed,'true');
   pad.onpointerdown(down(5));
-  p.run('runtime={};keys.add("KeyX");pending=16');p.events.blur();assert.equal(p.run('mask()|pending|dpadPending'),0);assert.equal(p.run('paused'),true);
+  p.run('runtime={};keys.add("KeyN");pending=16');p.events.blur();assert.equal(p.run('mask()|pending|dpadPending'),0);assert.equal(p.run('paused'),true);
   pad.onpointermove({...down(5),clientX:150});assert.equal(p.run('mask()'),0);
   assert.equal(p.touch[4].dataset.pressed,'false');
 });
 test('game transitions preserve held raw inputs for the shared release gate',()=>{
   const p=player();
-  p.run('keys.add("KeyX");touch.set(1,1);pending=16;gameStopped()');
+  p.run('keys.add("KeyN");touch.set(1,1);pending=16;gameStopped()');
   assert.equal(p.run('mask()'),17);assert.equal(p.run('pending'),0);
 });
 
@@ -245,8 +299,8 @@ test('page-scale gestures are cancelled without consuming single-touch movement 
 });
 
 test('keyboard keycaps follow saved mappings and release their pressed state',()=>{
-  const p=player(JSON.stringify({version:1,keys:['KeyA','KeyD','KeyW','KeyS','Space','ControlRight','Enter','Escape'],touch:'auto'}));
-  assert.equal(p.element('#key-help-2').textContent,'W');
+  const p=player(JSON.stringify({version:1,keys:['KeyH','KeyL','KeyI','KeyK','Space','ControlRight','Enter','Escape'],touch:'auto'}));
+  assert.equal(p.element('#key-help-2').textContent,'I');
   assert.equal(p.element('#key-help-4').textContent,'Space');
   assert.equal(p.element('#key-help-5').textContent,'Ctrl R');
   p.events.keydown({code:'Space',preventDefault(){}});
@@ -309,4 +363,47 @@ test('game saves retain bytes across player instances and reject invalid or unav
   next.localStorage.setItem=()=>{throw Error('quota');};
   assert.equal(next.run('onSaveWrite("phosphor-run","scores",new Uint8Array([1]))'),false);
   p.storage.set('chirky.save.v1.phosphor-run.bad','not base64!');assert.equal(p.run('onSaveRead("phosphor-run","bad")'),null);
+});
+
+test('two keyboard layouts isolate movement and actions, share Start/Menu and use P1 for solo play',()=>{
+  const p=player();
+  for(const code of ['ArrowRight','KeyN','KeyA','KeyG'])p.events.keydown({code,preventDefault(){}});
+  assert.deepEqual(Array.from(p.run('localDevices().slice(0,2).map(d=>d.mask)')),[18,33]);
+  assert.equal(p.run('keyboardMask()'),18,'P1 drives combined input too; P2 stays independent');
+  for(const code of ['ArrowRight','KeyN','KeyA','KeyG'])p.events.keyup({code});
+  assert.deepEqual(Array.from(p.run('localDevices().slice(0,2).map(d=>d.pending)')),[18,33]);
+  p.run('localKeyPending.fill(0)');
+  for(const code of ['Enter','Escape']){p.events.keydown({code,preventDefault(){}});p.events.keyup({code});}
+  assert.deepEqual(Array.from(p.run('localDevices().slice(0,2).map(d=>d.pending)')),[192,192]);
+  p.run('setPaused(true)');
+  assert.deepEqual(Array.from(p.run('localKeyPending')),[0,0]);
+});
+
+test('player mappings persist independently, reject cross-player conflicts and update labels atomically',()=>{
+  const p=player();
+  p.run('var values=playerKeys[0].map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));values[4].code=keyCodes.indexOf("KeyQ")');
+  assert.equal(p.run('onSaveKeyboard(values,1)'),true);
+  assert.equal(p.run('onDeviceLabel(1,4)'),'Q');assert.equal(p.run('onDeviceLabel(3,4)'),'F');
+  assert.equal(p.run('onButtonLabel(4)'),'Q');
+  assert.equal(p.element('#key-help-4').textContent,'Q');
+  const next=player(p.storage.get('chirky.inputs.v1'));
+  assert.equal(next.run('onDeviceLabel(1,4)'),'Q');
+  assert.equal(p.run('values[4].code=keyCodes.indexOf("KeyF");onSaveKeyboard(values,1)'),-1);
+  assert.equal(p.run('values[4].code=keyCodes.indexOf("Enter");onSaveKeyboard(values,1)'),false);
+  p.localStorage.setItem=()=>{throw Error('blocked');};
+  assert.equal(p.run('values[4].code=keyCodes.indexOf("KeyR");onSaveKeyboard(values,1)'),false);
+  assert.equal(p.run('onDeviceLabel(1,4)'),'Q');
+  const broken=JSON.stringify({version:1,keys:[Array(8).fill('KeyF'),Array(8).fill('KeyF')]});
+  assert.equal(player(broken).run('onDeviceLabel(1,4)'),'N');
+});
+
+test('old default keyboard mappings upgrade to the shared P1 layout',()=>{
+  const p=player(JSON.stringify({version:1,keys:['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyX','KeyZ','Enter','Escape'],touch:'hide'}));
+  assert.equal(p.run('onButtonLabel(4)'),'N');assert.equal(p.run('onDeviceLabel(1,5)'),'M');
+  assert.equal(p.run('inputSettings.touch'),'hide');
+  p.run('var map=playerKeys[1].map(code=>({kind:1,code:keyCodes.indexOf(code),direction:0}));map[4].code=keyCodes.indexOf("KeyR");map[5].code=keyCodes.indexOf("KeyT")');
+  assert.equal(p.run('onSaveKeyboard(map,2)'),true);
+  const next=player(p.storage.get('chirky.inputs.v1'));
+  assert.equal(next.run('onDeviceLabel(3,4)'),'R');assert.equal(next.run('onDeviceLabel(3,5)'),'T');
+  assert.equal(next.run('onButtonLabel(4)'),'N');
 });

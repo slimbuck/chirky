@@ -20,10 +20,9 @@ static void draw_settings_menu(struct host *host)
 
 static void draw_live_inputs(struct host *host)
 { struct chirky_host_api ui=console_api(host);
-    unsigned pad=0,key=0;char pad_line[96],key_line[96];
+    unsigned pad=controller_mask(host),key=0;char pad_line[96],key_line[96];
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
-        if(binding_down(&host->inputs,&host->bindings[i],false))pad|=1u<<i;
-        if(binding_down(&host->inputs,&host->keyboard_bindings[i],true))key|=1u<<i;
+        if(keyboard_binding_down(&host->inputs,&host->keyboard_bindings[i]))key|=1u<<i;
     }
     held_input_names(host,false,pad_line,sizeof(pad_line));held_input_names(host,true,key_line,sizeof(key_line));
     console_draw_live_inputs(&ui,pad,key,pad_line,key_line);
@@ -117,7 +116,7 @@ static void fake_shutdown(void) {}
 static void check_timing_toggle(void)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
-    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.inputs.count=2;h.inputs.devices[0].controller=true;h.inputs.devices[0].snes_adapter=true;h.inputs.devices[0].connection_id=3;
     assert(!h.frame_timing_enabled);
     event(&h,0,EV_KEY,BTN_TR2,1);update_controller_buttons(&h);
     update_timing_toggle(&h,0);update_timing_toggle(&h,1999999);assert(!h.frame_timing_enabled);
@@ -151,7 +150,7 @@ static void fake_pause_render(void)
 static void check_pause_menu(const char *output_dir)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
-    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.inputs.count=2;h.inputs.devices[0].controller=true;h.inputs.devices[0].snes_adapter=true;h.inputs.devices[0].connection_id=3;
     h.mode.hdisplay=320;h.mode.vdisplay=240;h.safe_x=32;h.safe_y=24;update_safe_area(&h);
     strcpy(h.games[0].id,"phosphor-run");strcpy(h.games[0].name,"Phosphor Run");h.game_count=1;
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown,.render=fake_pause_render};
@@ -174,15 +173,15 @@ static void check_pause_menu(const char *output_dir)
     assert(!memcmp(framebuffer[panel_y][panel_x+8],(unsigned char[]){60,57,74},3));
     draw_host(&h);assert(pause_renders==2 && game_updates==saved_updates);
     char path[512];snprintf(path,sizeof(path),"%s/pause-menu.ppm",output_dir);write_preview(path);
-    event(&h,1,EV_KEY,KEY_X,1);update_host(&h);assert(!h.console.paused && h.active_game);
+    event(&h,1,EV_KEY,KEY_N,1);update_host(&h);assert(!h.console.paused && h.active_game);
     for(int i=0;i<30;i++)update_host(&h);
     assert(game_updates==saved_updates);
-    event(&h,1,EV_KEY,KEY_X,0);for(int i=0;i<3;i++)update_host(&h);
+    event(&h,1,EV_KEY,KEY_N,0);for(int i=0;i<3;i++)update_host(&h);
     assert(game_updates==saved_updates+1);
     tap(&h,1,KEY_ESC);assert(h.console.paused);
-    tap(&h,1,KEY_Z);assert(!h.console.paused && h.active_game);
+    tap(&h,1,KEY_M);assert(!h.console.paused && h.active_game);
     tap(&h,1,KEY_ESC);tap(&h,1,KEY_DOWN);assert(h.console.paused && h.console.pause_option==1);
-    tap(&h,1,KEY_X);assert(!h.active_game && !h.console.paused && current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_N);assert(!h.active_game && !h.console.paused && current_screen(&h)==SCREEN_LAUNCHER);
     game_updates=saved_updates;
 }
 
@@ -203,7 +202,7 @@ static void check_settings_shortcuts(void)
 static void check_launcher_menu(void)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
-    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.inputs.count=2;h.inputs.devices[0].controller=true;h.inputs.devices[0].snes_adapter=true;h.inputs.devices[0].connection_id=3;
     h.game_count=3;
     strcpy(h.games[0].id,"hardware-test");strcpy(h.games[0].name,"Hardware Test");h.games[0].diagnostic=true;
     strcpy(h.games[1].id,"rosey-chop");strcpy(h.games[1].name,"Rosey Chop");
@@ -213,21 +212,21 @@ static void check_launcher_menu(void)
     assert(!strcmp(h.games[0].id,"phosphor-run") && !strcmp(h.games[1].id,"rosey-chop"));
     tap(&h,1,KEY_DOWN);assert(h.console.selected_game==1);
     tap(&h,1,KEY_DOWN);assert(h.console.selected_game==2);
-    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_N);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_DOWN);tap(&h,1,KEY_DOWN);assert(h.console.settings_option==2);
     const struct chirky_game_api fake={.update=fake_update,.shutdown=fake_shutdown};
     h.console.game_active=true;h.console.diagnostic=true;h.active_game=&h.games[2];h.runtime=(struct chirky_runtime){.game=&fake,.active=true};
     tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS && h.console.settings_option==2);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER && h.console.selected_game==2);
-    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_M);assert(current_screen(&h)==SCREEN_LAUNCHER && h.console.selected_game==2);
+    tap(&h,1,KEY_N);assert(current_screen(&h)==SCREEN_SETTINGS);
     tap(&h,1,KEY_UP);assert(h.console.settings_option==0);
     for(int i=0;i<4;i++)tap(&h,1,KEY_DOWN);
     assert(h.console.settings_option==3);
-    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_LAUNCHER);
-    tap(&h,1,KEY_X);tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS);
-    tap(&h,1,KEY_X);assert(current_screen(&h)==SCREEN_INPUT);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_SETTINGS);
-    tap(&h,1,KEY_Z);assert(current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_N);assert(current_screen(&h)==SCREEN_LAUNCHER);
+    tap(&h,1,KEY_N);tap(&h,1,KEY_ESC);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_N);assert(current_screen(&h)==SCREEN_INPUT);
+    tap(&h,1,KEY_M);assert(current_screen(&h)==SCREEN_SETTINGS);
+    tap(&h,1,KEY_M);assert(current_screen(&h)==SCREEN_LAUNCHER);
     tap(&h,1,KEY_DOWN);assert(h.console.selected_game==3);
     tap(&h,1,KEY_DOWN);assert(h.console.selected_game==3);
     for(int i=0;i<5;i++)tap(&h,1,KEY_UP);
@@ -237,7 +236,7 @@ static void check_launcher_menu(void)
 static void check_transition_gates(void)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
-    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.inputs.count=2;h.inputs.devices[0].controller=true;h.inputs.devices[0].snes_adapter=true;h.inputs.devices[0].connection_id=3;
     h.inputs.devices[0].abs_minimums[ABS_HAT0X]=-1;h.inputs.devices[0].abs_maximums[ABS_HAT0X]=1;
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);
     assert(h.console.settings_menu && !h.console.controller_settings && h.console.ui_wait_release);
@@ -246,14 +245,18 @@ static void check_transition_gates(void)
     /* A brief release followed by bounce, or a second input source, must
        not activate the first item on the new screen. */
     event(&h,0,EV_KEY,BTN_EAST,0);update_host(&h);
-    event(&h,0,EV_KEY,BTN_EAST,1);event(&h,1,EV_KEY,KEY_X,1);update_host(&h);
+    event(&h,0,EV_KEY,BTN_EAST,1);event(&h,1,EV_KEY,KEY_N,1);update_host(&h);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<4;i++)update_host(&h);
     assert(h.console.ui_wait_release && !h.console.setup.active);
-    event(&h,1,EV_KEY,KEY_X,0);update_host(&h);assert(h.console.ui_wait_release);
+    event(&h,1,EV_KEY,KEY_N,0);update_host(&h);assert(h.console.ui_wait_release);
     update_host(&h);assert(!h.console.ui_wait_release && !h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);assert(!h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_settings && !h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
+    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_selecting);
+    event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
+    tap(&h,0,BTN_EAST);assert(h.console.controller_options);
+    h.console.controller_option=2;
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.setup.active && h.console.setup.step==0);
     for(int i=0;i<5;i++)update_host(&h);
     assert(!h.console.setup.ready);
@@ -262,6 +265,7 @@ static void check_transition_gates(void)
     event(&h,0,EV_ABS,ABS_HAT0X,0);update_host(&h);assert(h.console.setup.step==1);
     event(&h,1,EV_KEY,KEY_F1,1);update_host(&h);assert(!h.console.setup.active && h.console.controller_settings);
     event(&h,1,EV_KEY,KEY_F1,0);for(int i=0;i<3;i++)update_host(&h);
+    tap(&h,0,BTN_SOUTH);assert(!h.console.controller_options);
     event(&h,0,EV_KEY,BTN_SOUTH,1);update_host(&h);assert(!h.console.controller_settings);
     for(int i=0;i<4;i++)update_host(&h);
     assert(!h.console.controller_settings);
@@ -279,7 +283,7 @@ static void check_transition_gates(void)
 static void check_uninitialized_controller_axes(void)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
-    h.inputs.count=2;h.inputs.devices[0].controller=true;
+    h.inputs.count=2;h.inputs.devices[0].controller=true;h.inputs.devices[0].snes_adapter=true;h.inputs.devices[0].connection_id=3;
     struct input_device *pad=&h.inputs.devices[0];
     /* Digital USB controllers can advertise unused 0..255 sticks which stay
        at zero. They must not hold every menu's release gate forever. */
@@ -288,13 +292,15 @@ static void check_uninitialized_controller_axes(void)
     assert(!h.console.ui_wait_release);
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_INPUT);
     char held[128];held_input_names(&h,false,held,sizeof(held));assert(!strcmp(held,"PAD NONE"));
-    tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_SETUP && !h.console.setup.wait_release);
+    tap(&h,0,BTN_EAST);assert(h.console.controller_selecting);
+    tap(&h,0,BTN_EAST);h.console.controller_option=2;tap(&h,0,BTN_EAST);
+    assert(current_screen(&h)==SCREEN_SETUP && !h.console.setup.wait_release);
     event(&h,0,EV_ABS,ABS_X,0);update_host(&h);assert(h.console.setup.step==0);
     /* Once a real stick has centred, capture and release tracking work. */
     event(&h,0,EV_ABS,ABS_X,127);update_host(&h);
     event(&h,0,EV_ABS,ABS_X,0);update_host(&h);
     assert(h.console.setup.candidate.kind==BINDING_ABS && h.console.setup.candidate.code==ABS_X);
-    assert(!buttons_released(&h.inputs,false));
+    assert(!buttons_released(&h.inputs,false,0));
     event(&h,0,EV_ABS,ABS_X,127);update_host(&h);assert(h.console.setup.step==1);
     /* An explicitly mapped, initially deflected stick still drives gameplay. */
     h.bindings[CHIRKY_BUTTON_LEFT]=(struct controller_binding){BINDING_ABS,ABS_Y,-1};
@@ -359,7 +365,7 @@ static void check_migration(void)
     assert(migrated.keyboard_bindings[CHIRKY_BUTTON_START].code==KEY_ENTER);
     assert(save_bindings(&migrated));
     char saved[4096]={0};f=fopen(HOST_CONFIG_PATH,"r");assert(f);assert(fread(saved,1,sizeof(saved)-1,f)>0);fclose(f);
-    assert(strstr(saved,"input_version=4") && strstr(saved,"bind_secondary=key:307") && !strstr(saved,"bind_a="));
+    assert(strstr(saved,"input_version=5") && strstr(saved,"bind_secondary=key:307") && !strstr(saved,"bind_a="));
     assert(!strstr(saved,"bind_jump=") && !strstr(saved,"bind_confirm=") && !strstr(saved,"key_confirm="));
     struct host reloaded={0};load_host_config(&reloaded);
     assert(reloaded.bindings[CHIRKY_BUTTON_SECONDARY].code==BTN_NORTH);
@@ -385,6 +391,12 @@ static void check_migration(void)
     assert(migrated.keyboard_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_R);
     assert(migrated.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_SOUTH);
     assert(migrated.bindings[CHIRKY_BUTTON_SECONDARY].kind==BINDING_NONE);
+    f=fopen(HOST_CONFIG_PATH,"w");assert(f);
+    fputs("input_version=4\nkey_left=key:105\nkey_right=key:106\nkey_up=key:103\nkey_down=key:108\nkey_primary=key:45\nkey_secondary=key:44\nkey_start=key:28\nkey_menu=key:1\n",f);fclose(f);
+    load_host_config(&migrated);
+    assert(migrated.keyboard_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_N);
+    assert(migrated.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_M);
+    assert(migrated.keyboard2_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_F);
     assert(remove(HOST_CONFIG_PATH)==0);
     assert(rename("config/before-migration.conf",HOST_CONFIG_PATH)==0);
 }
@@ -393,7 +405,7 @@ static void check_live_inputs(struct host *host,const char *output_dir)
 {
     assert(CHIRKY_BUTTON_COUNT==8);
     host->console.controller_settings=true;host->console.selected_option=2;
-    tap(host,1,KEY_X);assert(host->console.input_test);
+    tap(host,1,KEY_N);assert(host->console.input_test);
     /* Every keyboard key addresses one Chirky button, independent of UI behavior. */
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) {
         unsigned int key=host->keyboard_bindings[i].code;
@@ -410,20 +422,20 @@ static void check_live_inputs(struct host *host,const char *output_dir)
     const char *snes[]={"Y","B","X","A","L","R"};
     for(unsigned i=0;i<6;i++) {
         struct controller_binding binding={BINDING_KEY,304+i,0};
-        controller_binding_label(&binding,CONTROLLER_LABEL_SNES_PICO,name,sizeof(name));assert(!strcmp(name,snes[i]));
-        controller_binding_label(&binding,CONTROLLER_LABEL_GENERIC,name,sizeof(name));assert(strstr(name,"BTN "));
+        controller_binding_label(&binding,CONTROLLER_SNES,name,sizeof(name));assert(!strcmp(name,snes[i]));
+        controller_binding_label(&binding,CONTROLLER_GENERIC,name,sizeof(name));assert(strstr(name,"BTN "));
     }
-    controller_binding_label(&(struct controller_binding){BINDING_ABS,ABS_HAT0Y,-1},CONTROLLER_LABEL_SNES_PICO,name,sizeof(name));
+    controller_binding_label(&(struct controller_binding){BINDING_ABS,ABS_HAT0Y,-1},CONTROLLER_SNES,name,sizeof(name));
     assert(!strcmp(name,CHIRKY_ARROW_UP));
     const char *directions[]={CHIRKY_ARROW_UP,CHIRKY_ARROW_DOWN,CHIRKY_ARROW_LEFT,CHIRKY_ARROW_RIGHT};
     for(unsigned i=0;i<4;i++) {
         struct controller_binding binding={BINDING_KEY,BTN_TRIGGER_HAPPY1+i,0};
-        controller_binding_label(&binding,CONTROLLER_LABEL_SNES_PICO,name,sizeof(name));assert(!strcmp(name,directions[i]));
-        controller_binding_label(&binding,CONTROLLER_LABEL_GENERIC,name,sizeof(name));assert(strstr(name,"BTN "));
+        controller_binding_label(&binding,CONTROLLER_SNES,name,sizeof(name));assert(!strcmp(name,directions[i]));
+        controller_binding_label(&binding,CONTROLLER_GENERIC,name,sizeof(name));assert(strstr(name,"BTN "));
     }
     keyboard_name(&(struct controller_binding){BINDING_KEY,KEY_LEFT,0},name,sizeof(name));assert(!strcmp(name,CHIRKY_ARROW_LEFT));
     keyboard_name(&(struct controller_binding){BINDING_KEY,KEY_W,0},name,sizeof(name));assert(!strcmp(name,"W"));
-    controller_binding_label(&(struct controller_binding){BINDING_ABS,ABS_RX,1},CONTROLLER_LABEL_GENERIC,name,sizeof(name));
+    controller_binding_label(&(struct controller_binding){BINDING_ABS,ABS_RX,1},CONTROLLER_GENERIC,name,sizeof(name));
     assert(!strcmp(name,"AX3 POS"));
     button_label(host,CHIRKY_BUTTON_COUNT,name,sizeof(name));assert(!strcmp(name,"UNBOUND"));
     char tiny[2]={'?','?'};button_label(host,CHIRKY_BUTTON_PRIMARY,tiny,sizeof(tiny));assert(tiny[1]==0);
@@ -457,31 +469,95 @@ static void check_live_inputs(struct host *host,const char *output_dir)
 static void check_separate_devices(void)
 {
     struct host h={0};default_bindings(h.bindings);default_keyboard_bindings(h.keyboard_bindings);
-    h.controller_labels=CONTROLLER_LABEL_SNES_PICO;
+    default_player_keyboard_bindings(h.keyboard2_bindings,1);
+    h.controller_labels=CONTROLLER_SNES;
     h.inputs.count=3;
     for(int i=0;i<2;i++) {
-        h.inputs.devices[i].controller=true;h.inputs.devices[i].connection_id=3+i;
+        h.inputs.devices[i].controller=true;h.inputs.devices[i].snes_adapter=true;h.inputs.devices[i].connection_id=3+i;
     }
     event(&h,0,EV_KEY,BTN_EAST,1);update_controller_buttons(&h);update_device_inputs(&h);
     assert(h.inputs.state.buttons[CHIRKY_BUTTON_PRIMARY]);
-    assert(h.inputs.state.device_count==3 && h.inputs.state.devices[1].id==3 && h.inputs.state.devices[2].id==4);
-    assert(h.inputs.state.devices[1].button_pressed[CHIRKY_BUTTON_PRIMARY]);
-    assert(!h.inputs.state.devices[2].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(h.inputs.state.device_count==4 && h.inputs.state.devices[2].id==3 && h.inputs.state.devices[3].id==4);
+    assert(h.inputs.state.devices[2].button_pressed[CHIRKY_BUTTON_PRIMARY]);
+    assert(!h.inputs.state.devices[3].buttons[CHIRKY_BUTTON_PRIMARY]);
     event(&h,1,EV_KEY,BTN_EAST,1);event(&h,1,EV_KEY,BTN_EAST,0);
     update_controller_buttons(&h);update_device_inputs(&h);
     assert(!h.inputs.state.button_pressed[CHIRKY_BUTTON_PRIMARY]); /* Combined input remains held. */
-    assert(h.inputs.state.devices[2].button_pressed[CHIRKY_BUTTON_PRIMARY]); /* Independent short tap. */
-    assert(!h.inputs.state.devices[2].buttons[CHIRKY_BUTTON_PRIMARY]);
-    assert(!strcmp(h.inputs.state.devices[1].labels[CHIRKY_BUTTON_PRIMARY],"B"));
+    assert(h.inputs.state.devices[3].button_pressed[CHIRKY_BUTTON_PRIMARY]); /* Independent short tap. */
+    assert(!h.inputs.state.devices[3].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(!strcmp(h.inputs.state.devices[2].labels[CHIRKY_BUTTON_PRIMARY],"B"));
+    event(&h,2,EV_KEY,KEY_N,1);event(&h,2,EV_KEY,KEY_F,1);
+    update_device_inputs(&h);
+    assert(h.inputs.state.devices[0].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(h.inputs.state.devices[1].buttons[CHIRKY_BUTTON_PRIMARY]);
+    event(&h,2,EV_KEY,KEY_N,0);event(&h,2,EV_KEY,KEY_F,0);
+    event(&h,2,EV_KEY,KEY_ENTER,1);event(&h,2,EV_KEY,KEY_ENTER,0);
+    update_controller_buttons(&h);update_device_inputs(&h);
+    assert(h.inputs.state.button_pressed[CHIRKY_BUTTON_START]);
+    for(int p=0;p<2;p++)assert(h.inputs.state.devices[p].button_pressed[CHIRKY_BUTTON_START]);
+    event(&h,2,EV_KEY,KEY_X,1);update_controller_buttons(&h);update_device_inputs(&h);
+    for(int p=0;p<2;p++)assert(!h.inputs.state.devices[p].buttons[CHIRKY_BUTTON_PRIMARY]);
+    event(&h,2,EV_KEY,KEY_X,0);
+    struct controller_binding conflict[CHIRKY_BUTTON_COUNT];memcpy(conflict,h.keyboard_bindings,sizeof(conflict));
+    conflict[CHIRKY_BUTTON_PRIMARY]=h.keyboard2_bindings[CHIRKY_BUTTON_PRIMARY];
+    assert(save_keyboard_service(&h,1,conflict)==MAPPING_CONFLICT);
+    assert(!player_maps_conflict(h.keyboard_bindings,h.keyboard2_bindings));
     h.keyboard_bindings[CHIRKY_BUTTON_PRIMARY]=(struct controller_binding){BINDING_KEY,KEY_Q,0};
     event(&h,2,EV_KEY,KEY_Q,1);update_device_inputs(&h);
     assert(h.inputs.state.devices[0].id==1 && h.inputs.state.devices[0].buttons[CHIRKY_BUTTON_PRIMARY]);
     assert(!strcmp(h.inputs.state.devices[0].labels[CHIRKY_BUTTON_PRIMARY],"Q"));
     h.inputs.devices[0].fd=-1;disconnect_input(&h.inputs.devices[0]);
     update_controller_buttons(&h);update_device_inputs(&h);
-    assert(h.inputs.state.device_count==2 && h.inputs.state.devices[1].id==4);
+    assert(h.inputs.state.device_count==3 && h.inputs.state.devices[2].id==4);
     h.inputs.devices[0]=(struct input_device){.fd=0,.controller=true,.connection_id=5};
-    update_device_inputs(&h);assert(h.inputs.state.devices[1].id==5);
+    update_device_inputs(&h);assert(h.inputs.state.devices[2].id==5);
+}
+
+static void check_controller_profiles(void)
+{
+    struct host h={0};default_bindings(h.bindings);h.controller_labels=CONTROLLER_SNES;
+    h.inputs.count=3;
+    const struct input_id usb={.bustype=BUS_USB,.vendor=0x10c4,.product=0x82c0,.version=0x111};
+    for(int i=0;i<3;i++) {
+        struct input_device *d=&h.inputs.devices[i];d->controller=true;d->connection_id=3+i;
+        snprintf(d->name,sizeof(d->name),"%s",i==2?"Other joystick":"GP2040");
+        controller_model(d->model,sizeof(d->model),&usb,d->name);
+    }
+    assert(device_label_profile(&h,&h.inputs.devices[0])==CONTROLLER_SNES);
+    assert(device_bindings(&h,&h.inputs.devices[0])[CHIRKY_BUTTON_PRIMARY].code==BTN_EAST);
+    assert(!device_mask(&h,&h.inputs.devices[0]));
+    assert(save_controller_service(&h,3,CONTROLLER_SNES,NULL)==MAPPING_SAVED);
+    assert(device_bindings(&h,&h.inputs.devices[1])[CHIRKY_BUTTON_PRIMARY].code==BTN_EAST);
+    assert(device_bindings(&h,&h.inputs.devices[2])[CHIRKY_BUTTON_PRIMARY].code==BTN_EAST);
+    event(&h,0,EV_KEY,BTN_EAST,1);update_device_inputs(&h);
+    assert(h.inputs.state.devices[0].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(!h.inputs.state.devices[1].buttons[CHIRKY_BUTTON_PRIMARY]);
+    assert(!strcmp(h.inputs.state.devices[0].labels[CHIRKY_BUTTON_PRIMARY],"B"));
+    struct controller_binding map[CHIRKY_BUTTON_COUNT];default_bindings(map);
+    map[CHIRKY_BUTTON_PRIMARY].code=BTN_NORTH;
+    assert(save_controller_service(&h,5,CONTROLLER_GENERIC,map)==MAPPING_SAVED);
+    assert(device_bindings(&h,&h.inputs.devices[0])[CHIRKY_BUTTON_PRIMARY].code==BTN_EAST);
+    assert(device_bindings(&h,&h.inputs.devices[2])[CHIRKY_BUTTON_PRIMARY].code==BTN_NORTH);
+    assert(mkdir(CONTROLLER_PROFILES_PATH ".tmp",0700)==0);
+    assert(save_controller_service(&h,3,CONTROLLER_GENERIC,map)==MAPPING_FAILED);
+    assert(device_label_profile(&h,&h.inputs.devices[0])==CONTROLLER_SNES);
+    assert(rmdir(CONTROLLER_PROFILES_PATH ".tmp")==0);
+    h.inputs.devices[0].fd=-1;
+    assert(save_controller_service(&h,3,CONTROLLER_SNES,NULL)==MAPPING_FAILED);
+    h.inputs.devices[0].fd=0;h.inputs.devices[0].connection_id=6;
+    controller_profiles_load(&h.controller_profiles);
+    assert(h.controller_profiles.count==2 && device_label_profile(&h,&h.inputs.devices[0])==CONTROLLER_SNES);
+    assert(device_bindings(&h,&h.inputs.devices[2])[CHIRKY_BUTTON_PRIMARY].code==BTN_NORTH);
+    setup_begin(&h.console.setup,false);h.console.setup.controller_id=6;h.console.setup.wait_release=false;
+    event(&h,1,EV_KEY,BTN_SOUTH,1);assert(!h.console.setup.ready);
+    assert(buttons_released(&h.inputs,false,6)==false); /* selected pad is still held */
+    event(&h,0,EV_KEY,BTN_EAST,0);assert(buttons_released(&h.inputs,false,6));
+    assert(controller_buttons_down(&h.inputs,6)==0);
+    event(&h,0,EV_KEY,BTN_SOUTH,1);assert(h.console.setup.ready);
+    FILE *file=fopen(CONTROLLER_PROFILES_PATH,"a");assert(file);
+    fputs("bad data\n1 broken 9\n",file);fclose(file);
+    controller_profiles_load(&h.controller_profiles);assert(h.controller_profiles.count==2);
+    assert(unlink(CONTROLLER_PROFILES_PATH)==0);
 }
 
 int main(int argc,char **argv)
@@ -499,6 +575,7 @@ int main(int argc,char **argv)
     assert(memcmp(glyph(':'),glyph('?'),sizeof(expected_colon)));
     char directory[]="/tmp/chirky-host-test-XXXXXX";assert(mkdtemp(directory));assert(chdir(directory)==0);
     assert(mkdir("config",0700)==0);
+    check_controller_profiles();
     check_pause_menu(argv[1]);
     check_settings_shortcuts();
     check_launcher_menu();
@@ -508,10 +585,23 @@ int main(int argc,char **argv)
     FILE *profile=fopen(HOST_CONFIG_PATH,"w");assert(profile);
     fputs("controller_labels=generic\n",profile);fclose(profile);
     static struct host generic;
-    load_host_config(&generic);assert(generic.controller_labels==CONTROLLER_LABEL_GENERIC);
+    load_host_config(&generic);assert(generic.controller_labels==CONTROLLER_GENERIC);
     assert(generic.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_EAST);
     assert(save_bindings(&generic));load_host_config(&generic);
-    assert(generic.controller_labels==CONTROLLER_LABEL_GENERIC);
+    assert(generic.controller_labels==CONTROLLER_GENERIC);
+    struct controller_binding player_map[CHIRKY_BUTTON_COUNT];
+    memcpy(player_map,generic.keyboard_bindings,sizeof(player_map));
+    player_map[CHIRKY_BUTTON_PRIMARY].code=KEY_Q;
+    assert(save_keyboard_service(&generic,1,player_map)==MAPPING_SAVED);
+    load_host_config(&generic);
+    assert(generic.keyboard_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_Q);
+    assert(generic.keyboard2_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_F);
+    assert(generic.keyboard_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_Q);
+    assert(mkdir(HOST_CONFIG_PATH ".tmp",0700)==0);
+    player_map[CHIRKY_BUTTON_PRIMARY].code=KEY_R;
+    assert(save_keyboard_service(&generic,1,player_map)==MAPPING_FAILED);
+    assert(generic.keyboard_bindings[CHIRKY_BUTTON_PRIMARY].code==KEY_Q);
+    assert(rmdir(HOST_CONFIG_PATH ".tmp")==0);
     FILE *config=fopen(HOST_CONFIG_PATH,"w");assert(config);
     fputs("boot_game=launcher\n# Keep this comment\nbind_confirm=key:313\nframe_timing=1\n",config);fclose(config);
     static struct host host;
@@ -525,6 +615,8 @@ int main(int argc,char **argv)
     assert(host.api.screen_width==288 && host.api.screen_height==216);
     host.inputs.count=2;host.inputs.devices[0].controller=true;
     strcpy(host.inputs.devices[0].name,"GP2040");
+    host.inputs.devices[0].connection_id=3;host.inputs.devices[0].snes_adapter=true;
+    strcpy(host.inputs.devices[0].model,"test-snes");
     for(int axis=ABS_HAT0X;axis<=ABS_HAT0Y;axis++) {
         host.inputs.devices[0].abs_minimums[axis]=-1;host.inputs.devices[0].abs_maximums[axis]=1;
     }
@@ -535,7 +627,10 @@ int main(int argc,char **argv)
     tap(&host,0,BTN_SOUTH);assert(!host.console.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.console.settings_menu && !host.console.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.console.controller_settings);
-    tap(&host,0,BTN_EAST);assert(host.console.setup.active && !host.console.setup.keyboard);
+    tap(&host,0,BTN_EAST);assert(host.console.controller_selecting);
+    tap(&host,0,BTN_EAST);assert(host.console.controller_options);
+    host.console.controller_option=2;tap(&host,0,BTN_EAST);
+    assert(host.console.setup.active && !host.console.setup.keyboard);
     update_host(&host);assert(!host.console.setup.wait_release);
     /* D-pad must return to neutral, and another event cannot overwrite capture. */
     event(&host,0,EV_ABS,ABS_HAT0X,-1);event(&host,0,EV_KEY,BTN_SOUTH,1);update_host(&host);
@@ -553,12 +648,12 @@ int main(int argc,char **argv)
     tap(&host,0,BTN_EAST);
     assert(host.console.setup.step==7 && host.console.setup.active);
     tap(&host,0,BTN_TL2);assert(!host.console.setup.active && host.console.controller_settings);
-    assert(host.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
+    assert(device_bindings(&host,&host.inputs.devices[0])[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     update_host(&host);
     /* Keyboard setup captures Escape as a mapping; only F1 cancels. */
-    host.console.selected_option=1;tap(&host,1,KEY_X);update_host(&host);
+    host.console.controller_options=false;host.console.selected_option=1;tap(&host,1,KEY_N);update_host(&host);
     assert(host.console.setup.active && host.console.setup.keyboard);
-    const int keyboard[]={KEY_A,KEY_D,KEY_W,KEY_S,KEY_X,KEY_R,KEY_ENTER,KEY_ESC};
+    const int keyboard[]={KEY_H,KEY_L,KEY_I,KEY_K,KEY_N,KEY_R,KEY_ENTER,KEY_ESC};
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) tap(&host,1,keyboard[i]);
     assert(!host.console.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
     update_host(&host);
@@ -567,19 +662,19 @@ int main(int argc,char **argv)
     assert(host.inputs.state.button_pressed[CHIRKY_BUTTON_SECONDARY]);
     event(&host,0,EV_KEY,KEY_ESC,1);assert(!host.inputs.pressed[KEY_ESC]);event(&host,0,EV_KEY,KEY_ESC,0);
     update_host(&host);
-    tap(&host,1,KEY_X);update_host(&host);tap(&host,1,KEY_Q);tap(&host,1,KEY_F1);
-    assert(!host.console.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_LEFT].code==KEY_A);
+    tap(&host,1,KEY_N);update_host(&host);tap(&host,1,KEY_Q);tap(&host,1,KEY_F1);
+    assert(!host.console.setup.active && host.keyboard_bindings[CHIRKY_BUTTON_LEFT].code==KEY_H);
     update_host(&host);
     struct host reloaded={0};load_host_config(&reloaded);
     assert(reloaded.keyboard_bindings[CHIRKY_BUTTON_SECONDARY].code==KEY_R);
-    assert(reloaded.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
+    assert(controller_profile_find(&reloaded.controller_profiles,"test-snes")->bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     check_migration();
     check_live_inputs(&host,argv[1]);
     /* A controller-only user can cancel without consuming Start/Select as back. */
-    setup_begin(&host.console.setup,false);update_host(&host);
+    setup_begin(&host.console.setup,false);host.console.setup.controller_id=host.console.controller_id=3;update_host(&host);
     event(&host,0,EV_KEY,BTN_EAST,1);event(&host,0,EV_KEY,BTN_SOUTH,1);
     for(int i=0;i<60;i++) update_host(&host);
-    assert(!host.console.setup.active && host.bindings[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
+    assert(!host.console.setup.active && device_bindings(&host,&host.inputs.devices[0])[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     event(&host,0,EV_KEY,BTN_EAST,0);event(&host,0,EV_KEY,BTN_SOUTH,0);update_host(&host);
     /* Failed persistence must not change the live mappings. */
     for(int i=0;i<3;i++)update_host(&host);
@@ -590,21 +685,21 @@ int main(int argc,char **argv)
     assert(rmdir(HOST_CONFIG_PATH)==0);assert(rename("config/saved.conf",HOST_CONFIG_PATH)==0);update_host(&host);
     host.console.controller_settings=false;host.console.settings_menu=true;host.console.settings_option=1;
     tap(&host,0,BTN_TR2);assert(host.console.display_settings);
-    tap(&host,1,KEY_D);assert(host.safe_x==17);
+    tap(&host,1,KEY_L);assert(host.safe_x==17);
     tap(&host,1,KEY_R);assert(!host.console.display_settings && host.safe_x==16);
-    tap(&host,0,BTN_TR2);tap(&host,1,KEY_D);tap(&host,1,KEY_S);tap(&host,1,KEY_D);
+    tap(&host,0,BTN_TR2);tap(&host,1,KEY_L);tap(&host,1,KEY_K);tap(&host,1,KEY_L);
     assert(host.safe_x==17 && host.safe_y==13);
-    tap(&host,1,KEY_S);tap(&host,1,KEY_D); /* horizontal +1 */
-    tap(&host,1,KEY_S);tap(&host,1,KEY_D); /* vertical +1 */
+    tap(&host,1,KEY_K);tap(&host,1,KEY_L); /* horizontal +1 */
+    tap(&host,1,KEY_K);tap(&host,1,KEY_L); /* vertical +1 */
     assert(host.safe_offset_x==1 && host.safe_offset_y==1);
     assert(host.api.screen_width==286 && host.api.screen_height==214);
     fill_rect(&host,0,0,8,8,255,255,255);
     assert(scissor_x==18 && scissor_y==14 && scissor_w==8 && scissor_h==8);
-    tap(&host,1,KEY_S);tap(&host,0,BTN_TR2);assert(!host.console.display_settings);
+    tap(&host,1,KEY_K);tap(&host,0,BTN_TR2);assert(!host.console.display_settings);
     load_host_config(&reloaded);assert(reloaded.safe_x==17 && reloaded.safe_y==13);
     assert(reloaded.safe_offset_x==1 && reloaded.safe_offset_y==1);
-    tap(&host,0,BTN_TR2);host.console.display_option=2;tap(&host,1,KEY_A);
-    host.console.display_option=3;tap(&host,1,KEY_A);
+    tap(&host,0,BTN_TR2);host.console.display_option=2;tap(&host,1,KEY_H);
+    host.console.display_option=3;tap(&host,1,KEY_H);
     assert(host.safe_offset_x==0 && host.safe_offset_y==0);
     tap(&host,1,KEY_R);assert(host.safe_offset_x==1 && host.safe_offset_y==1);
     /* Offsets cannot push the logical viewport outside the physical framebuffer. */
@@ -645,7 +740,7 @@ int main(int argc,char **argv)
     draw_launcher(&host);char output[512];snprintf(output,sizeof(output),"%s/launcher.ppm",argv[1]);write_preview(output);
     host.console.settings_message="";host.console.selected_option=2;
     draw_controller_settings(&host);snprintf(output,sizeof(output),"%s/input-settings.ppm",argv[1]);write_preview(output);
-    setup_begin(&host.console.setup,false);host.console.setup.step=6;host.console.setup.wait_release=false;
+    setup_begin(&host.console.setup,false);host.console.setup.controller_id=host.console.controller_id=3;host.console.setup.step=6;host.console.setup.wait_release=false;
     memcpy(host.console.setup.pending,host.bindings,sizeof(host.bindings));
     draw_controller_settings(&host);snprintf(output,sizeof(output),"%s/button-setup.ppm",argv[1]);write_preview(output);
     host.console.settings_message="";
@@ -654,7 +749,7 @@ int main(int argc,char **argv)
     draw_settings_menu(&host);snprintf(output,sizeof(output),"%s/settings.ppm",argv[1]);write_preview(output);
     check_frame_timing(&host,argv[1]);
     splash_free(&host.launcher_art);
-    assert(remove(HOST_CONFIG_PATH)==0);assert(rmdir("config")==0);
+    assert(remove(HOST_CONFIG_PATH)==0);assert(remove(CONTROLLER_PROFILES_PATH)==0);assert(rmdir("config")==0);
     assert(remove("run/status.json")==0);assert(rmdir("run")==0);
     assert(chdir("/tmp")==0);assert(rmdir(directory)==0);
     puts("Host: Chirky buttons, migration, live controller/keyboard indicators, test mode, viewport, setup and persistence passed.");

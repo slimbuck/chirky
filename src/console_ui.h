@@ -201,6 +201,21 @@ static inline void console_draw_settings_menu(const struct chirky_host_api *api,
     console_scroll_list(api,labels,NULL,count+1,selected,offset,28,api->screen_height-78);
     console_menu_footer(api,true);
 }
+static inline void console_draw_controller_selection(const struct chirky_host_api *api,const char *message)
+{
+    int h=api->screen_height;
+    launcher_text(api,12,h-88,"Press a button on the",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
+    launcher_text(api,12,h-110,"controller to configure",1,launcher_cream,launcher_navy,api->screen_width-12,0,h);
+    if(message && *message)launcher_text(api,12,h-140,message,0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    console_menu_footer(api,false);
+}
+static inline void console_draw_controller_profile(const struct chirky_host_api *api,const char *name,int selected,const char *message)
+{
+    const char *labels[]={"SNES preset","Generic joystick","Remap buttons","Back"};
+    launcher_text(api,12,api->screen_height-65,message && *message?message:name,0,console_muted,launcher_navy,api->screen_width-12,0,api->screen_height);
+    console_scroll_list(api,labels,NULL,4,selected,0,28,api->screen_height-78);
+    console_menu_footer(api,true);
+}
 static inline void console_draw_live_inputs(const struct chirky_host_api *api,unsigned pad_mask,unsigned key_mask,const char *pad_line,const char *key_line)
 {
     int h=api->screen_height,cell=(api->screen_width-24)/4;
@@ -239,8 +254,8 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         snprintf(hint,sizeof(hint),"Hold %s to go back",label);
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
-        const char *labels[]={"Map controller","Map keyboard","Test buttons","Back"};
-        console_scroll_list(api,labels,NULL,4,selected,offset,28,h-78);
+        const char *labels[]={"Map controller","Map keyboard P1","Test buttons","Map keyboard P2","Back"};
+        console_scroll_list(api,labels,NULL,5,selected,offset,28,h-78);
         if(message && *message)launcher_text(api,12,h-65,message,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
         console_menu_footer(api,true);
     }
