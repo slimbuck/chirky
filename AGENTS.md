@@ -53,9 +53,11 @@ Keep implemented behavior distinct from proposals when updating these files.
   rectangle helpers in the host apply that offset and clip to the logical
   viewport. Phosphor Run is the reference implementation for this ownership.
 - The browser host emulates the same framebuffer and safe viewport. Fit the
-  320x240 canvas as large as possible at 4:3, allowing fractional display scales
-  and keeping the surrounding border minimal. Keep pixelated scaling for user
-  review; a filtering shader is a possible later change, not yet implemented.
+  320x240 canvas at 4:3, allowing fractional display scales. Mobile and fullscreen
+  use the available space with compact shell margins; normal desktop play keeps
+  a centred, compact shell and a display up to 800 CSS pixels wide. Keep pixelated
+  scaling for user review; a filtering shader is a possible later change, not yet
+  implemented.
 
 ## Pixel Art
 

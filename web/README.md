@@ -191,9 +191,11 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   They need no font download or platform fallback. The toy handheld shell uses warm yellow,
   a graphite D-pad, coral Primary and turquoise Secondary, with inset grips and
   visible pressed feedback. Branding appears within the display only.
-  Rounded shell and display corners, inset highlights and a thin painted rim
-  retain the handheld appearance. The measured display border stays one pixel,
-  with compact shell padding and control gaps. All targets are at least 44 CSS pixels;
+  Rounded corners, strong shell outlines and highlights, a raised five-pixel
+  painted bezel, roomy grips and landscape speaker slots retain the handheld
+  appearance. The measured display border stays one pixel; compact shell
+  margins leave room for the painted bezel while preserving fractional scaling.
+  All targets are at least 44 CSS pixels;
   the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
   the thumb around the fixed centre, with eight sectors (including diagonals)
   and a small neutral centre. Dragging beyond the pad keeps the direction held
@@ -203,8 +205,10 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   In landscape, controls flank a centred display sized to the available height
   and width, in both normal and fullscreen mode. Portrait uses the visible viewport:
   the display gets the full available width, centred above the two grips anchored
-  at the bottom. Desktop uses the viewport height with a compact heading and keyboard
-  guide, without a fixed page-width cap. The page
+  at the bottom. Normal desktop play uses a centred shell capped at 1000 pixels
+  wide and 900 pixels high, with a display up to 800 pixels wide and keyboard
+  hints grouped together in the centre. Smaller windows scale down to fit;
+  fullscreen still fills the available space. The page
   heading and keyboard help are hidden on touch layouts to leave room for play.
   Browser toolbar resizing and rotation recalculate the layout; bottom safe-area
   padding keeps controls above the phone's gesture bar. Safe-area padding keeps landscape controls clear of

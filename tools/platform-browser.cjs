@@ -205,14 +205,14 @@ async function main() {
         assert(game.x>=slot.x && game.y>=slot.y && game.x+game.width<=slot.x+slot.width+.03 && game.y+game.height<=slot.y+slot.height+.03,'Display stays inside its slot');
         assert(game.y>=0 && game.y+game.height<=height,'Display must fit vertically without scrolling');
         assert.equal(await page.eval(`getComputedStyle(document.querySelector('#screen')).imageRendering`),'pixelated');
-        if(width===1920)assert(game.width>1400,'Desktop display is not capped by the former 1000px page width');
+        if(width===1920)assert(game.width<=800,'Normal desktop play keeps a compact display on large monitors');
         if(touch){
           const controls=await page.eval(`Array.from(document.querySelectorAll('.touch button')).map(e=>{const r=e.getBoundingClientRect();return {button:e.dataset.button,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})`);
           assert.equal(controls.length,8);
           assert(controls.every(r=>r.width>=44 && r.height>=44 && r.x>=0 && r.y>=0 && r.right<=width && r.bottom<=height),'All eight touch targets must fit and be at least 44 CSS pixels');
           if(width>height){
-            const landscapeScale=Math.min((width-302)/320,(height-10)/240);
-            assert(Math.abs(game.width-320*landscapeScale)<.03,'Landscape keeps only compact controls, 4px gaps and a 1px bezel');
+            const landscapeScale=Math.min((width-342)/320,(height-26)/240);
+            assert(Math.abs(game.width-320*landscapeScale)<.03,'Landscape reserves room for the grips and painted bezel while maximizing the display');
             assert(controls.filter(r=>['0','1','2','3','7'].includes(r.button)).every(r=>r.right<=game.x),'D-pad and Menu must sit left of the display');
             assert(controls.filter(r=>['4','5','6'].includes(r.button)).every(r=>r.x>=game.x+game.width),'Actions and Start must sit right of the display');
             assert(Math.abs(game.y+game.height/2-height/2)<=1,'Display must be vertically centred');
@@ -221,9 +221,9 @@ async function main() {
             assert.equal(portrait.heading,'none');assert.equal(portrait.help,'none');
             assert(!portrait.overflow,'Portrait touch console must fit the visible viewport');
             assert(Math.abs(portrait.player.height-height)<1);
-            assert(portrait.grips.every(r=>Math.abs(r.bottom-(height-8))<1),'Both portrait grips must stay anchored at the bottom');
-            assert(game.y+game.height+8<=Math.min(...portrait.grips.map(r=>r.top)),'Display must not overlap bottom controls');
-            assert(Math.abs(game.width-(width-10))<.03,'Portrait display uses all width except 4px shell padding and a 1px bezel');
+            assert(portrait.grips.every(r=>Math.abs(r.bottom-(height-18))<1),'Both portrait grips must stay anchored at the bottom');
+            assert(game.y+game.height+12<=Math.min(...portrait.grips.map(r=>r.top)),'Display must not overlap bottom controls');
+            assert(Math.abs(game.width-(width-18))<.03,'Portrait display uses all width except 8px shell padding and a 1px measured bezel');
             report.checks.push('portrait fills visible viewport, maximizes display and anchors both grips at bottom');
           }
           report.checks.push('touch targets fit, controller wings flank the centred landscape display');
