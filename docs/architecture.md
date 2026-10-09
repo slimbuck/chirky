@@ -186,17 +186,22 @@ connected devices once per second, and clears unplugged state. Both platforms
 keep profiles by model and input state by connection ID. Identical pads share a
 profile but have separate inputs. Touch is one additional browser source.
 
-Input settings derives USB availability and separate test rows from the same
+Input settings derives controller availability and separate test rows from the same
 per-device snapshots that games receive. Both hosts render this through the
 shared console UI; colours supplement source labels rather than identifying
 players. The test table keeps configured labels visible and highlights pressed
 cells under shared action headings, with the four directions grouped together.
-Fixed touch controls are omitted from this table; keyboard and USB mappings remain visible.
+Fixed touch controls are omitted from this table; keyboard and controller mappings remain visible.
 The browser supplies presentation flags for its touch layout: hide keyboard
 mapping entries and diagnostic rows until a key is used. The shared
 console owns filtering and selection recovery; game input snapshots are unchanged.
+When keyboard setup is hidden and no controller is connected, Input Settings is
+unavailable and any open input screen returns to Settings. Runtime availability
+is separate from saved launcher visibility, preserving user menu preferences.
 
-The shared console owns controller selection, SNES/Generic choice, remapping,
+The shared console lists connected controllers after the keyboard mapping entries,
+preserving selection by connection ID when devices change. Each entry opens that
+controller's options directly. It owns SNES/Generic choice, remapping,
 release/cancel gates and disconnect recovery. Platform callbacks resolve a
 connection to its model, apply the platform-specific raw SNES preset and persist
 bindings. Capture and release detection use only the selected connection.

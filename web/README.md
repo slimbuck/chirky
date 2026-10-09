@@ -146,20 +146,25 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   Its Fredoka 500–600 character subset and SIL Open Font License are embedded in
   `style.css`, so the guide needs no external font request.
 - **Settings → Input Settings** runs the same portable console code as the Pi: Test inputs,
-  Map USB controller/joystick, Map keyboard 1, Map keyboard 2, Back. USB setup is disabled when no
-  controller is connected. Selection has a Back option and accepts Esc/Menu or F1.
+  Map keyboard 1, Map keyboard 2, numbered Map controller entries, Back.
+  Each controller entry appears only while that controller is connected. Its options have
+  a Back option and accept Esc/Menu, Secondary or F1.
+  The touch layout hides Input Settings entirely until a controller is detected
+  or a physical keyboard is used. Losing the last controller before keyboard use
+  closes input setup or testing and returns to Settings, discarding any draft.
   The touch layout initially hides both keyboard mapping entries and keyboard
   test rows. Keyboard use reveals both for the rest of the page session, and
   physical keyboards still work in games. Desktop layouts always show keyboard setup.
-  USB setup first asks for a button press
-  on the chosen device, then offers SNES preset, Generic joystick and Remap buttons.
+  Selecting a controller entry directly offers SNES preset, Generic controller and Remap buttons.
+  Controller activity briefly marks its menu row to help identify it. Unplugging
+  the selected controller returns to input settings and cancels any draft mapping.
   SNES applies default bindings and legends; Generic opens the mapping wizard;
   Remap retains the existing legend profile. The wizard captures all eight inputs and saves
   after the last release. Duplicate inputs are rejected. F1 cancels a draft;
   holding two controller buttons also cancels controller setup. In Test inputs, each source has its own labelled, coloured row showing its
   configured physical button labels, including when released. D-pad directions are
   arranged with Up above Left/Down/Right when row space permits, beside Prim, Sec, Start and Menu;
-  pressed cells highlight in the device colour. Both keyboard layouts and each USB
+  pressed cells highlight in the device colour. Both keyboard layouts and each
   controller remain distinct; fixed touch controls are omitted. Hold Menu for one second to return. Cancel or a storage failure preserves
   the old mapping. Pi and browser mappings are stored independently.
 - Menu opens the shared pause menu: Continue Game or Return to Launcher.
@@ -167,11 +172,11 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   recovery even if the saved mapping is inconvenient.
 - Default SNES bindings on standard gamepads use D-pad/left stick, south for Primary, west for Secondary,
   and Start/Select for Start/Menu. Saving the SNES preset retains left-stick support. Remapped directions and
-  Generic joystick profiles use their explicit bindings.
+  Generic controller profiles use their explicit bindings.
   The GP2040 Generic HID adapter uses its separate D-pad buttons (16–19);
   old unmodified SNES presets are corrected automatically, preserving custom maps.
   Raw adapters default to the SNES/Pico layout; other USB devices can map their
-  raw buttons and axes in Map USB controller/joystick; use the keyboard to get there first.
+  raw buttons and axes in Map controller; use the keyboard to get there first.
   Both platforms save profiles per model, independently of player connection IDs.
   Browser profiles use `chirky.controllers.v2` in localStorage; existing v1 maps
   migrate as generic profiles. Identical controllers share a profile. Selecting
@@ -251,6 +256,8 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   non-passive Safari gesture handlers and multi-touch move cancellation.
   Pointer input remains active for diagonal D-pad movement and simultaneous
   action buttons; the display's deliberate double-tap fullscreen shortcut remains.
+  The D-pad and action/system buttons also cancel native touch-start gestures
+  to suppress browser long-press feedback while pointer events handle held inputs.
 - Games still render into the normal CRT-safe logical viewport. Simulation
   runs at 60 ticks/second with bounded catch-up after slow frames.
 - Restarting starts a fresh run; there is no general resume/save-state feature.

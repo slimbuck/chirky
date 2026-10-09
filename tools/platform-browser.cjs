@@ -432,17 +432,21 @@ async function main() {
           assert.equal((await state()).inputOptions,3);
           await page.eval('__platformProbe.shell._web_console_launch(-1)');await delay(200);
           for(const entry of catalog.games.filter(g=>g.role==='game'))await tap('[data-button="3"]');
-          await tap('[data-button="4"]');await tap('[data-button="4"]');
+          await tap('[data-button="4"]');assert.equal((await state()).screen,1);
+          await capture('touch-settings-no-input-devices');
+          await page.eval(`globalThis.__mobileMenuPad={id:'Mobile USB test pad',index:0,connected:true,mapping:'standard',buttons:Array.from({length:16},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__mobileMenuPad]});`);await delay(150);
+          await tap('[data-button="2"]');await tap('[data-button="4"]');
           assert.equal((await state()).screen,2);await capture('touch-input-settings');
-          await tap('[data-button="3"]');await tap('[data-button="3"]');await tap('[data-button="4"]');
-          assert.equal((await state()).screen,1,'Third touch input-menu entry is Back before keyboard use');
-          await tap('[data-button="4"]');
           await tap('[data-button="4"]');assert.equal((await state()).screen,3);
           await capture('touch-input-test');
-          await key('KeyN','n',78);assert.equal((await state()).inputOptions,0);
+          await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');await delay(150);
+          assert.equal((await state()).screen,1,'Disconnecting the last device leaves unavailable Input Settings');
+          await key('ArrowUp','ArrowUp',38);assert.equal((await state()).inputOptions,0);
+          await tap('[data-button="4"]');assert.equal((await state()).screen,2);
+          await tap('[data-button="4"]');assert.equal((await state()).screen,3);
           await capture('touch-keyboard-detected');
           await key('F1','F1',112);
-          await tap('[data-button="3"]');await tap('[data-button="3"]');
+          await tap('[data-button="3"]');
           await capture('touch-keyboard-mapping-menu');
           for(let profile=1;profile<=2;profile++){
             await tap('[data-button="4"]');assert.equal((await state()).capture,1,'Keyboard mapping is available after keyboard use');
@@ -510,12 +514,11 @@ async function main() {
         await key('KeyN','n',78);assert.equal((await state()).screen,2);
         await page.eval('Object.defineProperty(navigator,"getGamepads",{configurable:true,value:()=>[]})');await delay(150);
         await key('KeyN','n',78);assert.equal((await state()).screen,3);
-        await key('F1','F1',112);await key('ArrowDown','ArrowDown',40);
-        await key('KeyN','n',78);assert.equal((await state()).capture,-1);
+        await key('F1','F1',112);
         await capture('no-usb-controller');
-        await key('Escape','Escape',27);assert.equal((await state()).screen,1);
+        for(let i=0;i<3;i++)await key('ArrowDown','ArrowDown',40);
+        await key('KeyN','n',78);assert.equal((await state()).screen,1,'Without USB devices the fourth input-menu entry is Back');
         await key('KeyN','n',78);assert.equal((await state()).screen,2);
-        await key('ArrowDown','ArrowDown',40);
         await key('ArrowDown','ArrowDown',40);await key('KeyN','n',78);assert.equal((await state()).capture,1);
         // Cancel a partial draft. It must not reach browser storage.
         await key('KeyA','a',65);await key('F1','F1',112);assert.equal((await state()).capture,-1);
@@ -533,18 +536,16 @@ async function main() {
         // Raw USB gamepad: map button AND axis events through the actual C wizard.
         await page.eval(`globalThis.__pad={id:'USB SNES test adapter',index:0,connected:true,mapping:'',buttons:Array.from({length:10},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__pad]});`);
         await delay(150);
-        await key('ArrowUp','ArrowUp',38);await key('KeyQ','q',81);assert.equal((await state()).capture,-1);
-        await capture('choose-usb-controller');
-        await key('Escape','Escape',27);await key('KeyQ','q',81);
-        await page.eval('__pad.buttons[1]={pressed:true,value:1}');await delay(150);
-        await page.eval('__pad.buttons[1]={pressed:false,value:0}');await delay(150);
+        await key('ArrowDown','ArrowDown',40);await key('ArrowDown','ArrowDown',40);
+        await capture('usb-controller-menu');
+        await key('KeyQ','q',81);assert.equal((await state()).capture,-1);
         await capture('controller-profile');
         await key('KeyQ','q',81);
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].type'),'snes');
         assert.equal(await page.eval('__platformProbe.shell.onButtonLabel(4)'), 'Q');
         await key('KeyQ','q',81);
-        await page.eval('__pad.buttons[1]={pressed:true,value:1}');await delay(150);
-        await page.eval('__pad.buttons[1]={pressed:false,value:0}');await delay(150);
+        await page.eval('__pad.buttons[3]={pressed:true,value:1}');await delay(150);
+        await page.eval('__pad.buttons[3]={pressed:false,value:0}');await delay(150);
         assert.equal(await page.eval('__platformProbe.shell.onButtonLabel(4)'), 'B');
         await key('ArrowDown','ArrowDown',40);await key('KeyQ','q',81);assert.equal((await state()).capture,0);
         for(const [kind,code,direction] of [[2,0,-1],[2,0,1],[2,1,-1],[2,1,1],[1,1,0],[1,0,0],[1,9,0],[1,8,0]]){
@@ -555,7 +556,7 @@ async function main() {
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].bindings.length'),8);
         assert.equal(await page.eval('Object.values(JSON.parse(localStorage.getItem("chirky.controllers.v2")))[0].type'),'generic');
         await key('KeyM','m',77); // Profile options -> input settings.
-        await key('ArrowUp','ArrowUp',38);
+        for(let i=0;i<3;i++)await key('ArrowUp','ArrowUp',38);
         await key('KeyQ','q',81);assert.equal((await state()).screen,3);
         await page.eval(`globalThis.__pad2={...__pad,index:1,buttons:Array.from({length:10},()=>({pressed:false,value:0})),axes:[0,0]};Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[__pad,__pad2]});__pad.buttons[1]={pressed:true,value:1};__pad2.axes[0]=-1;`);
         await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyQ',key:'q',windowsVirtualKeyCode:81});

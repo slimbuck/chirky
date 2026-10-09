@@ -5,8 +5,8 @@ const test=require('node:test');
 function player(saved,controllers={}){
   const elements=new Map(),storage=new Map([...Object.entries(controllers),...(saved?[['chirky.inputs.v1',saved]]:[])]),events={};
   function element(selector){
-    if(!elements.has(selector))elements.set(selector,{dataset:{},listeners:{},style:{},
-      addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(){},focus(){}});
+    if(!elements.has(selector))elements.set(selector,{dataset:{},listeners:{},listenerOptions:{},style:{},
+      addEventListener(name,fn,options){this.listeners[name]=fn;this.listenerOptions[name]=options;},setAttribute(){},focus(){}});
     return elements.get(selector);
   }
   const touch=Array.from({length:8},(_,i)=>Object.assign(element('touch'+i),{dataset:{button:String(i)},setPointerCapture(){}}));
@@ -346,6 +346,21 @@ test('iOS fullscreen failures offer Home Screen launch and standalone avoids a f
   p.run('navigator.standalone=false;navigator.userAgent="Macintosh";navigator.platform="MacIntel";navigator.maxTouchPoints=5');
   await p.run('toggleFullscreen()');
   assert.match(p.element('#fullscreen-message').textContent,/Add to Home Screen/,'iPad desktop user agents get the same guidance');
+});
+
+test('controls cancel native touch gestures while simultaneous pointer inputs remain held until release',()=>{
+  const p=player(),pad=p.element('.dpad');let prevented=0;
+  for(const control of [pad,...p.touch.slice(4)]){
+    assert.equal(control.listenerOptions.touchstart.passive,false);
+    control.listeners.touchstart({cancelable:true,preventDefault(){prevented++;}});
+    control.listeners.touchstart({cancelable:false,preventDefault(){assert.fail('Non-cancelable event');}});
+  }
+  assert.equal(prevented,5);
+  pad.onpointerdown({pointerId:1,clientX:20,clientY:76,preventDefault(){}});
+  p.touch[4].onpointerdown({pointerId:2,preventDefault(){}});
+  assert.equal(p.run('mask()'),17);
+  p.touch[4].onpointerup({pointerId:2});assert.equal(p.run('mask()'),1);
+  pad.onpointerup({pointerId:1});assert.equal(p.run('mask()'),0);
 });
 
 test('page-scale gestures are cancelled without consuming single-touch movement or held inputs',()=>{

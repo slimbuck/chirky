@@ -4,20 +4,21 @@
 #include <stdio.h>
 #include <string.h>
 #define LAUNCHER_MAX 40
-struct launcher_item { char id[64],label[25]; int action; bool settings,visible; };
+/* Availability is runtime state; visible remains the saved menu preference. */
+struct launcher_item { char id[64],label[25]; int action; bool settings,visible,unavailable; };
 struct launcher_config { struct launcher_item items[LAUNCHER_MAX]; int count; };
 static inline void launcher_add(struct launcher_config *c,const char *id,const char *label,int action,bool settings)
 {
     if(c->count>=LAUNCHER_MAX)return;
     struct launcher_item *e=&c->items[c->count++];
     snprintf(e->id,sizeof(e->id),"%s",id);snprintf(e->label,sizeof(e->label),"%.24s",label);
-    e->action=action;e->settings=settings;e->visible=true;
+    e->action=action;e->settings=settings;e->visible=true;e->unavailable=false;
 }
 static inline int launcher_count(const struct launcher_config *c,bool settings)
-{ int n=0;for(int i=0;i<c->count;i++)if(c->items[i].settings==settings && c->items[i].visible)n++;return n; }
+{ int n=0;for(int i=0;i<c->count;i++)if(c->items[i].settings==settings && c->items[i].visible && !c->items[i].unavailable)n++;return n; }
 static inline const struct launcher_item *launcher_at(const struct launcher_config *c,bool settings,int index)
 {
-    for(int i=0;i<c->count;i++)if(c->items[i].settings==settings && c->items[i].visible && index--==0)return &c->items[i];
+    for(int i=0;i<c->count;i++)if(c->items[i].settings==settings && c->items[i].visible && !c->items[i].unavailable && index--==0)return &c->items[i];
     return NULL;
 }
 /* Invalid or partial files leave the complete default menu intact. */

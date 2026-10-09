@@ -172,20 +172,20 @@ listed above; normal menus and games show the assigned button/key.
 | Menu | Select | Escape |
 
 New controllers default to SNES bindings and labels on both platforms. Saved
-profiles, including Generic joystick mappings, take precedence.
+profiles, including Generic controller mappings, take precedence.
 
 Both platforms offer the same controller setup: **Settings > Input Settings >
-Map USB controller/joystick**, then press a button on the controller to select it.
+Map controller 1** (or another connected controller's numbered entry).
 Choose **SNES preset** for B/Y, Start/Select and arrow labels with default bindings,
-or **Generic joystick** to map all eight inputs with neutral button/axis labels.
+or **Generic controller** to map all eight inputs with neutral button/axis labels.
 **Remap buttons** changes bindings while retaining the selected label profile.
 Directions and keyboard arrow keys use `← → ↑ ↓`; letter keys keep their letters.
 Use a keyboard or an already configured controller to navigate setup for an
-unmapped joystick.
+unmapped controller.
 
 The SNES preset matches the tested [SNES/Pico adapter](docs/snes-pico-usb-controller.md)
 and browser-standard gamepad positions. Other USB adapters can expose different
-button numbers; use Generic joystick to configure those devices. Remap buttons
+button numbers; use Generic controller to configure those devices. Remap buttons
 lets you customize the bindings within an existing profile.
 Profiles are saved per controller model on both platforms. Two identical
 controllers share a profile but remain independent input devices; different models
@@ -201,8 +201,8 @@ Existing Pi SNES/Pico bindings and browser controller mappings remain usable.
 - F1 is native recovery/cancel, F12 captures a Pi snapshot. The physical
   Start + Select recovery chord remains available outside input setup.
 
-Choose **Settings > Input Settings**, then **Map USB controller/joystick**, **Map keyboard 1**, or **Map keyboard 2**.
-Keyboard setup and the Generic joystick/Remap buttons wizards capture the eight
+Choose **Settings > Input Settings**, then **Map keyboard 1**, **Map keyboard 2**, or a numbered **Map controller** entry.
+Keyboard setup and the Generic controller/Remap buttons wizards capture the eight
 Chirky inputs in the order above, with Primary before Secondary. Release inputs between prompts. Duplicate bindings are
 rejected; completed mappings save atomically. F1 cancels keyboard setup; holding
 two controller buttons for one second cancels controller setup. F1/F12 remain
@@ -215,20 +215,25 @@ must use distinct keys except matching Start/Menu bindings. The fighter joins
 with each player's action button, so Enter does not claim both slots. Prompts
 and keyboard help follow the saved mappings.
 
-USB setup is disabled until a controller/joystick is connected. The menu order is
-Test inputs, USB controller/joystick, keyboard 1, keyboard 2, Back. Controller
-selection has a visible Back option; Esc/Menu, the mapped Back button or F1 also
-return to input settings. Disconnecting the last controller leaves selection.
+The menu order is Test inputs, Map keyboard 1, Map keyboard 2, a numbered entry
+for each connected controller, then Back. No controller entries appear when
+none are connected. Selecting a controller entry opens its options directly; pressing a
+controller button briefly marks its menu row to help identify it. Esc/Menu,
+Secondary or F1 returns from its options. Disconnecting the selected controller
+returns to input settings and cancels any unfinished mapping.
 
-In the browser touch layout, keyboard mapping entries are initially hidden: the
-menu is Test inputs, USB controller/joystick, Back. Keyboard use reveals both
-mapping entries and test rows for the rest of the current page session. Physical
-keyboards still control games normally.
+In the browser touch layout, Input Settings is hidden until a controller is
+detected or a physical keyboard is used. Disconnecting the last controller before
+keyboard use returns an open input screen to Settings. Keyboard mapping entries
+are initially hidden: the menu is Test inputs, connected controllers, Back.
+Keyboard use reveals both mapping entries before controller entries and test rows
+for the rest of the current page session. Physical keyboards still control games normally.
 Desktop browser and Pi keyboard setup remain available as before.
 
 **Test inputs** gives each connected source a separate labelled, coloured row,
-including both keyboard layouts and each USB controller. Fixed touch controls are
-not listed. The table always shows configured physical labels under D-pad, Prim,
+including both keyboard layouts and each controller (abbreviated CTRL1, CTRL2,
+and so on in the compact table). Fixed touch controls are not listed.
+The table always shows configured physical labels under D-pad, Prim,
 Sec, Start and Menu. Up sits above Left/Down/Right when row space permits.
 Held or newly pressed inputs highlight their cells.
 This screen suspends navigation; hold the displayed Menu binding for one second or press F1

@@ -437,11 +437,11 @@ canvas.addEventListener("pointercancel",()=>{screenContact=lastScreenTap=null;})
 canvas.addEventListener("dblclick",event=>{if(event.timeStamp-lastTouchFullscreen>700)void toggleFullscreen();});
 // Safari can ignore viewport zoom limits. Cancel its page-scale gestures too,
 // without stopping pointer events used by the D-pad and simultaneous buttons.
-function preventPageZoom(event){if(event.cancelable)event.preventDefault();}
+function preventBrowserGesture(event){if(event.cancelable)event.preventDefault();}
 for(const name of ["gesturestart","gesturechange"])
-  document.addEventListener(name,preventPageZoom,{passive:false});
+  document.addEventListener(name,preventBrowserGesture,{passive:false});
 document.addEventListener("touchmove",event=>{
-  if(event.touches.length>1)preventPageZoom(event);
+  if(event.touches.length>1)preventBrowserGesture(event);
 },{passive:false});
 window.addEventListener("blur",()=>{if(runtime)setPaused(true);});
 document.addEventListener("visibilitychange",()=>{if(document.hidden && runtime)setPaused(true);});
@@ -450,6 +450,9 @@ function refreshTouchFeedback(){
   document.querySelectorAll("[data-button]").forEach(button=>{button.dataset.pressed=String(!!(held&(1<<Number(button.dataset.button))));});
 }
 const dpad=$(".dpad");
+// Cancel touchstart before Chrome recognises a long press and supplies haptic
+// feedback. Cancelling contextmenu alone is too late; pointer input stays active.
+dpad.addEventListener("touchstart",preventBrowserGesture,{passive:false});
 function moveDpad(event){
   if(event.pointerId!==dpadPointer)return;
   const x=event.clientX-dpadBounds.left-dpadBounds.width/2,y=event.clientY-dpadBounds.top-dpadBounds.height/2;
@@ -480,6 +483,7 @@ dpad.onpointercancel=dpad.onlostpointercapture=event=>{
 dpad.oncontextmenu=event=>event.preventDefault();
 document.querySelectorAll("[data-button]").forEach(button=>{
   if(Number(button.dataset.button)<4)return; // Directions share the sliding pad.
+  button.addEventListener("touchstart",preventBrowserGesture,{passive:false});
   button.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();labelSource="touch";button.setPointerCapture(event.pointerId);touch.set(event.pointerId,1<<Number(button.dataset.button));pending|=1<<Number(button.dataset.button);localTouchPending|=1<<Number(button.dataset.button);refreshTouchFeedback();unlock();};
   button.onpointerup=event=>{if(touch.has(event.pointerId))consoleGesture();touch.delete(event.pointerId);refreshTouchFeedback();};
   button.onpointercancel=button.onlostpointercapture=event=>{touch.delete(event.pointerId);fullscreenQueued=false;refreshTouchFeedback();};

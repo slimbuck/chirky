@@ -205,19 +205,9 @@ static inline void console_draw_settings_menu(const struct chirky_host_api *api,
     console_scroll_list(api,labels,NULL,count+1,selected,offset,28,api->screen_height-78);
     console_menu_footer(api,true);
 }
-static inline void console_draw_controller_selection(const struct chirky_host_api *api,const char *message)
-{
-    int h=api->screen_height;
-    launcher_text(api,12,h-84,"Press a button on your",0,launcher_cream,launcher_navy,api->screen_width-12,0,h);
-    launcher_text(api,12,h-98,"USB controller/joystick",0,launcher_cream,launcher_navy,api->screen_width-12,0,h);
-    if(message && *message)launcher_text(api,12,h-116,message,0,console_muted,launcher_navy,api->screen_width-12,0,h);
-    launcher_round(api,12,34,api->screen_width-24,26,launcher_gold,0,h);
-    launcher_text(api,23,54,"Back",1,launcher_navy,launcher_gold,api->screen_width-12,0,h);
-    console_menu_footer(api,true);
-}
 static inline void console_draw_controller_profile(const struct chirky_host_api *api,const char *name,int selected,const char *message)
 {
-    const char *labels[]={"SNES preset","Generic joystick","Remap buttons","Back"};
+    const char *labels[]={"SNES preset","Generic controller","Remap buttons","Back"};
     launcher_text(api,12,api->screen_height-65,message && *message?message:name,0,console_muted,launcher_navy,api->screen_width-12,0,api->screen_height);
     console_scroll_list(api,labels,NULL,4,selected,0,28,api->screen_height-78);
     console_menu_footer(api,true);
@@ -283,7 +273,7 @@ static inline void console_draw_live_inputs(const struct chirky_host_api *api,co
         struct launcher_colour colour=console_device_colour(row);
         char name[24];
         if(device->kind==CHIRKY_DEVICE_KEYBOARD)snprintf(name,sizeof(name),"KB %u",++keyboards);
-        else snprintf(name,sizeof(name),"USB %u",++controllers);
+        else snprintf(name,sizeof(name),"CTRL%u",++controllers);
         int y=h-46-(++visible_row)*row_height;
         launcher_rect(api,left,y,2,row_height-2,colour,0,h);
         console_table_text(api,left+3,y+row_height/2+2,name,colour,edges[0],y,y+row_height);
@@ -303,9 +293,9 @@ static inline void console_draw_live_inputs(const struct chirky_host_api *api,co
                 device->buttons[b] || device->button_pressed[b],colour);
         }
     }
-    if(!count)launcher_text(api,12,h-60,"No keyboard or USB controller",0,console_muted,launcher_navy,api->screen_width-12,0,h);
+    if(!count)launcher_text(api,12,h-60,"No keyboard or controller",0,console_muted,launcher_navy,api->screen_width-12,0,h);
 }
-static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset,bool controller_available,bool hide_keyboard)
+static inline void console_draw_controller_settings(const struct chirky_host_api *api,const struct binding_setup *setup,bool input_test,int selected,const char *message,float offset,unsigned controller_count,bool hide_keyboard,uint32_t activity,const uint32_t *controller_ids)
 {
     int h=api->screen_height;
     if(setup->active) {
@@ -325,9 +315,20 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         snprintf(hint,sizeof(hint),"Hold %s to go back",label);
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
-        const char *labels[]={"Test inputs",controller_available?"Map USB controller/joystick":"USB controller/joystick (none)","Map keyboard 1","Map keyboard 2","Back"};
-        if(hide_keyboard)labels[2]="Back";
-        console_scroll_list_disabled(api,labels,NULL,hide_keyboard?3:5,selected,offset,28,h-78,controller_available?-1:1);
+        const char *labels[CHIRKY_INPUT_DEVICES+4];char controllers[CHIRKY_INPUT_DEVICES][24];int count=0,active=-1;
+        labels[count++]="Test inputs";
+        if(!hide_keyboard){labels[count++]="Map keyboard 1";labels[count++]="Map keyboard 2";}
+        for(unsigned i=0;i<controller_count;i++) {
+            snprintf(controllers[i],sizeof(controllers[i]),"Map controller %u",i+1);
+            if(activity && controller_ids[i]==activity)active=count;
+            labels[count++]=controllers[i];
+        }
+        labels[count++]="Back";
+        console_scroll_list(api,labels,NULL,count,selected,offset,28,h-78);
+        if(active>=0) {
+            int y=(28+h-78)/2-(int)((active-selected+offset)*30);
+            launcher_rect(api,16,y-8,3,16,(struct launcher_colour){112,184,255},28,h-78);
+        }
         if(message && *message)launcher_text(api,12,h-65,message,0,launcher_gold,launcher_navy,api->screen_width-12,0,h);
         console_menu_footer(api,true);
     }

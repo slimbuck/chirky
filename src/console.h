@@ -44,9 +44,11 @@ struct chirky_console {
     bool settings_menu,controller_settings,display_settings,input_test,paused;
     bool game_active,loading,diagnostic,ui_wait_release;
     struct binding_setup setup;
-    bool controller_selecting,controller_options;
+    bool controller_options;
     uint32_t controller_id;
     unsigned controller_count;
+    uint32_t controller_ids[CHIRKY_INPUT_DEVICES],controller_activity_id;
+    unsigned controller_activity_frames;
     int controller_option;
     char controller_name[96];
     struct chirky_input_gate transition_gate;

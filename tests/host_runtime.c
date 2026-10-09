@@ -243,10 +243,9 @@ static void check_transition_gates(void)
     event(&h,0,EV_KEY,BTN_EAST,2);update_host(&h);assert(!h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_settings && !h.console.setup.active);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
-    tap(&h,1,KEY_DOWN);
-    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_selecting);
+    for(int i=0;i<3;i++)tap(&h,1,KEY_DOWN);
+    event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.controller_options);
     event(&h,0,EV_KEY,BTN_EAST,0);for(int i=0;i<3;i++)update_host(&h);
-    tap(&h,0,BTN_EAST);assert(h.console.controller_options);
     h.console.controller_option=2;
     event(&h,0,EV_KEY,BTN_EAST,1);update_host(&h);assert(h.console.setup.active && h.console.setup.step==0);
     for(int i=0;i<5;i++)update_host(&h);
@@ -282,8 +281,9 @@ static void check_uninitialized_controller_axes(void)
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_SETTINGS);
     assert(!h.console.ui_wait_release);
     tap(&h,0,BTN_EAST);assert(current_screen(&h)==SCREEN_INPUT);
-    tap(&h,1,KEY_DOWN);tap(&h,0,BTN_EAST);assert(h.console.controller_selecting);
-    tap(&h,0,BTN_EAST);h.console.controller_option=2;tap(&h,0,BTN_EAST);
+    for(int i=0;i<3;i++)tap(&h,1,KEY_DOWN);
+    tap(&h,0,BTN_EAST);assert(h.console.controller_options);
+    h.console.controller_option=2;tap(&h,0,BTN_EAST);
     assert(current_screen(&h)==SCREEN_SETUP && !h.console.setup.wait_release);
     event(&h,0,EV_ABS,ABS_X,0);update_host(&h);assert(h.console.setup.step==0);
     /* Once a real stick has centred, capture and release tracking work. */
@@ -618,7 +618,7 @@ int main(int argc,char **argv)
     tap(&host,0,BTN_SOUTH);assert(!host.console.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.console.settings_menu && !host.console.controller_settings);
     tap(&host,0,BTN_EAST);assert(host.console.controller_settings);
-    tap(&host,1,KEY_DOWN);tap(&host,0,BTN_EAST);assert(host.console.controller_selecting);
+    for(int i=0;i<3;i++)tap(&host,1,KEY_DOWN);
     tap(&host,0,BTN_EAST);assert(host.console.controller_options);
     host.console.controller_option=2;tap(&host,0,BTN_EAST);
     assert(host.console.setup.active && !host.console.setup.keyboard);
@@ -642,7 +642,7 @@ int main(int argc,char **argv)
     assert(device_bindings(&host,&host.inputs.devices[0])[CHIRKY_BUTTON_PRIMARY].code==BTN_TR2);
     update_host(&host);
     /* Keyboard setup captures Escape as a mapping; only F1 cancels. */
-    host.console.controller_options=false;host.console.selected_option=2;tap(&host,1,KEY_N);update_host(&host);
+    host.console.controller_options=false;host.console.selected_option=1;tap(&host,1,KEY_N);update_host(&host);
     assert(host.console.setup.active && host.console.setup.keyboard);
     const int keyboard[]={KEY_H,KEY_L,KEY_I,KEY_K,KEY_N,KEY_R,KEY_ENTER,KEY_ESC};
     for(int i=0;i<CHIRKY_BUTTON_COUNT;i++) tap(&host,1,keyboard[i]);
