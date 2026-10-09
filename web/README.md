@@ -191,7 +191,8 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   They need no font download or platform fallback. The toy handheld shell uses warm yellow,
   a graphite D-pad, coral Primary and turquoise Secondary, with inset grips and
   visible pressed feedback. Branding appears within the display only.
-  The display has a one-pixel bezel,
+  Rounded shell and display corners, inset highlights and a thin painted rim
+  retain the handheld appearance. The measured display border stays one pixel,
   with compact shell padding and control gaps. All targets are at least 44 CSS pixels;
   the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
   the thumb around the fixed centre, with eight sectors (including diagonals)
