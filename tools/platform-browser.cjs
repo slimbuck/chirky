@@ -128,11 +128,11 @@ async function main() {
     assert.equal(catalogResponse.status,200);
     const catalog=await catalogResponse.json();
     assert.equal(catalog.version,1);assert(catalog.games.length>0);
-    // Keep the same physical pixel grid before/after loading and across games,
+    // Maximise the same 4:3 display before/after loading and across games,
     // including fractional OS scale and narrow windows.
     const layoutGame=catalog.games.find(game=>game.role==='game');
     assert(layoutGame);
-    for(const [width,height,density,touch=false] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[390,844,2.625],[670,700,1],[844,390,3,true],[667,375,2,true],[390,844,3,true],[390,844,2.625,true],[412,915,2.625,true],[360,640,3,true],[320,568,2,true],[1024,768,2,true]])){
+    for(const [width,height,density,touch=false] of (process.argv.includes('--console-only') || process.argv.includes('--catalog-only')?[]:[[1280,1000,1.25],[1000,800,1.5],[1280,1000,1.75],[1920,1600,1],[800,600,1],[390,844,2.625],[670,700,1],[844,390,3,true],[667,375,2,true],[390,844,3,true],[390,844,2.625,true],[412,915,2.625,true],[360,640,3,true],[320,568,2,true],[1024,768,2,true]])){
       const label=`layout-${width}-${density}${touch?'-touch':''}`,target=await(await fetch(`${endpoint}/json/new?about:blank`,{method:'PUT'})).json();
       const page=new CDP(target.webSocketDebuggerUrl);await page.open;
       const report={label,checks:[],errors:[],warnings:[],failedRequests:[],passed:false};reports.push(report);
@@ -198,22 +198,21 @@ async function main() {
         assert.deepEqual(game,launcher,'Launcher and game must use the same screen size');
         assert.deepEqual(game.buffer,[320,240]);assert(!game.overflow);
         const physicalScale=game.width*density/320;
-        assert(Math.abs(physicalScale-Math.round(physicalScale))<.001,'Each game pixel must use whole physical pixels');
-        // The sampling bias stays within the same physical raster pixel;
-        // screenshot checks below verify actual horizontal AND vertical texels.
-        assert(Math.abs(game.x*density+1/3-Math.round(game.x*density+1/3))<.03);
-        assert(Math.abs(game.y*density+1/3-Math.round(game.y*density+1/3))<.03);
+        assert(Math.abs(game.height-game.width*240/320)<.03,'Display must preserve 4:3');
+        const slot=await page.eval(`(()=>{const r=document.querySelector('#screen-slot').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};})()`);
+        const maximumScale=Math.min((slot.width-2)/320,(slot.height-2)/240);
+        assert(Math.abs(game.width-320*maximumScale)<.03,'Display must fill the available slot without integer rounding');
+        assert(game.x>=slot.x && game.y>=slot.y && game.x+game.width<=slot.x+slot.width+.03 && game.y+game.height<=slot.y+slot.height+.03,'Display stays inside its slot');
+        assert(game.y>=0 && game.y+game.height<=height,'Display must fit vertically without scrolling');
+        assert.equal(await page.eval(`getComputedStyle(document.querySelector('#screen')).imageRendering`),'pixelated');
+        if(width===1920)assert(game.width>1400,'Desktop display is not capped by the former 1000px page width');
         if(touch){
           const controls=await page.eval(`Array.from(document.querySelectorAll('.touch button')).map(e=>{const r=e.getBoundingClientRect();return {button:e.dataset.button,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})`);
           assert.equal(controls.length,8);
           assert(controls.every(r=>r.width>=44 && r.height>=44 && r.x>=0 && r.y>=0 && r.right<=width && r.bottom<=height),'All eight touch targets must fit and be at least 44 CSS pixels');
           if(width>height){
-            // Preserve the original middle-space allocation: two 148px control
-            // columns, two 12px gaps, 12px outer padding, and the 1px screen border.
-            // Decorative shell borders must not consume this space and knock a
-            // narrow phone down an entire physical-pixel scaling step.
-            const maximumScale=Math.floor(Math.min((width-346)/320,(height-26)/240)*density+1e-6);
-            assert(Math.abs(game.width*density-320*maximumScale)<.03,'Landscape display must fill the original middle space at the largest integer physical scale');
+            const landscapeScale=Math.min((width-302)/320,(height-10)/240);
+            assert(Math.abs(game.width-320*landscapeScale)<.03,'Landscape keeps only compact controls, 4px gaps and a 1px bezel');
             assert(controls.filter(r=>['0','1','2','3','7'].includes(r.button)).every(r=>r.right<=game.x),'D-pad and Menu must sit left of the display');
             assert(controls.filter(r=>['4','5','6'].includes(r.button)).every(r=>r.x>=game.x+game.width),'Actions and Start must sit right of the display');
             assert(Math.abs(game.y+game.height/2-height/2)<=1,'Display must be vertically centred');
@@ -222,11 +221,9 @@ async function main() {
             assert.equal(portrait.heading,'none');assert.equal(portrait.help,'none');
             assert(!portrait.overflow,'Portrait touch console must fit the visible viewport');
             assert(Math.abs(portrait.player.height-height)<1);
-            assert(portrait.grips.every(r=>Math.abs(r.bottom-(height-18))<1),'Both portrait grips must stay anchored at the bottom');
-            assert(game.y+game.height+12<=Math.min(...portrait.grips.map(r=>r.top)),'Display must not overlap bottom controls');
-            const maximumScale=Math.floor(Math.min((width-18)/320,(portrait.slot.height-2)/240)*density+1e-6);
-            assert(Math.abs(game.width*density-320*maximumScale)<.03,'Portrait display must use the full available width at the largest crisp scale');
-            if(width===390 && density===2.625)assert(game.width>360,'Typical Android portrait display must grow beyond the old nested-page size');
+            assert(portrait.grips.every(r=>Math.abs(r.bottom-(height-8))<1),'Both portrait grips must stay anchored at the bottom');
+            assert(game.y+game.height+8<=Math.min(...portrait.grips.map(r=>r.top)),'Display must not overlap bottom controls');
+            assert(Math.abs(game.width-(width-10))<.03,'Portrait display uses all width except 4px shell padding and a 1px bezel');
             report.checks.push('portrait fills visible viewport, maximizes display and anchors both grips at bottom');
           }
           report.checks.push('touch targets fit, controller wings flank the centred landscape display');
@@ -248,32 +245,33 @@ async function main() {
         const stripes=Buffer.from((await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64');
         fs.writeFileSync(path.join(out,`${label}-pixels.png`),stripes);
         const {pixels,channels}=pngRow(stripes,Math.round((game.y+game.height/2)*density));
-        const start=Math.round(game.x*density),step=Math.round(physicalScale);
+        const start=Math.round(game.x*density),step=physicalScale;
         // Check every column of the CRT-safe game viewport. The surrounding
         // native black border can overlap the page's decorative screen border.
         const runs=[];
-        for(let x=16*step;x<(320-16)*step;x++){
+        for(let x=Math.ceil(16*step);x<Math.floor((320-16)*step);x++){
           const offset=(start+x)*channels,red=pixels[offset];
-          assert(red===0 || red===255,'Pixel edges must not be blurred');
           assert.equal(pixels[offset+1],0);assert.equal(pixels[offset+2],255-red);
-          if(runs.at(-1)?.red===red)runs.at(-1).width++;else runs.push({red,width:1});
+          const band=red>=128;
+          if(runs.at(-1)?.band===band)runs.at(-1).width++;else runs.push({band,width:1});
         }
         // DOM bounds can round a physical pixel differently from the compositor;
         // measure complete color runs, excluding only the two clipped end runs.
         assert(runs.length>=287);
-        for(const run of runs.slice(1,-1))assert.equal(run.width,step,'Every game pixel must have the same physical width');
+        for(const run of runs.slice(1,-1))assert(Math.abs(run.width-step)<=1.01,'Fractional scaling must preserve each source column within one display pixel');
         await page.eval(`(()=>{const gl=document.querySelector('#screen').getContext('webgl');gl.enable(gl.SCISSOR_TEST);for(let y=0;y<240;y++){gl.scissor(0,y,320,1);gl.clearColor(y%2,0,1-y%2,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.disable(gl.SCISSOR_TEST);})()`);
         const rows=Buffer.from((await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64');
         const vertical=pngRow(rows,rows.readUInt32BE(20)-1,Math.round((game.x+game.width/2)*density));
         const rowRuns=[],top=Math.round(game.y*density);
-        for(let y=12*step;y<(240-12)*step;y++){
+        for(let y=Math.ceil(12*step);y<Math.floor((240-12)*step);y++){
           const offset=(top+y)*vertical.channels,red=vertical.pixels[offset];
-          assert(red===0 || red===255);assert.equal(vertical.pixels[offset+1],0);assert.equal(vertical.pixels[offset+2],255-red);
-          if(rowRuns.at(-1)?.red===red)rowRuns.at(-1).height++;else rowRuns.push({red,height:1});
+          assert.equal(vertical.pixels[offset+1],0);assert.equal(vertical.pixels[offset+2],255-red);
+          const band=red>=128;
+          if(rowRuns.at(-1)?.band===band)rowRuns.at(-1).height++;else rowRuns.push({band,height:1});
         }
         assert(rowRuns.length>=215);
-        for(const run of rowRuns.slice(1,-1))assert.equal(run.height,step,'Every game pixel must have the same physical height');
-        report.checks.push('stable loading and launcher/game size; native framebuffer; uniform screenshot pixel widths at display scale');report.passed=true;
+        for(const run of rowRuns.slice(1,-1))assert(Math.abs(run.height-step)<=1.01,'Fractional scaling must preserve each source row within one display pixel');
+        report.checks.push('stable loading and launcher/game size; native framebuffer; maximum 4:3 fit and fractional pixelated scaling');report.passed=true;
       }catch(error){report.failure=error.stack;console.error(`${label}: ${error.message}`);}
       finally{await page.call('Page.navigate',{url:'about:blank'}).catch(()=>{});page.close();await fetch(`${endpoint}/json/close/${target.id}`).catch(()=>{});console.log(JSON.stringify(report));}
     }
@@ -327,13 +325,10 @@ async function main() {
         for(const ext of ['js','wasm'])assert.equal(responses.get(new URL(`${game.id}.${ext}`,assetBase).href),200);
         await press('Enter','Enter',13);await delay(250);
         const size=await page.eval('(() => {const r=document.querySelector("#screen").getBoundingClientRect();return {width:r.width,height:r.height};})()');
-        // DOMRects use floating-point bounds after the subpixel sampling bias.
-        // Exact raster pixels are checked from screenshots in the layout suite.
-        assert(Math.abs(size.width-Math.round(size.width/320)*320)<.001);
         assert(Math.abs(size.height-size.width*240/320)<.001);
         const shot=await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
         fs.writeFileSync(path.join(out,`${label}.png`),Buffer.from(shot.data,'base64'));
-        report.checks.push('selected through catalog launcher, JS/WASM HTTP 200, integer canvas scale');report.passed=true;
+        report.checks.push('selected through catalog launcher, JS/WASM HTTP 200, 4:3 canvas scale');report.passed=true;
       } catch(error){report.failure=error.stack;console.error(`${label}: ${error.message}`);}
       finally {
         await page.call('Page.navigate',{url:'about:blank'}).catch(()=>{});page.close();
@@ -615,10 +610,10 @@ async function main() {
         assert.equal((await state()).id,game);
         assert(await page.eval('document.querySelector("#screen")===__originalCanvas && __originalCanvas.getContext("webgl")===__originalGL'));
         assert.equal(await page.eval('document.fullscreenElement?.id'),'player');
-        const full=await capture('fullscreen');assert(Math.abs(full.rect.width-Math.round(full.rect.width/320)*320)<.001);
+        const full=await capture('fullscreen');assert(Math.abs(full.rect.height-full.rect.width*240/320)<.001);
         if(mobile){
           await page.call('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});await delay(200);
-          const landscape=await capture('fullscreen-landscape');assert(Math.abs(landscape.rect.width-Math.round(landscape.rect.width/320)*320)<.001);
+          const landscape=await capture('fullscreen-landscape');assert(Math.abs(landscape.rect.height-landscape.rect.width*240/320)<.001);
           assert(await page.eval('Array.from(document.querySelectorAll(".touch button")).every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})'),'Fullscreen touch controls must stay onscreen');
           const pad=await page.eval(`(()=>{const r=document.querySelector('.dpad').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
           const action=await page.eval(`(()=>{const r=document.querySelector('[data-button="4"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,id:2};})()`);

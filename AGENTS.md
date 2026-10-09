@@ -52,10 +52,10 @@ Keep implemented behavior distinct from proposals when updating these files.
 - Do not add the CRT border or centering offset inside a game. Native sprite and
   rectangle helpers in the host apply that offset and clip to the logical
   viewport. Phosphor Run is the reference implementation for this ownership.
-- The browser host emulates the same framebuffer and safe viewport. Keep the
-  canvas at an integer multiple of 320x240 whenever the available window permits
-  it. `image-rendering: pixelated` does not prevent uneven pixels when a canvas is
-  enlarged by a fractional factor.
+- The browser host emulates the same framebuffer and safe viewport. Fit the
+  320x240 canvas as large as possible at 4:3, allowing fractional display scales
+  and keeping the surrounding border minimal. Keep pixelated scaling for user
+  review; a filtering shader is a possible later change, not yet implemented.
 
 ## Pixel Art
 
@@ -89,8 +89,9 @@ For rendering or asset changes:
    art and a magnified preview can both hide a bad reduction.
 3. Verify idle, every walk direction/frame, edge clipping, and every composed
    state such as riding a bicycle in the live game.
-4. Check the browser at native or integer canvas scale. Do not approve a visual
-   change from code review or an atlas preview alone.
+4. Check the browser at its actual fitted display scale, including fractional
+   scales on desktop and mobile, as well as native-resolution assets. Do not
+   approve a visual change from code review or an atlas preview alone.
 5. Run `wsl make test NODE=node.exe` and `wsl make web NODE=node.exe` on Windows.
 6. When asked to deploy, use the dashboard deployment path, launch the game,
    confirm `/api/status`, inspect a real Pi snapshot, and compare the deployed

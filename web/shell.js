@@ -37,6 +37,7 @@ function renderInputSettings(inputSettings){
     const key=$("#key-help-"+index);key.textContent=keycapName(code);
     key.setAttribute("aria-label",`${inputNames[index]}: ${keyName(code)}`);
   });
+  resizePlayer();
 }
 const initialSettings=loadInputSettings();
 renderInputSettings(initialSettings);
@@ -52,43 +53,19 @@ function resizePlayer(){
   document.body.classList.toggle("controller-wide",sideControls && !fullscreen);
   document.body.classList.toggle("controller-portrait",bottomControls && !fullscreen);
   player.style.setProperty("--player-height",`${window.visualViewport?.height || innerHeight}px`);
-  const touchHeight=touchVisible?$(".touch").getBoundingClientRect().height+12:0;
-  const availableWidth=Math.max(1,slot.clientWidth-2);
-  const availableHeight=sideControls || bottomControls?Math.max(1,slot.clientHeight-2):
-    fullscreen?Math.max(1,innerHeight-touchHeight-58):Infinity;
-  // CSS pixels can be fractional physical pixels at browser/OS zoom. Quantize
-  // the framebuffer's physical scale, then convert back to CSS dimensions.
-  const density=window.devicePixelRatio || 1;
-  const fit=Math.min(availableWidth/320,availableHeight/240)*density;
-  const scale=(fit>=1?Math.floor(fit+1e-6):fit)/density;
-  // A fractional CSS width is rounded to layout units before compositing and
-  // can still produce uneven pixels. Scale the native-size canvas directly.
+  // The grid reserves room for controls/help. Fill its remaining slot at 4:3,
+  // including fractional scales, without changing the native framebuffer.
+  const bounds=slot.getBoundingClientRect();
+  const scale=Math.min(Math.max(1,bounds.width-2)/320,Math.max(1,bounds.height-2)/240);
   canvas.style.width="320px";canvas.style.height="240px";
   canvas.style.transformOrigin="top left";canvas.style.transform=`scale(${scale})`;
   display.style.width=`${320*scale+2}px`;display.style.height=`${240*scale+2}px`;
-  // Centering and borders can place even an integer-size image between pixels.
-  display.style.position="relative";display.style.left="0px";display.style.top="0px";
-  const rect=canvas.getBoundingClientRect();
-  display.style.left=`${Math.round(rect.left*density)/density-rect.left}px`;
-  display.style.top=`${Math.round(rect.top*density)/density-rect.top}px`;
-  // Relative positioning rounds to CSS layout units. Correct the remaining
-  // error in the transform, biasing a third of a physical pixel before the edge.
-  // This stays in the same raster pixel while avoiding nearest-neighbour
-  // rounding ties that produce alternating widths at fractional Android DPRs.
-  const aligned=canvas.getBoundingClientRect();
-  canvas.style.transform=`translate(${(Math.round(aligned.left*density)-1/3)/density-aligned.left}px,${(Math.round(aligned.top*density)-1/3)/density-aligned.top}px) scale(${scale})`;
 }
 document.addEventListener("fullscreenchange",resizePlayer);
 document.addEventListener("webkitfullscreenchange",resizePlayer);
 window.addEventListener("resize",resizePlayer);
 window.visualViewport?.addEventListener("resize",resizePlayer);
 if(typeof matchMedia==="function")matchMedia("(any-pointer: coarse)").addEventListener("change",resizePlayer);
-// Moving between monitors can change density without changing the CSS viewport.
-function watchPixelDensity(){
-  if(typeof matchMedia!=="function")return;
-  matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener("change",()=>{resizePlayer();watchPixelDensity();},{once:true});
-}
-watchPixelDensity();
 resizePlayer();
 window.ChirkyShell={playerKeysConflict,inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer};
 })();

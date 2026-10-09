@@ -190,9 +190,9 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   each visible glyph bounding box is centred at (31,31) in a 62px button face.
   They need no font download or platform fallback. The toy handheld shell uses warm yellow,
   a graphite D-pad, coral Primary and turquoise Secondary, with inset grips and
-  visible pressed feedback. Decorative speaker slots stay outside the game display;
-  branding appears within the display only. Its bezel is painted outside the measured framebuffer border,
-  preserving integer canvas scaling. All targets are at least 44 CSS pixels;
+  visible pressed feedback. Branding appears within the display only.
+  The display has a one-pixel bezel,
+  with compact shell padding and control gaps. All targets are at least 44 CSS pixels;
   the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
   the thumb around the fixed centre, with eight sectors (including diagonals)
   and a small neutral centre. Dragging beyond the pad keeps the direction held
@@ -201,16 +201,20 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   lost capture or loss of focus clears held inputs and the pressed appearance.
   In landscape, controls flank a centred display sized to the available height
   and width, in both normal and fullscreen mode. Portrait uses the visible viewport:
-  the display gets the full available width at the largest whole physical-pixel
-  scale that fits, centred above the two grips anchored at the bottom. The page
+  the display gets the full available width, centred above the two grips anchored
+  at the bottom. Desktop uses the viewport height with a compact heading and keyboard
+  guide, without a fixed page-width cap. The page
   heading and keyboard help are hidden on touch layouts to leave room for play.
   Browser toolbar resizing and rotation recalculate the layout; bottom safe-area
   padding keeps controls above the phone's gesture bar. Safe-area padding keeps landscape controls clear of
   device cutouts. Layout and touch event handling belong in `web/`; they send the
   same logical Chirky inputs to the shared console and games.
-  The canvas transform uses a one-third-physical-pixel sampling bias to avoid
-  nearest-neighbour rounding ties at fractional Android densities. Browser
-  screenshot checks verify uniform pixel widths and heights, as well as layout.
+  Canvas presentation fits its available slot at 4:3 without rounding to integer
+  scales. The native framebuffer stays 320x240 and CSS keeps pixelated scaling.
+  Fractional scales can produce uneven apparent pixel widths; this first pass
+  leaves their appearance for device review before adding any filtering shader.
+  Browser checks cover maximum fit, stable loading, source rows/columns in raster
+  screenshots, and controls staying visible without overlap.
 - **Settings → Full Screen** toggles the whole player. Double-clicking or
   double-tapping the display also toggles it. Touch selections request fullscreen
   on finger-up, when the browser grants permission; short menu taps are delivered
@@ -219,8 +223,8 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   authorize entry. Escape may exit browser
   fullscreen, so map Menu to another key if desired. **Mute / Unmute** is also
   inside Settings. There are no external navigation/settings buttons.
-  The 320x240 framebuffer uses whole physical screen pixels at browser/OS zoom
-  levels whenever space permits. `web/shell.js` is inlined into the generated
+  The 320x240 framebuffer scales to the available space at browser/OS zoom
+  levels, including fractional scales. `web/shell.js` is inlined into the generated
   HTML by `tools/web-assets.js`, applying saved touch preferences, keyboard
   labels and canvas sizing before the first paint, without another download.
   The same layout function handles later resizing and fullscreen changes.
@@ -290,4 +294,4 @@ device joins. Menu opens the normal shared pause menu.
 
 Run `node tools/circuit-clash-browser.cjs` against the dashboard for the real
 WASM check with two simulated identical pads and keyboard replacement. It checks
-independent movement and records integer-scale gameplay/lobby screenshots.
+independent movement and records fitted 4:3 gameplay/lobby screenshots.

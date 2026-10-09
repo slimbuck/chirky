@@ -117,7 +117,7 @@ Compiled side modules and downloaded files are cached per game for the page's
 lifetime; `init` must reset all game state on every launch, just as after a Pi
 module load. Cancellation invalidates pending download work before it can
 activate a game. URL/history changes do not reload the document, preserving
-fullscreen and integer canvas scaling.
+fullscreen and fitted 4:3 canvas scaling, including fractional display scales.
 
 Browser services own DOM keyboard codes, Gamepad API buttons/axes, localStorage,
 WebAudio, fetch and animation frames. Raw device codes are platform-specific;

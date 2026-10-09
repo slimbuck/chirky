@@ -55,7 +55,7 @@ async function main(){
     await page.eval('fighterProbe.freeze();fighterProbe.step(10)');
     async function shot(name){
       const clip=await page.eval(`(()=>{const r=document.querySelector('#screen').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1};})()`);
-      assert.equal(clip.width%320,0);
+      assert(Math.abs(clip.height-clip.width*240/320)<.001);
       const png=await page.call('Page.captureScreenshot',{format:'png',clip});
       fs.writeFileSync(path.join(out,name+'.png'),Buffer.from(png.data,'base64'));
     }
@@ -119,7 +119,7 @@ async function main(){
     await tapKey('Escape');assert.notEqual(await page.eval('fighterProbe.state()'),4);
     await shot('keyboard-pause');
     await tapKey('Escape');assert.equal(await page.eval('fighterProbe.state()'),4);
-    assert.deepEqual(errors,[]);console.log('Real WASM: identical pads, independent movement, keyboard rejoin, shared-keyboard movement/pause, mapped labels, damage/KO/rematch and integer-scale screenshots passed.');
+    assert.deepEqual(errors,[]);console.log('Real WASM: identical pads, independent movement, keyboard rejoin, shared-keyboard movement/pause, mapped labels, damage/KO/rematch and 4:3 screenshots passed.');
   }finally{
     page?.close();if(browser){try{await browser.call('Browser.close');}catch{}browser.close();}
     if(child.exitCode===null)await Promise.race([new Promise(resolve=>child.once('exit',resolve)),delay(3000)]);
