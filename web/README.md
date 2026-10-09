@@ -194,7 +194,7 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   Rounded corners, strong shell outlines and highlights, a raised five-pixel
   painted bezel, roomy grips and landscape speaker slots retain the handheld
   appearance. The measured display border stays one pixel; compact shell
-  margins leave room for the painted bezel while preserving fractional scaling.
+  margins leave room for the painted bezel around the fitted display.
   All targets are at least 44 CSS pixels;
   the whole D-pad and an 8-pixel margin accept a sliding thumb. Directions follow
   the thumb around the fixed centre, with eight sectors (including diagonals)
@@ -215,12 +215,13 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   padding keeps controls above the phone's gesture bar. Safe-area padding keeps landscape controls clear of
   device cutouts. Layout and touch event handling belong in `web/`; they send the
   same logical Chirky inputs to the shared console and games.
-  Canvas presentation fits its available slot at 4:3 without rounding to integer
-  scales. The native framebuffer stays 320x240 and CSS keeps pixelated scaling.
-  Fractional scales can produce uneven apparent pixel widths; this first pass
-  leaves their appearance for device review before adding any filtering shader.
-  Browser checks cover maximum fit, stable loading, source rows/columns in raster
-  screenshots, and controls staying visible without overlap.
+  Canvas presentation uses the largest integer scale in physical device pixels
+  that fits its slot at 4:3. CSS sizes can still be fractional on high-density
+  displays; browser zoom and density changes recalculate the fit. The native
+  framebuffer stays 320x240, aligned to physical pixels with nearest-neighbour
+  scaling and no filtering shader. If even 1x cannot fit, the display downscales.
+  Browser checks cover stable loading, equally sized unblended rows and columns
+  in raster screenshots, and controls staying visible without overlap.
 - **Settings → Full Screen** toggles the whole player. Double-clicking or
   double-tapping the display also toggles it. Touch selections request fullscreen
   on finger-up, when the browser grants permission; short menu taps are delivered
@@ -229,8 +230,8 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   authorize entry. Escape may exit browser
   fullscreen, so map Menu to another key if desired. **Mute / Unmute** is also
   inside Settings. There are no external navigation/settings buttons.
-  The 320x240 framebuffer scales to the available space at browser/OS zoom
-  levels, including fractional scales. `web/shell.js` is inlined into the generated
+  The 320x240 framebuffer fits the available space at browser/OS zoom
+  levels, including fractional device densities. `web/shell.js` is inlined into the generated
   HTML by `tools/web-assets.js`, applying saved touch preferences, keyboard
   labels and canvas sizing before the first paint, without another download.
   The same layout function handles later resizing and fullscreen changes.

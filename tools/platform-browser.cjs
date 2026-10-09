@@ -201,14 +201,18 @@ async function main() {
         assert(Math.abs(game.height-game.width*240/320)<.03,'Display must preserve 4:3');
         const slot=await page.eval(`(()=>{const r=document.querySelector('#screen-slot').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};})()`);
         const maximumScale=Math.min((slot.width-2)/320,(slot.height-2)/240);
-        assert(Math.abs(game.width-320*maximumScale)<.03,'Display must fill the available slot without integer rounding');
-        assert(game.x>=slot.x && game.y>=slot.y && game.x+game.width<=slot.x+slot.width+.03 && game.y+game.height<=slot.y+slot.height+.03,'Display stays inside its slot');
+        if(maximumScale*density>=1){
+          assert(Math.abs(physicalScale-Math.round(physicalScale))<.001,'Each source pixel uses a whole physical-pixel block');
+          assert(maximumScale*density-physicalScale<1.001,'Display uses the largest integer scale that fits');
+        }
+        const alignment=1/density+.03;
+        assert(game.x>=slot.x-alignment && game.y>=slot.y-alignment && game.x+game.width<=slot.x+slot.width+alignment && game.y+game.height<=slot.y+slot.height+alignment,'Display stays inside its slot allowing physical-pixel alignment');
         assert(game.y>=0 && game.y+game.height<=height,'Display must fit vertically without scrolling');
         assert.equal(await page.eval(`getComputedStyle(document.querySelector('#screen')).imageRendering`),'pixelated');
         if(width===1920)assert(game.width<=800,'Normal desktop play keeps a compact display on large monitors');
         if(!touch){
           const frame=await page.eval(`(()=>{const p=document.querySelector('#player').getBoundingClientRect(),d=document.querySelector('#display').getBoundingClientRect();return {left:d.left-p.left,right:p.right-d.right,top:d.top-p.top};})()`);
-          assert(Math.abs(frame.left-frame.right)<.05 && Math.abs(frame.left-frame.top)<.05,'Desktop shell has equal top and side margins');
+          assert(Math.abs(frame.left-frame.right)<=alignment && Math.abs(frame.left-frame.top)<=alignment,'Desktop shell has equal top and side margins within physical-pixel alignment');
         }
         if(touch){
           const controls=await page.eval(`Array.from(document.querySelectorAll('.touch button')).map(e=>{const r=e.getBoundingClientRect();return {button:e.dataset.button,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})`);
@@ -216,7 +220,8 @@ async function main() {
           assert(controls.every(r=>r.width>=44 && r.height>=44 && r.x>=0 && r.y>=0 && r.right<=width && r.bottom<=height),'All eight touch targets must fit and be at least 44 CSS pixels');
           if(width>height){
             const landscapeScale=Math.min((width-342)/320,(height-26)/240);
-            assert(Math.abs(game.width-320*landscapeScale)<.03,'Landscape reserves room for the grips and painted bezel while maximizing the display');
+            const integerScale=Math.floor(landscapeScale*density+1e-6)/density;
+            assert(Math.abs(game.width-320*integerScale)<.03,'Landscape fits the largest integer scale around the grips and bezel');
             assert(controls.filter(r=>['0','1','2','3','7'].includes(r.button)).every(r=>r.right<=game.x),'D-pad and Menu must sit left of the display');
             assert(controls.filter(r=>['4','5','6'].includes(r.button)).every(r=>r.x>=game.x+game.width),'Actions and Start must sit right of the display');
             assert(Math.abs(game.y+game.height/2-height/2)<=1,'Display must be vertically centred');
@@ -227,7 +232,8 @@ async function main() {
             assert(Math.abs(portrait.player.height-height)<1);
             assert(portrait.grips.every(r=>Math.abs(r.bottom-(height-18))<1),'Both portrait grips must stay anchored at the bottom');
             assert(game.y+game.height+12<=Math.min(...portrait.grips.map(r=>r.top)),'Display must not overlap bottom controls');
-            assert(Math.abs(game.width-(width-18))<.03,'Portrait display uses all width except 8px shell padding and a 1px measured bezel');
+            const integerWidth=320*Math.floor((width-18)*density/320+1e-6)/density;
+            assert(Math.abs(game.width-integerWidth)<.03,'Portrait fits the largest integer scale inside the shell margins');
             report.checks.push('portrait fills visible viewport, maximizes display and anchors both grips at bottom');
           }
           report.checks.push('touch targets fit, controller wings flank the centred landscape display');
@@ -256,13 +262,14 @@ async function main() {
         for(let x=Math.ceil(16*step);x<Math.floor((320-16)*step);x++){
           const offset=(start+x)*channels,red=pixels[offset];
           assert.equal(pixels[offset+1],0);assert.equal(pixels[offset+2],255-red);
+          if(step>=1)assert(red===0 || red===255,'Integer scaling must not blend source columns');
           const band=red>=128;
           if(runs.at(-1)?.band===band)runs.at(-1).width++;else runs.push({band,width:1});
         }
         // DOM bounds can round a physical pixel differently from the compositor;
         // measure complete color runs, excluding only the two clipped end runs.
         assert(runs.length>=287);
-        for(const run of runs.slice(1,-1))assert(Math.abs(run.width-step)<=1.01,'Fractional scaling must preserve each source column within one display pixel');
+        for(const run of runs.slice(1,-1))assert.equal(run.width,Math.round(step),'Every source column has the same physical width');
         await page.eval(`(()=>{const gl=document.querySelector('#screen').getContext('webgl');gl.enable(gl.SCISSOR_TEST);for(let y=0;y<240;y++){gl.scissor(0,y,320,1);gl.clearColor(y%2,0,1-y%2,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.disable(gl.SCISSOR_TEST);})()`);
         const rows=Buffer.from((await page.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64');
         const vertical=pngRow(rows,rows.readUInt32BE(20)-1,Math.round((game.x+game.width/2)*density));
@@ -270,12 +277,13 @@ async function main() {
         for(let y=Math.ceil(12*step);y<Math.floor((240-12)*step);y++){
           const offset=(top+y)*vertical.channels,red=vertical.pixels[offset];
           assert.equal(vertical.pixels[offset+1],0);assert.equal(vertical.pixels[offset+2],255-red);
+          if(step>=1)assert(red===0 || red===255,'Integer scaling must not blend source rows');
           const band=red>=128;
           if(rowRuns.at(-1)?.band===band)rowRuns.at(-1).height++;else rowRuns.push({band,height:1});
         }
         assert(rowRuns.length>=215);
-        for(const run of rowRuns.slice(1,-1))assert(Math.abs(run.height-step)<=1.01,'Fractional scaling must preserve each source row within one display pixel');
-        report.checks.push('stable loading and launcher/game size; native framebuffer; maximum 4:3 fit and fractional pixelated scaling');report.passed=true;
+        for(const run of rowRuns.slice(1,-1))assert.equal(run.height,Math.round(step),'Every source row has the same physical height');
+        report.checks.push('stable layout, native framebuffer, integer physical-pixel scaling with uniform unblended rows and columns');report.passed=true;
       }catch(error){report.failure=error.stack;console.error(`${label}: ${error.message}`);}
       finally{await page.call('Page.navigate',{url:'about:blank'}).catch(()=>{});page.close();await fetch(`${endpoint}/json/close/${target.id}`).catch(()=>{});console.log(JSON.stringify(report));}
     }

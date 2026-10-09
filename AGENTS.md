@@ -53,11 +53,11 @@ Keep implemented behavior distinct from proposals when updating these files.
   rectangle helpers in the host apply that offset and clip to the logical
   viewport. Phosphor Run is the reference implementation for this ownership.
 - The browser host emulates the same framebuffer and safe viewport. Fit the
-  320x240 canvas at 4:3, allowing fractional display scales. Mobile and fullscreen
+  320x240 canvas at 4:3 using integer scales in physical device pixels. Mobile and fullscreen
   use the available space with compact shell margins; normal desktop play keeps
-  a centred, compact shell and a display up to 800 CSS pixels wide. Keep pixelated
-  scaling for user review; a filtering shader is a possible later change, not yet
-  implemented.
+  a centred, compact shell and a display up to 800 CSS pixels wide. Use nearest-neighbour
+  presentation and physical-pixel alignment, including fractional browser/OS densities.
+  Downscale only when a native-size physical frame cannot fit. There is no filtering shader.
 
 ## Pixel Art
 
@@ -92,7 +92,7 @@ For rendering or asset changes:
 3. Verify idle, every walk direction/frame, edge clipping, and every composed
    state such as riding a bicycle in the live game.
 4. Check the browser at its actual fitted display scale, including fractional
-   scales on desktop and mobile, as well as native-resolution assets. Do not
+   device pixel densities on desktop and mobile, as well as native-resolution assets. Do not
    approve a visual change from code review or an atlas preview alone.
 5. Run `wsl make test NODE=node.exe` and `wsl make web NODE=node.exe` on Windows.
 6. When asked to deploy, use the dashboard deployment path, launch the game,

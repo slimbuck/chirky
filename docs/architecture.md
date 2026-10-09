@@ -117,7 +117,10 @@ Compiled side modules and downloaded files are cached per game for the page's
 lifetime; `init` must reset all game state on every launch, just as after a Pi
 module load. Cancellation invalidates pending download work before it can
 activate a game. URL/history changes do not reload the document, preserving
-fullscreen and fitted 4:3 canvas scaling, including fractional display scales.
+fullscreen and fitted 4:3 canvas scaling. The browser presents the native 320x240
+canvas at integer physical-pixel scales, accounting for fractional device pixel
+densities and aligning the display to avoid uneven rows or columns. Only windows
+too small for a native-size physical frame use fractional downscaling.
 
 Browser services own DOM keyboard codes, Gamepad API buttons/axes, localStorage,
 WebAudio, fetch and animation frames. Raw device codes are platform-specific;
