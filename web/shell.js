@@ -53,6 +53,10 @@ function resizePlayer(){
   document.body.classList.toggle("controller-wide",sideControls && !fullscreen);
   document.body.classList.toggle("controller-portrait",bottomControls && !fullscreen);
   player.style.setProperty("--player-height",`${window.visualViewport?.height || innerHeight}px`);
+  // Measure the available grid afresh before wrapping the desktop shell around
+  // the fitted screen. Resetting avoids feedback when resizing or rotating.
+  player.style.removeProperty("width");player.style.removeProperty("height");
+  $("header").style.removeProperty("width");
   // The grid reserves room for controls/help. Fill its remaining slot at 4:3,
   // including fractional scales, without changing the native framebuffer.
   const bounds=slot.getBoundingClientRect();
@@ -60,6 +64,15 @@ function resizePlayer(){
   canvas.style.width="320px";canvas.style.height="240px";
   canvas.style.transformOrigin="top left";canvas.style.transform=`scale(${scale})`;
   display.style.width=`${320*scale+2}px`;display.style.height=`${240*scale+2}px`;
+  if(!touchVisible && !fullscreen){
+    const style=getComputedStyle(player),px=name=>parseFloat(style[name]) || 0;
+    const width=320*scale+2+px("paddingLeft")+px("paddingRight")+px("borderLeftWidth")+px("borderRightWidth");
+    player.style.width=`${width}px`;
+    // The keyboard guide can wrap after the shell narrows. Measure it at that
+    // final width so the screen and all hints retain their own space.
+    player.style.height=`${240*scale+2+$(".help").getBoundingClientRect().height+px("rowGap")+px("paddingTop")+px("paddingBottom")+px("borderTopWidth")+px("borderBottomWidth")}px`;
+    $("header").style.width=`${width}px`;
+  }
 }
 document.addEventListener("fullscreenchange",resizePlayer);
 document.addEventListener("webkitfullscreenchange",resizePlayer);

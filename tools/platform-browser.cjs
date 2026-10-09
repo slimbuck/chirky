@@ -206,6 +206,10 @@ async function main() {
         assert(game.y>=0 && game.y+game.height<=height,'Display must fit vertically without scrolling');
         assert.equal(await page.eval(`getComputedStyle(document.querySelector('#screen')).imageRendering`),'pixelated');
         if(width===1920)assert(game.width<=800,'Normal desktop play keeps a compact display on large monitors');
+        if(!touch){
+          const frame=await page.eval(`(()=>{const p=document.querySelector('#player').getBoundingClientRect(),d=document.querySelector('#display').getBoundingClientRect();return {left:d.left-p.left,right:p.right-d.right,top:d.top-p.top};})()`);
+          assert(Math.abs(frame.left-frame.right)<.05 && Math.abs(frame.left-frame.top)<.05,'Desktop shell has equal top and side margins');
+        }
         if(touch){
           const controls=await page.eval(`Array.from(document.querySelectorAll('.touch button')).map(e=>{const r=e.getBoundingClientRect();return {button:e.dataset.button,x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};})`);
           assert.equal(controls.length,8);

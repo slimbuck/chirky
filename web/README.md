@@ -205,9 +205,10 @@ Launcher order comes from each `game.conf`'s optional `launcher_order` integer
   In landscape, controls flank a centred display sized to the available height
   and width, in both normal and fullscreen mode. Portrait uses the visible viewport:
   the display gets the full available width, centred above the two grips anchored
-  at the bottom. Normal desktop play uses a centred shell capped at 1000 pixels
-  wide and 900 pixels high, with a display up to 800 pixels wide and keyboard
-  hints grouped together in the centre. Smaller windows scale down to fit;
+  at the bottom. Normal desktop play wraps a centred shell around a display up
+  to 800 pixels wide, with equal top and side margins and keyboard hints grouped
+  together underneath. Smaller windows scale the display down; the keyboard
+  guide wraps beneath it and can scroll into view in short windows;
   fullscreen still fills the available space. The page
   heading and keyboard help are hidden on touch layouts to leave room for play.
   Browser toolbar resizing and rotation recalculate the layout; bottom safe-area
