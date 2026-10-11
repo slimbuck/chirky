@@ -3,8 +3,8 @@
 See [the first live Pi measurements](performance-live-pi3.md) for deployment
 validation, gameplay costs, spike examples and measurement limitations.
 
-Build the host and all games together (`make`): the profiling callback arrived
-in ABI8; the current asset/sprite and director API uses ABI10. Rebuild browser modules with `make web` too.
+Build the host and all games together (`make`) against the current
+[game ABI](platform-api.md). Rebuild browser modules with `make web` too.
 An older running host does not support the capture command.
 
 On the Pi, from its checkout, start a capture while playing normally:
@@ -91,3 +91,61 @@ dashing, death/restart and level transitions separately. Keep the same overlay
 setting, scene and hardware conditions between comparisons. Record the build
 revision and Pi temperature/throttling alongside captures. These tools expose
 costs; measurements still need representative play before choosing an optimisation.
+
+## Frame timing overlay (Pi)
+
+The overlay starts disabled. Hold **Start for two seconds** to toggle it from
+any screen on the Pi (Enter with the default keyboard bindings). It has two running bars:
+
+- **CPU**: main-thread CPU time for game updates, rendering and frame submission.
+  Sleeping, blocked driver waits and waiting for the display flip are excluded.
+- **GPU**: on VC4, approximate GPU time from kernel dispatch/completion events. All
+  jobs within a completed host frame are combined; overlapping intervals are
+  counted once. Interrupt and dispatch latency is included. If OpenGL elapsed
+  timer queries are available, they supply the timing instead.
+
+The overlay occupies **24 pixels**: two compact rows.
+Each row reads `CPU 3.1 A2.5 M4.8` (or `GPU`): latest time, **A**verage over the
+last wall-clock second, and **M**aximum over that same second, all in milliseconds.
+This is a time window, not a fixed frame count, so it remains one second when
+frames are dropped. Unavailable/pending GPU samples are excluded; `--` means no
+valid samples in the last second. GPU values on VC4 remain kernel estimates even
+though the compact row label is simply `GPU`.
+
+Both thin bars use the same fixed scale: zero to two display refresh periods
+(about 33.3 ms at 60 Hz). The white tick marks the one-frame budget, **16.7 ms**,
+also printed at the right of the GPU row. Current fill turns red above that
+budget; the amber marker shows the maximum from the last second and falls again
+when that sample expires. GPU samples arrive asynchronously, so displayed CPU
+and GPU values need not describe the same frame. These bars measure workload,
+not the complete presentation deadline; bars below budget do not guarantee 60 FPS.
+
+The **D** counter at the right of the CPU row counts missed display refreshes
+since enabling the overlay. Its background flashes red for one second on a new
+miss. It uses actual DRM presentation sequence gaps. Toggle off/on to reset the
+counter; averages and maxima roll continuously without needing a reset.
+
+`deploy/install-service.sh` also installs the small root-owned
+`chirky-gpu.service` collector. It uses a dedicated tracefs instance and a bounded
+ring of atomically published snapshots in `/run/chirky-gpu/samples`, without
+waiting for GPU completion or collector results in the game. The collector
+batches reads at 10 Hz and disables tracing when neither the overlay nor a live
+capture is active. Collection adds some CPU/trace overhead. It requires Python 3
+and the VC4 kernel tracepoints;
+without it, CPU and dropped-frame diagnostics continue to work. The game itself
+still runs as the normal unprivileged user. On other drivers, native OpenGL timer
+queries are used when supported.
+
+For remote diagnostics, send `timing on` or `timing off` to `run/control.fifo`.
+Old `frame_timing` configuration entries are ignored. Work/submission time,
+display intervals and dropped refreshes are still logged every 300 frames.
+
+## Offscreen rendering benchmark
+
+`tools/render_benchmark.c` compares the reference and batched paths on an offscreen
+EGL surface without touching the CRT or the running game. On the connected Pi,
+the initial Rosey Chop garden measured 20.8 ms versus 2.0 ms per render on average,
+including GPU completion, with byte-identical framebuffer pixels. This is an
+offscreen rendering comparison, not a claim that every live frame meets its deadline.
+Run `make benchmark` on Linux/Pi to repeat the measurement and pixel comparison,
+including a stress check that overflows the rectangle batch multiple times.
