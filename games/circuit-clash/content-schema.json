@@ -1,0 +1,386 @@
+{
+  "version": 1,
+  "format": "key=value",
+  "unknown_fields": "reject",
+  "duplicate_fields": "reject",
+  "missing_fields": "reject",
+  "reload": "restart game",
+  "tick_rate_note": "Game updates; nominal 60 Hz. Native currently follows presentation.",
+  "fp8_note": "1 = 1/8 framebuffer pixel; velocity per update, acceleration per update squared.",
+  "character": [
+    {
+      "key": "schema_version",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "required": true
+    },
+    {
+      "key": "health",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "required": true
+    },
+    {
+      "key": "weight_percent",
+      "type": "integer",
+      "minimum": 25,
+      "maximum": 400,
+      "required": true
+    },
+    {
+      "key": "walk_speed_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "back_speed_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "ground_accel_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "ground_brake_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "air_speed_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "air_accel_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32,
+      "required": true
+    },
+    {
+      "key": "jump_velocity_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 80,
+      "required": true
+    },
+    {
+      "key": "gravity_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16,
+      "required": true
+    },
+    {
+      "key": "max_fall_speed_fp8",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "jump_startup_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "required": true
+    },
+    {
+      "key": "landing_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "required": true
+    },
+    {
+      "key": "crouch_enter_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "required": true
+    },
+    {
+      "key": "crouch_exit_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "required": true
+    },
+    {
+      "key": "body_half_width_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24,
+      "required": true
+    },
+    {
+      "key": "standing_height_px",
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "crouching_height_px",
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "idle_0_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600,
+      "required": true
+    },
+    {
+      "key": "idle_1_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600,
+      "required": true
+    },
+    {
+      "key": "idle_2_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600,
+      "required": true
+    },
+    {
+      "key": "idle_3_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600,
+      "required": true
+    },
+    {
+      "key": "punch_startup_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "punch_active_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "punch_recovery_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "punch_damage",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "required": true
+    },
+    {
+      "key": "punch_reach_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "punch_bottom_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "punch_top_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "punch_hitstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "punch_blockstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "punch_knockback_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "kick_startup_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "kick_active_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "kick_recovery_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "kick_damage",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "required": true
+    },
+    {
+      "key": "kick_reach_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "kick_bottom_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "kick_top_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "kick_hitstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "kick_blockstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "kick_knockback_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "name",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 23,
+      "required": true
+    },
+    {
+      "key": "atlas",
+      "type": "asset-path",
+      "required": true,
+      "cellSize": [
+        96,
+        96
+      ],
+      "frameCount": 4
+    }
+  ],
+  "stage": [
+    {
+      "key": "schema_version",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "required": true
+    },
+    {
+      "key": "floor_y_px",
+      "type": "integer",
+      "minimum": 32,
+      "maximum": 60,
+      "required": true
+    },
+    {
+      "key": "wall_margin_px",
+      "type": "integer",
+      "minimum": 26,
+      "maximum": 48,
+      "required": true
+    },
+    {
+      "key": "spawn_left_percent",
+      "type": "integer",
+      "minimum": 15,
+      "maximum": 40,
+      "required": true
+    },
+    {
+      "key": "spawn_right_percent",
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 85,
+      "required": true
+    },
+    {
+      "key": "countdown_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 600,
+      "required": true
+    },
+    {
+      "key": "name",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 23,
+      "required": true
+    }
+  ],
+  "constraints": [
+    "crouching_height_px <= standing_height_px",
+    "punch_bottom_px < punch_top_px",
+    "kick_bottom_px < kick_top_px"
+  ]
+}

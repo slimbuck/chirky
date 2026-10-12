@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "character": "arthur",
+  "source": "art/arthur/idle-approved.png",
+  "source_sha256": "412b6fa34fd6bf8dceefde3a6ea34fd62105ca63d4c043693bf2f1ceb1d5c245",
+  "runtime": "assets/characters/arthur-idle.pam",
+  "rgba_sha256": "60e45d733fa1b64c6cc1f709911bc6543778774b7b9ee611ef2f12609c51176d",
+  "atlas_size": [
+    384,
+    96
+  ],
+  "cell_size": [
+    96,
+    96
+  ],
+  "draw_size": [
+    96,
+    96
+  ],
+  "anchor": [
+    48,
+    80
+  ],
+  "baseline_row": 79,
+  "alpha": "binary",
+  "frames": [
+    {
+      "index": 0,
+      "name": "neutral",
+      "bounds": [
+        22,
+        16,
+        74,
+        80
+      ]
+    },
+    {
+      "index": 1,
+      "name": "descend",
+      "bounds": [
+        23,
+        17,
+        74,
+        80
+      ]
+    },
+    {
+      "index": 2,
+      "name": "low",
+      "bounds": [
+        25,
+        17,
+        74,
+        80
+      ]
+    },
+    {
+      "index": 3,
+      "name": "rise",
+      "bounds": [
+        22,
+        17,
+        74,
+        80
+      ]
+    }
+  ],
+  "timing": "assets/characters/arthur.conf: idle_0_ticks through idle_3_ticks",
+  "pending_clips": [
+    "walk",
+    "jump",
+    "crouch",
+    "punch",
+    "kick",
+    "block",
+    "hit",
+    "knockdown"
+  ],
+  "provenance": "Approved four-frame idle, including the single white-highlight correction. Already reduced to its final native grid; this export copies pixels exactly."
+}
