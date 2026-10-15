@@ -493,6 +493,16 @@ static void check_separate_devices(void)
     conflict[CHIRKY_BUTTON_PRIMARY]=h.keyboard2_bindings[CHIRKY_BUTTON_PRIMARY];
     assert(save_keyboard_service(&h,1,conflict)==MAPPING_CONFLICT);
     assert(!player_maps_conflict(h.keyboard_bindings,h.keyboard2_bindings));
+    for(unsigned profile=1;profile<=2;profile++) {
+        const struct controller_binding *own=profile==2?h.keyboard2_bindings:h.keyboard_bindings;
+        const struct controller_binding *other=profile==2?h.keyboard_bindings:h.keyboard2_bindings;
+        for(int action=0;action<CHIRKY_BUTTON_COUNT;action++) {
+            assert(!keyboard_conflict_service(&h,profile,action,own[action]));
+            assert(keyboard_conflict_service(&h,profile,action,other[action])==(action<CHIRKY_BUTTON_START));
+        }
+        assert(keyboard_conflict_service(&h,profile,CHIRKY_BUTTON_MENU,other[CHIRKY_BUTTON_PRIMARY]));
+        assert(keyboard_conflict_service(&h,profile,CHIRKY_BUTTON_MENU,other[CHIRKY_BUTTON_START]));
+    }
     h.keyboard_bindings[CHIRKY_BUTTON_PRIMARY]=(struct controller_binding){BINDING_KEY,KEY_Q,0};
     event(&h,2,EV_KEY,KEY_Q,1);update_device_inputs(&h);
     assert(h.inputs.state.devices[0].id==1 && h.inputs.state.devices[0].buttons[CHIRKY_BUTTON_PRIMARY]);

@@ -197,6 +197,11 @@ bool chirky_console_update(struct chirky_console *c,const struct console_input *
         if(frame->cancel || c->controller_menu_chord_frames>=60) {
             c->setup.active=false;c->settings_message="CANCELLED - NOTHING CHANGED";c->controller_menu_chord_frames=0;
         } else {
+            if(c->setup.keyboard && c->setup.ready && !frame->keyboard_held &&
+               c->services.keyboard_conflict && c->services.keyboard_conflict(c->services.context,
+                   c->setup.keyboard_profile,c->setup.step,c->setup.candidate)) {
+                c->setup.ready=false;c->setup.message="ALREADY USED";
+            }
             setup_release(&c->setup,c->setup.keyboard?!frame->keyboard_held:!frame->controller_held);
             if(c->setup.complete) {
                 enum mapping_save_result result=MAPPING_FAILED;

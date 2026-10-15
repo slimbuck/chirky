@@ -751,10 +751,15 @@ static bool same_binding(struct controller_binding a, struct controller_binding 
     return a.kind!=BINDING_NONE && a.kind==b.kind && a.code==b.code && a.direction==b.direction;
 }
 
+static bool player_binding_conflict(struct controller_binding binding,int action,const struct controller_binding *other)
+{
+    for(int j=0;j<CHIRKY_BUTTON_COUNT;j++)
+        if(same_binding(binding,other[j]) && !(action==j && action>=CHIRKY_BUTTON_START))return true;
+    return false;
+}
 static bool player_maps_conflict(const struct controller_binding *a,const struct controller_binding *b)
 {
-    for (int i=0;i<CHIRKY_BUTTON_COUNT;i++) for (int j=0;j<CHIRKY_BUTTON_COUNT;j++)
-        if (same_binding(a[i],b[j]) && !(i==j && i>=CHIRKY_BUTTON_START)) return true;
+    for(int i=0;i<CHIRKY_BUTTON_COUNT;i++)if(player_binding_conflict(a[i],i,b))return true;
     return false;
 }
 
@@ -999,6 +1004,11 @@ static void poll_audio(struct host *host)
 }
 
 static void unload_service(void *context) { unload_game(context); }
+static bool keyboard_conflict_service(void *context,unsigned profile,int action,struct controller_binding binding)
+{
+    struct host *host=context;
+    return player_binding_conflict(binding,action,profile==2?host->keyboard_bindings:host->keyboard2_bindings);
+}
 static enum mapping_save_result save_keyboard_service(void *context,unsigned profile,const struct controller_binding *bindings)
 {
     struct host *host=context;
@@ -1027,7 +1037,7 @@ static bool save_display_service(void *context) { return save_bindings(context);
 static void configure_console(struct host *host)
 {
     host->console.services=(struct console_services){host,load_game_platform,unload_service,
-        save_keyboard_service,action_service,display_service,save_display_service,controller_info_service,save_controller_service};
+        save_keyboard_service,action_service,display_service,save_display_service,controller_info_service,save_controller_service,keyboard_conflict_service};
     host->console.display=(struct console_display){host->safe_x,host->safe_y,host->safe_offset_x,host->safe_offset_y};
 }
 static void open_settings_screen(struct host *host,int option)

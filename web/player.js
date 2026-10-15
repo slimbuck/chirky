@@ -125,7 +125,7 @@ function playAssetSound(handle){
   const source=audio.createBufferSource();source.buffer=buffer;source.connect(audio.destination);
   sources.add(source);source.onended=()=>sources.delete(source);source.start();
 }
-const {playerKeysConflict,inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer}=window.ChirkyShell;
+const {inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer}=window.ChirkyShell;
 let inputSettings=initialSettings,bindings={};
 let playerKeys=[inputSettings.keys,inputSettings.p2Keys];
 // Presentation follows the most recently pressed device. Held pads and noisy
@@ -317,12 +317,16 @@ function keyboardMask(){
 }
 function controllerMask(){return pads().reduce((value,pad)=>value|padMask(pad),0);}
 function mask(){let value=keyboardMask()|controllerMask();for(const buttons of touch.values())value|=buttons;return value;}
+function onKeyboardConflict(profile,action,code){
+  return playerKeys[profile===2?0:1].some((key,other)=>
+    key===keyCodes[code] && !(action===other && action>=6));
+}
 function onSaveKeyboard(values,profile=1){
   try{
     if(profile<0 || profile>2)return false;
     const mapped=values.map(v=>keyCodes[v.code]),player=profile===2?1:0;
     if(!validKeys(mapped))return false;
-    if(playerKeysConflict(mapped,playerKeys[1-player]))return -1;
+    if(values.some((binding,action)=>onKeyboardConflict(profile,action,binding.code)))return -1;
     const next={...inputSettings,[player?"p2Keys":"keys"]:mapped};
     localStorage.setItem(settingsKey,JSON.stringify(next));inputSettings=next;
     playerKeys=[next.keys,next.p2Keys];refreshInputSettings();
@@ -562,7 +566,7 @@ async function createModule({default:create},wasmBinary){
     onDiagnostic:index=>catalog[index].role==="diagnostic",
     onLaunch:index=>loadGame(ids[index]),onStopped:gameStopped,onLoaded:onModuleLoaded,
     onOption:option=>{if(option===-6)requestConsoleFullscreen();else if(option===-7)toggleMute();},
-    onButtonLabel,onDeviceLabel,onSaveKeyboard,onControllerInfo,onSaveController,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
+    onButtonLabel,onDeviceLabel,onSaveKeyboard,onKeyboardConflict,onControllerInfo,onSaveController,onSaveRead,onSaveWrite,printErr:message=>console.warn(message)});
 }
 async function loadFiles(module,gameId,isCurrent=()=>true,onProgress=()=>{}){
   const loadedSounds=new Map();

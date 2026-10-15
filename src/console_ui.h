@@ -311,8 +311,7 @@ static inline void console_draw_controller_settings(const struct chirky_host_api
         const char *hint=setup->keyboard?"F1 cancels - saves after all 8":"Hold two buttons to cancel";
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else if(input_test) {
-        char label[24],hint[64];chirky_input_label(api,CHIRKY_BUTTON_MENU,label,sizeof(label));
-        snprintf(hint,sizeof(hint),"Hold %s to go back",label);
+        const char *hint="Hold MENU to go back";
         launcher_text(api,(api->screen_width-launcher_text_width(hint,0))/2,17,hint,0,console_muted,launcher_navy,api->screen_width-8,0,h);
     } else {
         const char *labels[CHIRKY_INPUT_DEVICES+4];char controllers[CHIRKY_INPUT_DEVICES][24];int count=0,active=-1;

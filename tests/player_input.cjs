@@ -474,6 +474,17 @@ test('player mappings persist independently, reject cross-player conflicts and u
   assert.equal(player(broken).run('onDeviceLabel(1,4)'),'N');
 });
 
+test('keyboard capture conflicts ignore the replaced layout and allow matching shared system keys',()=>{
+  const p=player();
+  for(const profile of [1,2])for(let action=0;action<8;action++){
+    assert.equal(p.run(`onKeyboardConflict(${profile},${action},keyCodes.indexOf(playerKeys[${profile-1}][${action}]))`),false);
+    assert.equal(p.run(`onKeyboardConflict(${profile},${action},keyCodes.indexOf(playerKeys[${2-profile}][${action}]))`),action<6);
+  }
+  assert.equal(p.run('onKeyboardConflict(2,7,keyCodes.indexOf("KeyN"))'),true);
+  assert.equal(p.run('onKeyboardConflict(2,7,keyCodes.indexOf("Enter"))'),true);
+  assert.equal(p.storage.size,0,'checking a candidate never saves it');
+});
+
 test('old default keyboard mappings upgrade to the shared P1 layout',()=>{
   const p=player(JSON.stringify({version:1,keys:['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyX','KeyZ','Enter','Escape'],touch:'hide'}));
   assert.equal(p.run('onButtonLabel(4)'),'N');assert.equal(p.run('onDeviceLabel(1,5)'),'M');

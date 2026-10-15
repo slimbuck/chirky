@@ -18,6 +18,11 @@ static bool load_service(void *unused,int index){(void)unused;launch(index);retu
 static void unload_service(void *unused){(void)unused;web_unload();stopped();}
 static enum mapping_save_result mapping_service(void *unused,unsigned profile,const struct controller_binding *bindings)
 {(void)unused;return (enum mapping_save_result)save_keyboard(profile,bindings);}
+EM_JS(int,keyboard_conflict,(unsigned profile,int action,unsigned code),{
+    return Module.onKeyboardConflict(profile,action,code)?1:0;
+});
+static bool keyboard_conflict_service(void *unused,unsigned profile,int action,struct controller_binding binding)
+{(void)unused;return keyboard_conflict(profile,action,binding.code)!=0;}
 EM_JS(int,controller_info,(unsigned id,char *name,size_t size),{
     const info=Module.onControllerInfo(id);if(!info)return -1;
     stringToUTF8(info.name,name,size);return info.profile;
@@ -40,7 +45,7 @@ static void console_init(void)
         catalog_name(i,names[i],sizeof(names[i]));catalog_id(i,ids[i],sizeof(ids[i]));
         games[i]=(struct console_game){ids[i],names[i],catalog_diagnostic(i)!=0};
     }
-    console.services=(struct console_services){.load=load_service,.unload=unload_service,.save_keyboard=mapping_service,.action=option_service,.controller_info=controller_info_service,.save_controller=save_controller_service};
+    console.services=(struct console_services){.load=load_service,.unload=unload_service,.save_keyboard=mapping_service,.action=option_service,.controller_info=controller_info_service,.save_controller=save_controller_service,.keyboard_conflict=keyboard_conflict_service};
     chirky_console_catalog(&console,games,count,CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
 }
 /* Stable browser diagnostics; internal screen ordinals are not an ABI. */

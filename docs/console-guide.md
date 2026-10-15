@@ -59,7 +59,8 @@ Existing Pi SNES/Pico bindings and browser controller mappings remain usable.
 Choose **Settings > Input Settings**, then **Map keyboard 1**, **Map keyboard 2**, or a numbered **Map controller** entry.
 Keyboard setup and the Generic controller/Remap buttons wizards capture the eight
 Chirky inputs in the order above, with Primary before Secondary. Release inputs between prompts. Duplicate bindings are
-rejected; completed mappings save atomically. F1 cancels keyboard setup; holding
+rejected; a key used by the other player shows "ALREADY USED" and keeps the current
+prompt open. Completed mappings save atomically. F1 cancels keyboard setup; holding
 two controller buttons for one second cancels controller setup. F1/F12 remain
 reserved. Cancellation and failed saves preserve the previous mapping.
 
@@ -91,7 +92,7 @@ and so on in the compact table). Fixed touch controls are not listed.
 The table always shows configured physical labels under D-pad, Prim,
 Sec, Start and Menu. Up sits above Left/Down/Right when row space permits.
 Held or newly pressed inputs highlight their cells.
-This screen suspends navigation; hold the displayed Menu binding for one second or press F1
+This screen suspends navigation; hold any device's Menu binding for one second or press F1
 to return. Screen transitions consume the opening press and wait for two neutral
 updates before accepting input on the next screen.
 

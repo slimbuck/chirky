@@ -54,6 +54,26 @@ static void controller_profiles(unsigned capabilities)
     assert(!c->setup.active && !c->controller_options && c->controller_settings);
     assert(!strcmp(c->settings_message,"CONTROLLER DISCONNECTED"));
 }
+static bool reject_keyboard_key(void *context,unsigned profile,int action,struct controller_binding binding)
+{(void)context;assert(profile==2 && action>=0 && action<8);return binding.code==108;}
+static void keyboard_conflict_prompt(void)
+{
+    struct fixture f;init(&f,0);struct chirky_console *c=&f.console;
+    c->services.keyboard_conflict=reject_keyboard_key;
+    chirky_console_open(c,CONSOLE_INPUT);settle(&f);c->selected_option=2;
+    tap(&f,CHIRKY_BUTTON_PRIMARY);
+    for(int step=0;step<8;step++) {
+        chirky_console_capture(c,(struct controller_binding){BINDING_KEY,108,0});
+        tick(&f,-1,false,false);
+        assert(c->setup.active && c->setup.step==step && !c->setup.complete);
+        assert(!c->setup.wait_release && !c->setup.ready && f.saves==0);
+        assert(!strcmp(c->setup.message,"ALREADY USED"));
+        chirky_console_capture(c,(struct controller_binding){BINDING_KEY,100+step,0});
+        tick(&f,-1,false,false);
+        assert(c->setup.step==step+1 && !*c->setup.message);
+    }
+    assert(!c->setup.active && f.saves==1 && f.profile==2);
+}
 static void shared_trace(unsigned caps)
 {
     struct fixture f;init(&f,caps);struct chirky_console *c=&f.console;
@@ -378,6 +398,7 @@ int main(void)
     shared_trace(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);
     shared_trace(CONSOLE_CAN_FULLSCREEN|CONSOLE_CAN_SOUND);
     input_menu_devices();
+    keyboard_conflict_prompt();
     touch_input_menu();
     touch_input_availability();
     controller_profiles(CONSOLE_CAN_POWER|CONSOLE_CAN_DISPLAY|CONSOLE_CAN_TIMING);

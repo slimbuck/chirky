@@ -32,6 +32,8 @@ struct console_services {
     int (*controller_info)(void *,uint32_t,char *,size_t);
     /* A NULL binding array requests the SNES preset. */
     enum mapping_save_result (*save_controller)(void *,uint32_t,enum controller_profile,const struct controller_binding *);
+    /* Checks only the other keyboard player's saved bindings. No writes. */
+    bool (*keyboard_conflict)(void *,unsigned,int,struct controller_binding);
 };
 struct chirky_console {
     struct console_services services;
