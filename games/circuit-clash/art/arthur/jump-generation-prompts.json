@@ -1,0 +1,11 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "output/arthur-idle-v1/source/00-neutral.png",
+  "prompts": [
+    {
+      "frame": "tuck",
+      "prompt": "Use case: precise-object-edit. Asset type: one sharp held airborne pose for Arthur's native pixel-art fighting game.\nEdit target: the attached approved Arthur sprite. Preserve the exact baby identity, face, blue eyes and white highlights, cheerful expression, hair, red headband, white nappy, chubby proportions and existing pixel-art palette. Keep the SAME 1448x1086 transparent canvas, camera, source scale, head and upper-body coordinates. No enlarging, zooming or reframing.\nChange only the legs below the nappy into an energetic compact tuck during a short kung-fu jump: both knees bend sharply, thighs lifted, lower legs fold back underneath the nappy, with small bare feet hanging around source y850-890 instead of the original ground y1044. Two distinct feet, anatomically readable limbs. This is a midair tuck, not a standing wide-legged pose or a kick. Leave generous transparent space underneath. Keep the torso, nappy, guard fists and entire upper body unchanged. Arthur faces RIGHT.\nStyle: strong held silhouette and abrupt limited-animation energy inspired by the rhythm of the original Gorillaz Clint Eastwood music video, retaining Arthur's approved pixel-art design. No blur, smear, motion lines, shadows, ground, effects, text or extra objects. Output one complete character with genuine transparent background."
+    }
+  ],
+  "reduction": "Shared native grid and palette; source stays at its original coordinates. Approved upper 38 rows retained. Airborne feet intentionally above ground baseline."
+}

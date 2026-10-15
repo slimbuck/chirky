@@ -1,12 +1,267 @@
 {
-  "version": 1,
+  "version": 4,
   "character": "arthur",
-  "source": "art/arthur/idle-approved.png",
-  "source_sha256": "412b6fa34fd6bf8dceefde3a6ea34fd62105ca63d4c043693bf2f1ceb1d5c245",
-  "runtime": "assets/characters/arthur-idle.pam",
-  "rgba_sha256": "60e45d733fa1b64c6cc1f709911bc6543778774b7b9ee611ef2f12609c51176d",
+  "clips": [
+    {
+      "id": "idle",
+      "source": "art/arthur/idle-approved.png",
+      "names": [
+        "neutral",
+        "descend",
+        "low",
+        "rise"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "idle_0_ticks",
+        "idle_1_ticks",
+        "idle_2_ticks",
+        "idle_3_ticks"
+      ],
+      "first": 0,
+      "source_sha256": "412b6fa34fd6bf8dceefde3a6ea34fd62105ca63d4c043693bf2f1ceb1d5c245"
+    },
+    {
+      "id": "walk",
+      "source": "art/arthur/walk-approved.png",
+      "names": [
+        "stance",
+        "lead-lift",
+        "wide-contact",
+        "rear-follow"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          73
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          75,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "walk_0_ticks",
+        "walk_1_ticks",
+        "walk_2_ticks",
+        "walk_3_ticks"
+      ],
+      "body_bob_px": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "note": "Body bob is baked into pixels. Reverse traversal when retreating.",
+      "first": 4,
+      "source_sha256": "3dd9897ed2d34a56f68807c380a3bc44e72fe1efff15344db264cdc87db2bc9f"
+    },
+    {
+      "id": "punch",
+      "source": "art/arthur/punch-balanced-v2.png",
+      "planted_reference": "art/arthur/punch-authored.png",
+      "eye_highlights": [
+        [
+          [
+            49,
+            34
+          ],
+          [
+            57,
+            33
+          ]
+        ],
+        [
+          [
+            59,
+            35
+          ],
+          [
+            67,
+            35
+          ]
+        ],
+        [
+          [
+            52,
+            34
+          ],
+          [
+            59,
+            32
+          ]
+        ]
+      ],
+      "names": [
+        "windup",
+        "strike",
+        "retract"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "punch_startup_ticks",
+        "punch_active_ticks",
+        "punch_recovery_ticks"
+      ],
+      "note": "Small torso wind-up and forward shoulder drive. Native rows 56-95 retain the planted lower body. Poses follow gameplay phases; no interpolation or extra visual delay.",
+      "first": 8,
+      "source_sha256": "faf70f61b29503aa335830667e4e969b3cc24d948941911021359cd3bf4a1a01"
+    },
+    {
+      "id": "jump",
+      "source": "art/arthur/jump-authored.png",
+      "names": [
+        "tuck"
+      ],
+      "feet_rows": [
+        [
+          68,
+          69
+        ]
+      ],
+      "timing_fields": [
+        null
+      ],
+      "note": "Tuck while rising; neutral feet extend on descent. Low idle at takeoff and landing. Physics drives pose selection; airborne feet intentionally clear the baseline.",
+      "first": 11,
+      "source_sha256": "f356ed2a9a27fc594611b569efc4608a0910401cb9aaa881a50d54455722335e"
+    },
+    {
+      "id": "kick",
+      "source": "art/arthur/kick-proportioned-v4.png",
+      "planted_reference": "art/arthur/kick-balanced-v2.png",
+      "edited_region": {
+        "frame": 1,
+        "bounds": [
+          59,
+          48,
+          96,
+          72
+        ]
+      },
+      "attack_extent_px": 41,
+      "eye_highlights": [
+        [
+          [
+            45,
+            35
+          ],
+          [
+            54,
+            33
+          ]
+        ],
+        [
+          [
+            39,
+            35
+          ],
+          [
+            47,
+            33
+          ]
+        ],
+        [
+          [
+            45,
+            35
+          ],
+          [
+            54,
+            33
+          ]
+        ]
+      ],
+      "names": [
+        "chamber",
+        "strike",
+        "recoil"
+      ],
+      "feet_rows": [
+        [
+          79,
+          67
+        ],
+        [
+          79,
+          66
+        ],
+        [
+          79,
+          67
+        ]
+      ],
+      "timing_fields": [
+        "kick_startup_ticks",
+        "kick_active_ticks",
+        "kick_recovery_ticks"
+      ],
+      "note": "Medium-length kicking leg redrawn within the edited region; all other pixels retain v2's backward lean and planted support leg. Toe ends at cell x88, matching 41 px of reach from anchor x48: nine pixels longer than v3, five shorter than v2. Chamber reused for recoil.",
+      "first": 12,
+      "source_sha256": "65ca825fe1689bc87cdb330281dbd18b57a941a73b918208d1fec88a961eaafe"
+    },
+    {
+      "id": "kneel",
+      "source": "art/arthur/kneel-authored.png",
+      "names": [
+        "guard"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        null
+      ],
+      "note": "Hold Down. Rear knee and front foot share the ground line; approved upper body translated down 11 native pixels. Entry/exit locks use crouch_enter_ticks and crouch_exit_ticks.",
+      "first": 15,
+      "source_sha256": "2981f85b59982db7d8d7248e26ca9e5b30bf2574ca97cd57d361754af937dd52"
+    }
+  ],
+  "runtime": "assets/characters/arthur.pam",
+  "rgba_sha256": "e2047cdc430ff6197ca599db11dde1bdab0242da6488119a105d26db0980c338",
   "atlas_size": [
-    384,
+    1536,
     96
   ],
   "cell_size": [
@@ -26,55 +281,268 @@
   "frames": [
     {
       "index": 0,
+      "clip": "idle",
       "name": "neutral",
       "bounds": [
         22,
         16,
         74,
         80
-      ]
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "idle_0_ticks"
     },
     {
       "index": 1,
+      "clip": "idle",
       "name": "descend",
       "bounds": [
         23,
         17,
         74,
         80
-      ]
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "idle_1_ticks"
     },
     {
       "index": 2,
+      "clip": "idle",
       "name": "low",
       "bounds": [
         25,
         17,
         74,
         80
-      ]
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "idle_2_ticks"
     },
     {
       "index": 3,
+      "clip": "idle",
       "name": "rise",
       "bounds": [
         22,
         17,
         74,
         80
-      ]
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "idle_3_ticks"
+    },
+    {
+      "index": 4,
+      "clip": "walk",
+      "name": "stance",
+      "bounds": [
+        22,
+        17,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "walk_0_ticks"
+    },
+    {
+      "index": 5,
+      "clip": "walk",
+      "name": "lead-lift",
+      "bounds": [
+        22,
+        16,
+        76,
+        80
+      ],
+      "feet_rows": [
+        79,
+        73
+      ],
+      "timing_field": "walk_1_ticks"
+    },
+    {
+      "index": 6,
+      "clip": "walk",
+      "name": "wide-contact",
+      "bounds": [
+        22,
+        17,
+        78,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "walk_2_ticks"
+    },
+    {
+      "index": 7,
+      "clip": "walk",
+      "name": "rear-follow",
+      "bounds": [
+        22,
+        16,
+        74,
+        80
+      ],
+      "feet_rows": [
+        75,
+        79
+      ],
+      "timing_field": "walk_3_ticks"
+    },
+    {
+      "index": 8,
+      "clip": "punch",
+      "name": "windup",
+      "bounds": [
+        21,
+        17,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "punch_startup_ticks"
+    },
+    {
+      "index": 9,
+      "clip": "punch",
+      "name": "strike",
+      "bounds": [
+        28,
+        18,
+        89,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "punch_active_ticks"
+    },
+    {
+      "index": 10,
+      "clip": "punch",
+      "name": "retract",
+      "bounds": [
+        22,
+        16,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "punch_recovery_ticks"
+    },
+    {
+      "index": 11,
+      "clip": "jump",
+      "name": "tuck",
+      "bounds": [
+        22,
+        16,
+        71,
+        70
+      ],
+      "feet_rows": [
+        68,
+        69
+      ],
+      "timing_field": null
+    },
+    {
+      "index": 12,
+      "clip": "kick",
+      "name": "chamber",
+      "bounds": [
+        18,
+        18,
+        71,
+        80
+      ],
+      "feet_rows": [
+        79,
+        67
+      ],
+      "timing_field": "kick_startup_ticks"
+    },
+    {
+      "index": 13,
+      "clip": "kick",
+      "name": "strike",
+      "bounds": [
+        10,
+        17,
+        89,
+        80
+      ],
+      "feet_rows": [
+        79,
+        66
+      ],
+      "timing_field": "kick_active_ticks"
+    },
+    {
+      "index": 14,
+      "clip": "kick",
+      "name": "recoil",
+      "bounds": [
+        18,
+        18,
+        71,
+        80
+      ],
+      "feet_rows": [
+        79,
+        67
+      ],
+      "timing_field": "kick_recovery_ticks"
+    },
+    {
+      "index": 15,
+      "clip": "kneel",
+      "name": "guard",
+      "bounds": [
+        22,
+        27,
+        73,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": null
     }
   ],
-  "timing": "assets/characters/arthur.conf: idle_0_ticks through idle_3_ticks",
+  "timing": "assets/characters/arthur.conf",
   "pending_clips": [
-    "walk",
-    "jump",
-    "crouch",
-    "punch",
-    "kick",
     "block",
     "hit",
-    "knockdown"
+    "knockdown",
+    "low-punch",
+    "low-kick"
   ],
-  "provenance": "Approved four-frame idle, including the single white-highlight correction. Already reduced to its final native grid; this export copies pixels exactly."
+  "provenance": "Native idle, body-bobbing walk, punch, airborne tuck, kick and kneeling guard. Already reduced to the final native grid; this export copies pixels exactly."
 }

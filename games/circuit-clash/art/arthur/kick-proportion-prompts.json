@@ -1,0 +1,5 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "output/arthur-attack-balance-v2/source/kick-strike.png",
+  "prompt": "Use case: precise-object-edit. Edit the attached Arthur pixel-art kick pose. Change ONLY the extended image-RIGHT kicking leg: it is too long. Redraw the thigh and calf about 30 percent shorter in total, with naturally chubby baby proportions matching the support leg. Keep the hip joint around source x850,y720; bring the outermost toe/heel silhouette back to about x1200 (currently x1380). Retain a readable knee, slightly bent rather than rigid, and the same small bare-foot size and raised-toe orientation. Do not merely squash the leg or shrink the foot. Keep the kicking foot at its existing height. Keep the leaning-back torso, head, face, blue eyes, expression, red headband, guard arms, nappy, support leg and planted foot EXACTLY unchanged. SAME 1448x1086 transparent canvas, native source scale and framing. Do not recenter the character. No extra limbs, blur, effects, shadows or background. Crisp existing pixel-art style, genuine transparency."
+}

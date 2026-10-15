@@ -1,0 +1,5 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "output/arthur-kick-v3/source/kick-strike.png",
+  "prompt": "Use case: precise-object-edit. Edit target: the attached Arthur kick pose. Make ONLY his extended image-right kicking leg moderately longer: extend thigh and shin together by about 100 source pixels, moving the outer edge of the raised foot from roughly x1150 to x1250. Keep a small bend at the knee and chubby baby proportions. Keep the foot itself the same size and height. This is a middle-length correction, NOT a fully stretched adult leg. Keep hip, nappy, leaning-back torso, guard arms, head, face, eyes, red headband, supporting leg and planted foot EXACTLY unchanged. Preserve the same 1448x1086 canvas and character coordinates; do not recenter or rescale. Existing crisp pixel-art style, transparent background, no shadows or effects."
+}

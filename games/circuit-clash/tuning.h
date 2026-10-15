@@ -10,7 +10,7 @@
 /* This field list also generates the future editor's numeric schema. Speeds
    use eighths of a pixel per update; timers count game updates (nominally 60Hz). */
 #define CC_CHARACTER_FIELDS(X) \
- X(schema_version,1,1) \
+ X(schema_version,5,5) \
  X(health,1,10000) \
  X(weight_percent,25,400) \
  X(walk_speed_fp8,1,64) \
@@ -21,9 +21,18 @@
  X(air_accel_fp8,1,32) \
  X(jump_velocity_fp8,1,80) \
  X(gravity_fp8,1,16) \
+ X(fall_gravity_fp8,1,24) \
  X(max_fall_speed_fp8,1,96) \
  X(jump_startup_ticks,0,60) \
+ X(jump_buffer_ticks,0,30) \
  X(landing_ticks,0,60) \
+ X(air_attack_landing_ticks,0,60) \
+ X(air_punch_startup_ticks,0,120) \
+ X(air_punch_active_ticks,1,120) \
+ X(air_punch_recovery_ticks,1,120) \
+ X(air_kick_startup_ticks,0,120) \
+ X(air_kick_active_ticks,1,120) \
+ X(air_kick_recovery_ticks,1,120) \
  X(crouch_enter_ticks,0,60) \
  X(crouch_exit_ticks,0,60) \
  X(body_half_width_px,1,24) \
@@ -33,6 +42,10 @@
  X(idle_1_ticks,1,600) \
  X(idle_2_ticks,1,600) \
  X(idle_3_ticks,1,600) \
+ X(walk_0_ticks,1,600) \
+ X(walk_1_ticks,1,600) \
+ X(walk_2_ticks,1,600) \
+ X(walk_3_ticks,1,600) \
  X(punch_startup_ticks,0,120) \
  X(punch_active_ticks,1,120) \
  X(punch_recovery_ticks,1,120) \

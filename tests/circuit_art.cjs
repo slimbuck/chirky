@@ -22,28 +22,73 @@ function rgba(png) {
   }
   return out;
 }
-test('Arthur runtime pixels equal approved art; four padded native cells, aligned feet and highlight',()=>{
+test('Arthur runtime copies authored clips exactly, preserving native cells, feet and highlight',()=>{
   const manifest=JSON.parse(fs.readFileSync(root+'art/manifest.json'));
-  const source=fs.readFileSync(root+manifest.source),png=rgba(source);
-  assert.equal(hash(source),manifest.source_sha256);
-  assert.deepEqual(manifest.atlas_size,[384,96]);assert.deepEqual(manifest.cell_size,[96,96]);
+  const layout=JSON.parse(fs.readFileSync(root+'art/clips.json'));
+  const width=1536,png=Buffer.alloc(width*96*4);
+  let first=0;
+  for(const [index,clip] of layout.clips.entries()) {
+    const source=fs.readFileSync(root+clip.source),pixels=rgba(source),stride=clip.names.length*96*4;
+    assert.equal(hash(source),manifest.clips[index].source_sha256);
+    assert.equal(manifest.clips[index].first,first);
+    assert.equal(source.readUInt32BE(16),clip.names.length*96);assert.equal(source.readUInt32BE(20),96);
+    for(let y=0;y<96;y++)pixels.copy(png,(y*width+first*96)*4,y*stride,(y+1)*stride);
+    first+=clip.names.length;
+  }
+  assert.equal(first,16);
+  assert.deepEqual(manifest.atlas_size,[width,96]);assert.deepEqual(manifest.cell_size,[96,96]);
   assert.deepEqual(manifest.cell_size,manifest.draw_size);
   const pam=fs.readFileSync(root+manifest.runtime),offset=pam.indexOf('ENDHDR\n')+7;
-  assert.equal(pam.subarray(0,offset).toString(),'P7\nWIDTH 384\nHEIGHT 96\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n');
+  assert.equal(pam.subarray(0,offset).toString(),`P7\nWIDTH ${width}\nHEIGHT 96\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n`);
   assert(pam.subarray(offset).equals(png),'Runtime must copy every approved pixel without scaling');
   assert.equal(hash(png),manifest.rgba_sha256);
   const palette=new Set();
-  for(let f=0;f<4;f++) {
+  const expectedFeet=layout.clips.flatMap(c=>c.feet_rows);
+  for(let f=0;f<16;f++) {
     const soles=[-1,-1];
     for(let y=0;y<96;y++)for(let x=0;x<96;x++) {
-      const i=(y*384+f*96+x)*4,a=png[i+3];assert(a===0||a===255);
+      const i=(y*width+f*96+x)*4,a=png[i+3];assert(a===0||a===255);
       if(x===0||x===95||y===0||y>=80)assert.equal(a,0,'Transparent gutter');
       if(a){soles[x<48?0:1]=y;palette.add(png.subarray(i,i+3).toString('hex'));}
     }
-    assert.deepEqual(soles,[79,79]);
+    assert.deepEqual(soles,expectedFeet[f]);
+    assert.deepEqual(manifest.frames[f].feet_rows,soles);
   }
   assert(palette.size<=52);
-  assert.deepEqual([...png.subarray((34*384+244)*4,(34*384+244)*4+4)],[246,242,240,255]);
+  assert.deepEqual([...png.subarray((34*width+244)*4,(34*width+244)*4+4)],[246,242,240,255]);
+  // Attack upper bodies are intentionally reauthored. Freeze the reviewed new
+  // pixels above via source hashes; preserve the grounded art below separately.
+  for(const id of ['punch','kick']) {
+    const clip=manifest.clips.find(c=>c.id===id),reference=rgba(fs.readFileSync(root+clip.planted_reference));
+    for(let n=0;n<3;n++) {
+      for(let y=clip.edited_region?0:56;y<96;y++)for(let x=0;x<96;x++) {
+        const edit=clip.edited_region,box=edit?.bounds;
+        if(edit && n===edit.frame && x>=box[0] && x<box[2] && y>=box[1] && y<box[3])continue;
+        const a=(y*288+n*96+x)*4,b=(y*width+(clip.first+n)*96+x)*4;
+        assert(reference.subarray(a,a+4).equals(png.subarray(b,b+4)),`${id} preserved pixels ${n}:${x},${y}`);
+      }
+      for(const [x,y] of clip.eye_highlights[n]) {
+        const i=(y*width+(clip.first+n)*96+x)*4;
+        assert.equal(png[i+3],255);assert(png[i]>=235 && png[i+1]>=235 && png[i+2]>=235,`${id} eye highlight ${n}`);
+      }
+    }
+  }
+  const eyes=id=>manifest.clips.find(c=>c.id===id).eye_highlights.map(pair=>pair.reduce((s,p)=>s+p[0],0)/2);
+  assert(eyes('kick')[1]<eyes('kick')[0]-4,'Kick head follows the backward torso lean');
+  assert(eyes('punch')[1]>eyes('punch')[0]+4,'Punch head follows the shoulder drive');
+  const kick=manifest.clips.find(c=>c.id==='kick');
+  assert.equal(manifest.frames[kick.first+1].bounds[2]-manifest.anchor[0],kick.attack_extent_px);
+  const tuning=fs.readFileSync(root+'assets/characters/arthur.conf','utf8');
+  assert.equal(+/^kick_reach_px=(\d+)/m.exec(tuning)[1],kick.attack_extent_px,'Kick reach follows the authored leg');
+  // New tucked legs must not drift the approved head, fists, or upper torso.
+  for(let y=0;y<54;y++) {
+    const a=y*width*4,b=(y*width+11*96)*4;
+    assert(png.subarray(a,a+96*4).equals(png.subarray(b,b+96*4)));
+  }
+  for(let y=16;y<54;y++) {
+    const a=y*width*4,b=((y+11)*width+15*96)*4;
+    assert(png.subarray(a,a+96*4).equals(png.subarray(b,b+96*4)),'Kneel preserves upper body on an integer offset');
+  }
 });
 test('Tuning schema tracks C validation and all shipped characters and arenas',()=>{
   const schema=JSON.parse(fs.readFileSync(root+'content-schema.json'));
