@@ -29,7 +29,9 @@ async function load(id){
     if(used.has(f.key))continue;used.add(f.key);
     const l=document.createElement('label'),span=document.createElement('span'),input=document.createElement('input'),hint=document.createElement('small');
     span.textContent=label(f.key.replace(/^(crouch_|air_)?(punch|kick)_/,''));input.type='number';input.name=f.key;input.min=f.minimum;input.max=f.maximum;input.step=1;input.required=true;input.value=current.values[f.key];
-    hint.textContent=f.key.endsWith('_followthrough_ticks')?'Extra strike-pose frames during recovery; no hitbox.':`${f.minimum}–${f.maximum}`;l.append(span,input,hint);grid.append(l);
+    hint.textContent=/^walk_\d_ticks$/.test(f.key)?'Frames at full forward speed; actual travel advances the drawing.':
+     /^(push_off|stop_plant|stop_sink|stop_rise)_ticks$/.test(f.key)?'Visual frames only; no input lock. Plant lasts through braking.':
+     f.key.endsWith('_followthrough_ticks')?'Extra strike-pose frames during recovery; no hitbox.':`${f.minimum}–${f.maximum}`;l.append(span,input,hint);grid.append(l);
    }fieldset.append(grid);$('#fields').append(fieldset);
   }
   dirty=false;compare();status('Saved values loaded.');
@@ -47,6 +49,7 @@ $('#character').onchange=()=>{const id=$('#character').value;if(dirty && !confir
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 (async()=>{
  const data=await api('');schema=data.schema;$('#back').href='/#edit/'+encodeURIComponent(game);$('#play').href='/play/?game='+encodeURIComponent(game);
+ if(data.workbench){$('#workbench').hidden=false;$('#workbench').href='/animation-workbench.html?game='+encodeURIComponent(game);$('#save').parentElement.append($('#workbench'));}
  for(const c of data.characters){const option=document.createElement('option');option.value=c.id;option.textContent=c.name+' ('+c.id+')';$('#character').append(option);}
  if(!data.characters.length)throw Error('No characters found.');await load(data.characters[0].id);
 })().catch(e=>status(e.message,true));

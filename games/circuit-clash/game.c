@@ -7,10 +7,11 @@
 #include <string.h>
 
 static const struct chirky_host_api *host;
+enum locomotion { MOTION_IDLE, MOTION_PUSH, MOTION_WALK, MOTION_PLANT, MOTION_SINK, MOTION_RISE };
 struct fighter {
     int x,y,vx,vy,health,facing,attack,action_tick,stun,transition,jump_wait,jump_buffer,landing,guard_release;
-    unsigned animation_tick,walk_tick;
-    int walk_direction;
+    unsigned animation_tick;
+    int walk_direction,walk_distance,motion,motion_tick;
     bool hit,ready,crouch,blocking,guard_stun,air_attack;
 };
 static struct fighter fighters[2];
@@ -129,6 +130,53 @@ static int approach(int value,int target,int step)
 { return value<target?(value+step<target?value+step:target):(value-step>target?value-step:target); }
 static int body_height(int p)
 {return fighters[p].crouch?characters[p].crouching_height_px:characters[p].standing_height_px;}
+static void update_locomotion(int p,int old_x)
+{
+    struct fighter *f=&fighters[p];const struct character_tuning *c=&characters[p];
+    int direction=(int)controls[p].buttons[CHIRKY_BUTTON_RIGHT]-(int)controls[p].buttons[CHIRKY_BUTTON_LEFT];
+    int dx=f->x-old_x;
+    bool available=!f->y && !f->vy && !f->attack && !f->stun && !f->crouch && !f->transition &&
+        !f->jump_wait && !f->landing && !f->blocking && !f->guard_release && f->health>0;
+    if(!available) {
+        f->motion=MOTION_IDLE;f->motion_tick=0;f->walk_direction=0;f->walk_distance=0;
+        return;
+    }
+    /* Only actual self-propelled travel advances the gait. Walls, knockback and
+       opponent separation cannot manufacture a step or a faster animation. */
+    int gait=direction && dx*direction>0 && f->vx*direction>0 ? direction*f->facing : 0;
+    int travel=abs(dx)<abs(f->vx)?abs(dx):abs(f->vx);
+    if(gait) {
+        bool starting=(f->motion!=MOTION_PUSH && f->motion!=MOTION_WALK) || gait!=f->walk_direction;
+        if(starting) {
+            f->motion=c->push_off_ticks?MOTION_PUSH:MOTION_WALK;f->motion_tick=0;
+            /* Push from the planted stance into the first passing foot. */
+            f->walk_distance=c->walk_0_ticks*c->walk_speed_fp8;
+        } else if(f->motion==MOTION_PUSH) {
+            if(++f->motion_tick>=c->push_off_ticks){f->motion=MOTION_WALK;f->motion_tick=0;}
+        } else {
+            int cycle=(c->walk_0_ticks+c->walk_1_ticks+c->walk_2_ticks+c->walk_3_ticks)*c->walk_speed_fp8;
+            f->walk_distance=(f->walk_distance+travel)%cycle;
+        }
+        f->walk_direction=gait;
+        return;
+    }
+    f->walk_direction=0;f->walk_distance=0;
+    if(f->motion==MOTION_PUSH || f->motion==MOTION_WALK) {
+        f->motion=MOTION_PLANT;f->motion_tick=0;
+    } else if(f->motion!=MOTION_IDLE)f->motion_tick++;
+    /* Plant throughout braking (or until blocked), then absorb and rise.
+       These are visual states only: new input can interrupt on any frame. */
+    bool sliding=dx && f->vx && ((dx>0)==(f->vx>0));
+    if(f->motion==MOTION_PLANT && f->motion_tick>=c->stop_plant_ticks && !sliding) {
+        f->motion=MOTION_SINK;f->motion_tick=0;
+    }
+    if(f->motion==MOTION_SINK && f->motion_tick>=c->stop_sink_ticks) {
+        f->motion=MOTION_RISE;f->motion_tick=0;
+    }
+    if(f->motion==MOTION_RISE && f->motion_tick>=c->stop_rise_ticks) {
+        f->motion=MOTION_IDLE;f->motion_tick=0;f->animation_tick=0;
+    }
+}
 static void simulate(void)
 {
     int old_x[]={fighters[0].x,fighters[1].x};
@@ -239,17 +287,7 @@ static void simulate(void)
         b->x+=a->facing*m.knockback*8*(blocked[p]?characters[1-p].block_knockback_percent:100)/characters[1-p].weight_percent;
         clamp_fighter(b);
     }
-    for(int p=0;p<2;p++) {
-        struct fighter *f=&fighters[p];
-        int direction=(int)controls[p].buttons[CHIRKY_BUTTON_RIGHT]-(int)controls[p].buttons[CHIRKY_BUTTON_LEFT];
-        int gait=direction && (f->x-old_x[p])*direction>0 && f->vx*direction>0 &&
-            !f->y && !f->attack && !f->stun && !f->crouch && !f->transition &&
-            !f->jump_wait && !f->landing && !f->blocking && !f->guard_release && f->health>0 ? direction*f->facing : 0;
-        /* Restart on a direction change, and stop at a wall or on interruption.
-           Opponent pushes and knockback must not animate a self-propelled step. */
-        f->walk_tick=gait && gait==f->walk_direction?f->walk_tick+1:0;
-        f->walk_direction=gait;
-    }
+    for(int p=0;p<2;p++)update_locomotion(p,old_x[p]);
     if(fighters[0].health<=0 || fighters[1].health<=0) {
         winner=fighters[0].health<=0?(fighters[1].health<=0?2:1):0;release_gate=true;
     }
@@ -363,13 +401,18 @@ static int fighter_frame(int p)
     if(f->y)return f->vy>=0?CC_JUMP_FIRST:CC_IDLE_FIRST;
     if(f->crouch)return CC_KNEEL_FIRST;
     if(f->jump_wait || f->landing)return CC_IDLE_FIRST+2;
-    if(f->walk_direction) {
+    if(f->motion==MOTION_PUSH)return CC_WALK_FIRST;
+    if(f->motion==MOTION_PLANT)return CC_WALK_FIRST+2;
+    if(f->motion==MOTION_SINK)return CC_IDLE_FIRST+2;
+    if(f->motion==MOTION_RISE)return CC_IDLE_FIRST+3;
+    if(f->motion==MOTION_WALK) {
         int durations[]={c->walk_0_ticks,c->walk_1_ticks,c->walk_2_ticks,c->walk_3_ticks};
-        unsigned tick=f->walk_tick%(durations[0]+durations[1]+durations[2]+durations[3]);
+        int distance=f->walk_distance;
         for(int i=0;i<4;i++) {
             int frame=f->walk_direction>0?i:(4-i)%4;
-            if(tick<(unsigned)durations[frame])return CC_WALK_FIRST+frame;
-            tick-=durations[frame];
+            int span=durations[frame]*c->walk_speed_fp8;
+            if(distance<span)return CC_WALK_FIRST+frame;
+            distance-=span;
         }
     }
     return CC_IDLE_FIRST+idle_frame(p);

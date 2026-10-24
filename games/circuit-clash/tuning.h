@@ -10,13 +10,17 @@
 /* This field list also generates the future editor's numeric schema. Speeds
    use eighths of a pixel per update; timers count game updates (nominally 60Hz). */
 #define CC_CHARACTER_FIELDS(X) \
- X(schema_version,7,7) \
+ X(schema_version,8,8) \
  X(health,1,10000) \
  X(weight_percent,25,400) \
  X(walk_speed_fp8,1,64) \
  X(back_speed_fp8,1,64) \
  X(ground_accel_fp8,1,64) \
  X(ground_brake_fp8,1,64) \
+ X(push_off_ticks,0,30) \
+ X(stop_plant_ticks,0,30) \
+ X(stop_sink_ticks,0,30) \
+ X(stop_rise_ticks,0,30) \
  X(air_speed_fp8,1,64) \
  X(air_accel_fp8,1,32) \
  X(jump_velocity_fp8,1,80) \

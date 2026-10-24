@@ -103,6 +103,12 @@ After `make web`, open <http://127.0.0.1:3030/play/> or use **Play in browser**
 from an editor. This player reads working-tree assets: save and restart the
 game to see data changes. C changes still require `make web`.
 
+Circuit Clash's **Animation workbench** previews the real movement simulation
+with frame scrubbing, live tuning and A/B takes. Build its local module with
+`wsl make animation-workbench NODE=node.exe`, then open it from the game's
+dashboard tools or Character balance page. See the
+[workbench guide](games/circuit-clash/README.md#animation-workbench).
+
 For Pi administration, override `host`, `user`, `remoteRoot` and optional
 `identityFile` in the gitignored `dashboard/config.local.json`; defaults are in
 [`dashboard/config.json`](dashboard/config.json). SSH/SCP and working key-based

@@ -77,6 +77,8 @@ test: $(GAME_TARGETS)
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/circuit_clash.c -o /tmp/circuit-clash-test
 	/tmp/circuit-clash-test
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/circuit_workbench.c -o /tmp/circuit-workbench-test
+	/tmp/circuit-workbench-test
 	$(NODE) --test tests/circuit_art.cjs
 	$(NODE) --test dashboard/character-tuning.test.js
 	$(NODE) --test tests/launcher_art.cjs
@@ -134,6 +136,12 @@ build/robot-preview/preview.js: tools/phosphor-preview.c games/phosphor-run/robo
 	$(EMCC) $(WEB_FLAGS) tools/phosphor-preview.c games/phosphor-run/robot.c src/rect_renderer.c -o $@
 
 .PHONY: robot-review
+.PHONY: animation-workbench
+animation-workbench: build/animation-workbench/circuit-clash/preview.js
+build/animation-workbench/circuit-clash/preview.js: tools/circuit-workbench.c games/circuit-clash/game.c games/circuit-clash/tuning.h games/circuit-clash/animation_layout.h $(WEB_HEADERS) .emscripten-version | check-web-toolchain
+	mkdir -p $(@D)
+	$(EMCC) $(WEB_FLAGS) tools/circuit-workbench.c -o $@
+
 robot-review:
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections tools/robot-review.c games/phosphor-run/robot.c src/rect_renderer.c -Wl,--gc-sections -l:libEGL.so.1 -l:libGLESv2.so.2 -lm -o build/robot-review

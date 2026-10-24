@@ -123,6 +123,7 @@ function listGames() {
       return { id: values.id || entry.name, name: values.name || entry.name,
         role: values.role || "game",
         characterTuning: fs.existsSync(path.join(root,entry.name,"content-schema.json")) && fs.existsSync(path.join(assetsPath,"characters")),
+        animationWorkbench: fs.existsSync(path.join(root,entry.name,"workbench.json")),
         order: Number(values.launcher_order ?? 1000),
         description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors, robotPreview: fs.existsSync(path.join(assetsPath,"models","robot.conf")) };
     }).filter(Boolean);
@@ -354,6 +355,13 @@ async function handle(request, response) {
       if(request.method==="PUT")return json(response,200,preview.save(await requestBody(request)));
       return json(response,405,{error:"Method not allowed"});
     }
+    const workbenchModule=/^\/animation-workbench\/([a-z0-9-]+)\/(preview\.(?:js|wasm))$/.exec(url.pathname);
+    if(request.method==="GET" && workbenchModule) {
+      characterTuning.workbench(workbenchModule[1]);
+      return sendFile(response,path.join(ROOT,"build","animation-workbench",workbenchModule[1],workbenchModule[2]));
+    }
+    const workbenchRoute=/^\/api\/games\/([a-z0-9-]+)\/animation-workbench$/.exec(url.pathname);
+    if(request.method==="GET" && workbenchRoute)return json(response,200,characterTuning.workbench(workbenchRoute[1]));
     if(request.method==="GET" && /^\/robot-preview\/(preview\.js|preview\.wasm)$/.test(url.pathname))
       return sendFile(response,path.join(ROOT,"build","robot-preview",path.basename(url.pathname)));
     if (request.method === "GET" && url.pathname === "/api/launcher") return json(response,200,await readLauncher());

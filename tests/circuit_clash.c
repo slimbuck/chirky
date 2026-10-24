@@ -47,12 +47,12 @@ static void movement_and_balance(const struct chirky_host_api *api)
     assert(!fighters[0].vx && !fighters[1].vx);characters[1]=approved;
     clean_simulation();
     controls[0].buttons[CHIRKY_BUTTON_DOWN]=true;simulate();
-    assert(fighters[0].crouch && fighters[0].transition==3 && body_height(0)==47);
+    assert(fighters[0].crouch && fighters[0].transition==approved.crouch_enter_ticks && body_height(0)==47);
     controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;
     for(int i=0;i<10;i++)simulate();
     assert(fighters[0].x==100*8);
-    controls[0].buttons[CHIRKY_BUTTON_DOWN]=false;simulate();assert(fighters[0].transition==3);
-    for(int i=0;i<3;i++)simulate();
+    controls[0].buttons[CHIRKY_BUTTON_DOWN]=false;simulate();assert(fighters[0].transition==approved.crouch_exit_ticks);
+    for(int i=0;i<approved.crouch_exit_ticks;i++)simulate();
     assert(fighters[0].x>100*8);
     clean_simulation();
     controls[0].button_pressed[CHIRKY_BUTTON_UP]=true;simulate();
@@ -141,21 +141,31 @@ static void malformed_tuning(void)
 static void animation_timing(const struct chirky_host_api *api)
 {
     assert(init(api,"games/circuit-clash/game.conf"));
-    /* Every held drawing lasts its configured duration in either direction. */
+    /* At full forward speed, distance-based holds equal the configured frames.
+       Enter on a passing foot after push-off, reverse traversal when retreating. */
+    struct character_tuning approved=characters[0];
+    characters[0].push_off_ticks=0;
+    characters[0].ground_accel_fp8=64;characters[0].back_speed_fp8=12;
     for(int direction=-1;direction<=1;direction+=2) {
         clean_simulation();fighters[0].x=100*8;fighters[1].x=230*8;
         controls[0].buttons[direction>0?CHIRKY_BUTTON_RIGHT:CHIRKY_BUTTON_LEFT]=true;
-        int durations[]={10,4,10,4};
+        int durations[]={approved.walk_0_ticks,approved.walk_1_ticks,approved.walk_2_ticks,approved.walk_3_ticks};
         for(int i=0;i<4;i++) {
-            int pose=direction>0?i:(4-i)%4;
+            int pose=direction>0?(i+1)%4:(3-i+4)%4;
             for(int t=0;t<durations[pose];t++) {
                 simulate();assert(fighter_frame(0)==CC_WALK_FIRST+pose);
             }
         }
-        simulate();assert(fighter_frame(0)==CC_WALK_FIRST);
+        simulate();assert(fighter_frame(0)==CC_WALK_FIRST+(direction>0?1:3));
         memset(controls,0,sizeof(controls));simulate();
-        assert(!fighters[0].walk_direction && !fighters[0].walk_tick && fighter_frame(0)<CC_WALK_FIRST);
+        assert(!fighters[0].walk_direction && !fighters[0].walk_distance);
+        assert(fighters[0].motion==MOTION_PLANT && fighter_frame(0)==CC_WALK_FIRST+2);
+        for(int t=1;t<approved.stop_plant_ticks;t++){simulate();assert(fighters[0].motion==MOTION_PLANT);}
+        for(int t=0;t<approved.stop_sink_ticks;t++){simulate();assert(fighter_frame(0)==CC_IDLE_FIRST+2);}
+        for(int t=0;t<approved.stop_rise_ticks;t++){simulate();assert(fighter_frame(0)==CC_IDLE_FIRST+3);}
+        simulate();assert(fighters[0].motion==MOTION_IDLE && fighter_frame(0)==CC_IDLE_FIRST);
     }
+    characters[0]=approved;
     clean_simulation();fighters[0].x=stage.wall_margin_px*8;
     controls[0].buttons[CHIRKY_BUTTON_LEFT]=true;
     for(int t=0;t<40;t++){simulate();assert(!fighters[0].walk_direction);}
@@ -164,14 +174,12 @@ static void animation_timing(const struct chirky_host_api *api)
     fighters[0].x=fighters[1].x-40*8;controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;
     for(int t=0;t<40;t++){simulate();assert(!fighters[0].walk_direction);}
     clean_simulation();fighters[1].x=230*8;
-    characters[0].walk_0_ticks=1;characters[0].walk_1_ticks=2;
+    characters[0].push_off_ticks=3;
     controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;
-    simulate();assert(fighter_frame(0)==CC_WALK_FIRST);
-    simulate();assert(fighter_frame(0)==CC_WALK_FIRST+1);
-    simulate();assert(fighter_frame(0)==CC_WALK_FIRST+1);
-    simulate();assert(fighter_frame(0)==CC_WALK_FIRST+2);
+    for(int t=0;t<3;t++){simulate();assert(fighters[0].motion==MOTION_PUSH && fighter_frame(0)==CC_WALK_FIRST);}
+    simulate();assert(fighters[0].motion==MOTION_WALK && fighter_frame(0)==CC_WALK_FIRST+1);
     controls[0].buttons[CHIRKY_BUTTON_RIGHT]=false;controls[0].buttons[CHIRKY_BUTTON_LEFT]=true;
-    for(int t=0;t<4;t++)simulate();
+    for(int t=0;t<12 && fighters[0].walk_direction!=-1;t++)simulate();
     assert(fighters[0].walk_direction==-1);
     controls[0].button_pressed[CHIRKY_BUTTON_PRIMARY]=true;simulate();
     assert(!fighters[0].walk_direction && fighter_frame(0)==CC_PUNCH_FIRST);
@@ -182,6 +190,61 @@ static void animation_timing(const struct chirky_host_api *api)
     fighters[0].action_tick=1+characters[0].punch_followthrough_ticks;assert(fighter_frame(0)==CC_PUNCH_FIRST+2);
     fighters[0].stun=5;assert(fighter_frame(0)==CC_IDLE_FIRST);
     shutdown();
+}
+static void responsive_locomotion(const struct chirky_host_api *api)
+{
+    assert(init(api,"games/circuit-clash/game.conf"));
+    struct character_tuning approved=characters[0];
+    int fast[18];
+    for(int take=0;take<2;take++) {
+        clean_simulation();fighters[1].y=1000000;
+        characters[0].ground_accel_fp8=take?1:12;
+        controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;
+        bool different=false;
+        for(int i=0;i<18;i++) {
+            simulate();if(!take)fast[i]=fighter_frame(0);else different|=fast[i]!=fighter_frame(0);
+        }
+        if(take)assert(different); /* Acceleration must change drawings, not just x. */
+    }
+    /* Equal travelled distance produces the same gait phase at different speeds. */
+    int phase[2];
+    for(int take=0;take<2;take++) {
+        characters[0]=approved;characters[0].push_off_ticks=0;characters[0].ground_accel_fp8=64;
+        characters[0].back_speed_fp8=take?6:12;
+        clean_simulation();fighters[1].x=230*8;controls[0].buttons[CHIRKY_BUTTON_LEFT]=true;
+        simulate(); /* first passing pose */
+        for(int i=0;i<(take?12:6);i++)simulate();
+        phase[take]=fighters[0].walk_distance;
+    }
+    assert(phase[0]==phase[1]);
+    /* Slow braking holds the planted feet, then always finishes through neutral. */
+    characters[0]=approved;characters[0].ground_brake_fp8=1;
+    clean_simulation();fighters[1].y=1000000;controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;
+    for(int i=0;i<18;i++)simulate();
+    controls[0].buttons[CHIRKY_BUTTON_RIGHT]=false;
+    for(int i=0;i<11;i++){simulate();assert(fighters[0].motion==MOTION_PLANT);}
+    simulate();assert(fighters[0].motion==MOTION_SINK);
+    for(int i=0;i<approved.stop_sink_ticks+approved.stop_rise_ticks;i++)simulate();
+    assert(fighters[0].motion==MOTION_IDLE && !fighters[0].animation_tick);
+    /* Zero visual holds disable transitions without delaying locomotion. */
+    characters[0].push_off_ticks=characters[0].stop_plant_ticks=0;
+    characters[0].stop_sink_ticks=characters[0].stop_rise_ticks=0;characters[0].ground_brake_fp8=64;
+    controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;simulate();assert(fighters[0].motion==MOTION_WALK);
+    controls[0].buttons[CHIRKY_BUTTON_RIGHT]=false;simulate();assert(fighters[0].motion==MOTION_IDLE);
+    /* Every transition remains interruptible by attacks, jumps, guard and crouch. */
+    for(int state=MOTION_PUSH;state<=MOTION_RISE;state++)for(int action=0;action<4;action++) {
+        characters[0]=approved;clean_simulation();fighters[1].x=230*8;
+        fighters[0].motion=state;fighters[0].walk_direction=1;
+        int button=action==0?CHIRKY_BUTTON_PRIMARY:action==1?CHIRKY_BUTTON_UP:CHIRKY_BUTTON_DOWN;
+        controls[0].buttons[button]=controls[0].button_pressed[button]=true;
+        if(action==3) {
+            controls[0].buttons[CHIRKY_BUTTON_DOWN]=false;
+            controls[0].buttons[CHIRKY_BUTTON_PRIMARY]=controls[0].buttons[CHIRKY_BUTTON_SECONDARY]=true;
+        }
+        simulate();assert(fighters[0].motion==MOTION_IDLE && !fighters[0].walk_direction);
+        assert(action==0?fighters[0].attack:action==1?fighters[0].jump_wait:action==2?fighters[0].crouch:fighters[0].blocking);
+    }
+    characters[0]=approved;shutdown();
 }
 static void jump_response(const struct chirky_host_api *api)
 {
@@ -196,8 +259,8 @@ static void jump_response(const struct chirky_host_api *api)
     assert(fighters[0].y==312 && !fighters[0].vy && fighter_frame(0)==CC_JUMP_FIRST);
     simulate();assert(fighters[0].vy==-6 && fighter_frame(0)==CC_IDLE_FIRST);
     while(fighters[0].y)simulate();
-    assert(fighters[0].landing==3 && fighter_frame(0)==CC_IDLE_FIRST+2);
-    for(int i=0;i<2;i++){simulate();assert(fighter_frame(0)==CC_IDLE_FIRST+2);}
+    assert(fighters[0].landing==characters[0].landing_ticks && fighter_frame(0)==CC_IDLE_FIRST+2);
+    for(int i=1;i<characters[0].landing_ticks;i++){simulate();assert(fighter_frame(0)==CC_IDLE_FIRST+2);}
     simulate();assert(!fighters[0].landing);
     for(int i=0;i<40;i++)simulate();
     assert(!fighters[0].y && !fighters[0].jump_wait); /* Holding up never auto-hops. */
@@ -205,7 +268,7 @@ static void jump_response(const struct chirky_host_api *api)
     clean_simulation();fighters[0].y=48;fighters[0].vy=-32;
     controls[0].button_pressed[CHIRKY_BUTTON_UP]=true;simulate();
     controls[0].button_pressed[CHIRKY_BUTTON_UP]=false;
-    for(int i=0;i<4;i++)simulate();
+    for(int i=0;i<1+characters[0].landing_ticks;i++)simulate();
     assert(fighters[0].jump_wait==1 && !fighters[0].jump_buffer);
     simulate();assert(fighters[0].y==48);
     /* An earlier press expires, and a disabled buffer preserves immediate input. */
@@ -293,6 +356,7 @@ static void aerial_attacks(const struct chirky_host_api *api)
     /* Each slot owns air timings; zero startup also selects the strike drawing. */
     clean_simulation();fighters[0].x=60*8;fighters[1].x=230*8;
     characters[1].air_kick_startup_ticks=0;characters[1].air_kick_active_ticks=1;
+    characters[1].air_kick_followthrough_ticks=0;
     for(int p=0;p<2;p++){fighters[p].y=80*8;controls[p].button_pressed[CHIRKY_BUTTON_SECONDARY]=true;}
     simulate();assert(!active_attack(0) && active_attack(1));
     assert(fighter_frame(0)==CC_JUMP_FIRST && fighter_frame(1)==CC_AIR_KICK_FIRST);
@@ -317,7 +381,8 @@ static void kick_and_kneel(const struct chirky_host_api *api)
     controls[0].button_pressed[CHIRKY_BUTTON_SECONDARY]=false;
     for(int t=0;t<c->kick_startup_ticks+c->kick_active_ticks+c->kick_recovery_ticks;t++) {
         int phase=t<c->kick_startup_ticks?0:t<c->kick_startup_ticks+c->kick_active_ticks?1:2;
-        assert(fighter_frame(0)==CC_KICK_FIRST+phase);
+        bool extended=t>=c->kick_startup_ticks && t<c->kick_startup_ticks+c->kick_active_ticks+c->kick_followthrough_ticks;
+        assert(fighter_frame(0)==CC_KICK_FIRST+(phase==0?0:extended?1:2));
         assert(active_attack(0)==(phase==1));
         assert(fighters[1].health==(phase==0?100:100-c->kick_damage));
         simulate();
@@ -391,15 +456,17 @@ static void explicit_guard_and_balance(const struct chirky_host_api *api)
     }
     /* A strike that missed its active window cannot hit on visual followthrough,
        even when the opponent moves into reach. Recovery still locks actions. */
-    for(int mode=0;mode<3;mode++) {
-        clean_simulation();fighters[0].attack=1;fighters[0].crouch=mode==1;fighters[0].air_attack=mode==2;
+    for(int mode=0;mode<3;mode++)for(int kind=1;kind<=2;kind++) {
+        clean_simulation();fighters[0].attack=kind;fighters[0].crouch=mode==1;fighters[0].air_attack=mode==2;
         if(mode==2)fighters[0].y=fighters[1].y=20*8;
         struct attack_tuning m=move_for(0);
         fighters[0].action_tick=m.startup+m.active;
-        int strike=mode==0?CC_PUNCH_FIRST+1:mode==1?CC_CROUCH_PUNCH_FIRST:CC_AIR_PUNCH_FIRST;
+        int strike=mode==0?(kind==1?CC_PUNCH_FIRST+1:CC_KICK_FIRST+1):
+                   mode==1?(kind==1?CC_CROUCH_PUNCH_FIRST:CC_CROUCH_KICK_FIRST):
+                           (kind==1?CC_AIR_PUNCH_FIRST:CC_AIR_KICK_FIRST);
         assert(fighter_frame(0)==strike && !active_attack(0) && !fighters[0].hit);
         controls[0].button_pressed[CHIRKY_BUTTON_SECONDARY]=true;
-        simulate();assert(fighters[0].attack==1 && fighters[1].health==100 && !fighters[0].hit);
+        simulate();assert(fighters[0].attack==kind && fighters[1].health==100 && !fighters[0].hit);
         fighters[0].action_tick=m.startup+m.active+m.followthrough;
         assert(fighter_frame(0)!=strike && !active_attack(0));
         fighters[0].action_tick=m.startup+m.active+m.recovery-1;
@@ -452,6 +519,6 @@ int main(void)
     api.screen_width=256;api.screen_height=192;tick(0,0,0);tick(16,16,0);tick(0,0,0);
     assert(rectangles && texts);
     shutdown();api.screen_width=288;api.screen_height=216;
-    movement_and_balance(&api);animation_timing(&api);jump_response(&api);kick_and_kneel(&api);aerial_attacks(&api);explicit_guard_and_balance(&api);malformed_tuning();
+    movement_and_balance(&api);animation_timing(&api);responsive_locomotion(&api);jump_response(&api);kick_and_kneel(&api);aerial_attacks(&api);explicit_guard_and_balance(&api);malformed_tuning();
     puts("Circuit Clash: joins, practice, movement, crouch, jump, attack windows, guard, weight, collision, KO, tuning validation and 1:1 sprites passed.");
 }

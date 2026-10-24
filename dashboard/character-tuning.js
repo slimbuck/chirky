@@ -43,7 +43,7 @@ function validate(schema,values) {
 }
 function listCharacters(game) {
   const schema=schemaFor(game),dir=path.join(gameDirectory(game),'assets/characters');
-  return {schema,characters:fs.readdirSync(dir).filter(n=>/^[a-z0-9][a-z0-9-]*\.conf$/.test(n)).map(n=>{
+  return {schema,workbench:fs.existsSync(path.join(gameDirectory(game),'workbench.json')),characters:fs.readdirSync(dir).filter(n=>/^[a-z0-9][a-z0-9-]*\.conf$/.test(n)).map(n=>{
     const id=n.slice(0,-5),v=parse(fs.readFileSync(characterFile(game,id),'utf8'));return {id,name:v.name};
   })};
 }
@@ -64,4 +64,12 @@ function saveCharacter(game,id,body) {
   const updated=text.replace(/^(\s*)(\w+)(\s*=).*$/gm,(line,space,key,eq)=>allowed.has(key)?`${space}${key}${eq}${body.values[key]}`:line);
   writeAtomic(file,updated);return {ok:true,hash:textHash(updated)};
 }
-module.exports={listCharacters,readCharacter,saveCharacter,parse,validate};
+function workbench(game) {
+  const root=gameDirectory(game),file=path.join(root,'workbench.json');
+  if(!fs.existsSync(file))fail('Animation workbench unavailable.',404);
+  const descriptor=JSON.parse(fs.readFileSync(file,'utf8'));
+  return {title:descriptor.title,module:`/animation-workbench/${game}/preview.js`,
+    manifest:JSON.parse(fs.readFileSync(editorAssetPath(root,descriptor.manifest),'utf8')),
+    stage:fs.readFileSync(editorAssetPath(root,descriptor.stage),'utf8')};
+}
+module.exports={listCharacters,readCharacter,saveCharacter,parse,validate,workbench};

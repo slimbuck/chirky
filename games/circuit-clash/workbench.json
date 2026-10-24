@@ -1,0 +1,5 @@
+{
+  "title": "Movement & animation",
+  "manifest": "art/manifest.json",
+  "stage": "assets/stages/dojo.conf"
+}

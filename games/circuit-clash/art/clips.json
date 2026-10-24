@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "cell_size": [
     96,
     96
@@ -82,7 +82,7 @@
         1,
         0
       ],
-      "note": "Body bob is baked into pixels. Reverse traversal when retreating."
+      "note": "Body bob is baked into pixels. Reverse traversal when retreating. Holds specify frames at full forward speed; actual travel advances the cycle. Push-off uses stance; stop plants wide-contact, then idle low and rise."
     },
     {
       "id": "punch",

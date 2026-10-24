@@ -62,16 +62,16 @@ and select its ID in game settings to compare different balances. It can share
 Arthur's atlas. Character creation/roster selection and level-editor UIs are
 future work; this prototype has one flat arena.
 
-Starting Arthur balance, in simulation frames at nominal 60 Hz:
+Arthur's Quick and planted balance, in simulation frames at nominal 60 Hz:
 
 | Move | Startup / active / recovery | Damage | Reach | On block, earliest contact |
 | --- | --- | --- | --- | --- |
-| Standing punch | 4 / 2 / 8 | 14 | 38 px | -5 |
-| Standing kick | 7 / 3 / 14 | 23 | 41 px | -9 |
-| Crouching punch | 3 / 2 / 7 | 10 | 32 px | -5 |
-| Crouching kick | 8 / 3 / 15 | 18 | 36 px | -11 |
-| Air punch | 4 / 3 / 9 | 12 | 41 px | -6 |
-| Air kick | 7 / 4 / 12 | 20 | 41 px | -8 |
+| Standing punch | 3 / 2 / 8 | 14 | 38 px | -5 |
+| Standing kick | 6 / 3 / 12 | 23 | 41 px | -7 |
+| Crouching punch | 3 / 2 / 6 | 10 | 32 px | -4 |
+| Crouching kick | 6 / 3 / 12 | 18 | 36 px | -8 |
+| Air punch | 3 / 3 / 7 | 12 | 41 px | -4 |
+| Air kick | 5 / 4 / 10 | 20 | 41 px | -6 |
 
 Kicks commit longer for more damage; punches recover sooner. The on-block
 comparison is `blockstun - active - recovery`, assuming first-active-frame
@@ -85,9 +85,11 @@ These are starting values, not a claim of final competitive balance.
 - Frame zero is the first startup frame; contact is possible for
   `startup <= action_tick < startup + active`. Zero startup hits immediately.
   Visual followthrough holds the strike pose into recovery without extending
-  the hit window, total move duration or action lock. Standing/crouching punches
-  add four followthrough frames and air punch adds three: each strike drawing
-  stays visible for six frames. Kicks currently add zero. Each move owns its
+  the hit window, total move duration or action lock. Standing punch adds five
+  followthrough frames, crouching punch four and air punch four: their strike
+  drawings stay visible for seven, six and seven frames. Standing/crouching kicks
+  add five followthrough frames and air kick four, holding each extension for
+  eight frames before retracting. Each move owns its
   own `followthrough_ticks`, which must be smaller than its recovery so at least
   one frame remains for retraction. Interrupted moves still leave the pose immediately.
 - The editor presents all timings as frames. Existing `_ticks` keys count these
@@ -100,16 +102,28 @@ These are starting values, not a claim of final competitive balance.
 - `weight_percent` scales received knockback by `100 / weight_percent`.
   `block_knockback_percent=50` halves it again when guarding.
 - `block_chord_ticks=2` is the early-startup allowance for the second button;
-  it cannot cancel a zero-startup move. `block_release_ticks=3` is guard recovery.
+  it cannot cancel a zero-startup move. `block_release_ticks=2` is guard recovery.
+- Crouch entry and exit each take two frames. Its smaller hurtbox applies
+  immediately; attacking waits until the entry transition finishes.
 - Jump uses one takeoff frame, approximately 39 px of rise, 23 frames from
-  launch to touchdown and three landing frames. `gravity_fp8` controls ascent,
+  launch to touchdown and two landing frames. `gravity_fp8` controls ascent,
   `fall_gravity_fp8` descent, and `max_fall_speed_fp8` caps falling velocity.
   `jump_buffer_ticks=6` retains fresh Up presses; holding Up does not repeat.
-- `air_attack_landing_ticks=5` applies to unfinished attacks on touchdown,
+- `air_attack_landing_ticks=4` applies to unfinished attacks on touchdown,
   taking the larger of that and normal landing recovery.
-- Idle holds are 12/10/13/10 frames; walk holds are 10/4/10/4. Retreat reverses
-  the gait, which restarts on direction changes and stops at walls. The walk's
-  one-pixel body dip is baked into the art; no extra runtime bob is added.
+- Idle holds are 16/5/10/5 frames. Walk holds (4/3/5/3) are measured at
+  full forward speed: each drawing covers `hold * walk_speed_fp8` eighth-pixels.
+  Actual travel advances the cycle, so acceleration, retreat and collisions
+  change pose progression. Retreat reverses the gait. Position remains integer
+  at draw time; the existing one-pixel body dip is baked into the artwork.
+- `push_off_ticks=2` holds the planted walk stance before the first passing foot.
+  Movement begins immediately. Releasing movement or meeting an obstacle plants
+  the wide-contact drawing for at least `stop_plant_ticks=2`, continuing while
+  braking displacement remains. `stop_sink_ticks=2` then uses idle's low drawing,
+  and `stop_rise_ticks=4` uses its rise drawing before restarting idle at neutral.
+  Each visual hold may be zero. New movement interrupts settling, reversal starts
+  a fresh push-off when velocity changes direction, and attacks, jumps, crouch,
+  guard and hit reactions always take priority. These phases add no action lock.
 
 Definitions use `key=value` and whole-line `#` comments. All fields are required;
 unknown, duplicate, missing and invalid values fail initialization. Character
@@ -117,7 +131,10 @@ names are 1-23 printable ASCII bytes and atlas paths stay under `assets/`.
 `content-schema.json` is generated from the C field list in `tuning.h` and
 supplies the editor's ranges, move groups and cross-field constraints.
 
-Characters now use `schema_version=7`; stages remain at 1. Migrate v6 by adding
+Characters now use `schema_version=8`; stages remain at 1. Migrate v7 by adding
+`push_off_ticks`, `stop_plant_ticks`, `stop_sink_ticks`, `stop_rise_ticks` and
+setting the version to 8. Zero disables each transition hold; the walk still
+uses travel rather than elapsed time. Migrate v6 by adding
 `followthrough_ticks` for each of the six move prefixes (zero preserves the old
 pose timing) and setting the version to 7. Migrate v5 by first adding
 the full crouching move definitions, seven missing power/geometry fields for
@@ -125,6 +142,54 @@ each air move, and the three block fields, then select the 22-cell atlas.
 Older versions also require walk durations, fall gravity, jump buffering and
 the kick/kneel layout introduced in versions 2-4. Use Arthur's complete current
 definition as a reference. No dashboard or network connection is needed to play.
+
+## Animation workbench
+
+Build the local preview with `wsl make animation-workbench NODE=node.exe`, then
+open `/animation-workbench.html?game=circuit-clash` in the dashboard. The game
+tools and Character balance page both link to it. This development module is
+separate from the public player and is not installed on the Pi.
+
+The initial study holds idle for 45 frames, walks forward for 18, releases
+movement for 12, presses punch once, then returns to idle for 45. The sequence
+waits for the longer A/B punch before the final idle hold. Sequence lengths are
+editable; both takes always receive identical inputs. It isolates one fighter
+with real wall limits, without an opponent's collision or combat reactions.
+
+- B is the working draft: ground speed, acceleration/braking, push-off and
+  plant/sink/rise frames, punch phases, follow-through, and each idle/walk
+  drawing's hold can be changed immediately. The motion timeline distinguishes
+  push-off, walk, plant/brake, sink and rise from the actual drawing names.
+- A starts from the character loaded from disk. Compare side by side, or choose
+  a named take as A. Saving B does not replace A during that session.
+- Pause, single-frame step, scrub or slow playback to 1/2, 1/4 or 1/10 speed.
+  The input, motion-phase and sprite timelines share the same frame cursor.
+- Onion skins show samples two frames before/after the cursor, where available.
+  Ground/anchor guides expose foot sliding; hitboxes distinguish active frames
+  from visual follow-through. Positions and velocities are reported in pixels.
+- Live controls record the same arrows and N/M input into both takes. The
+  on-screen buttons support touch and multiple simultaneous inputs. Scrubbing
+  replays the recording; Restart clears it. Recording pauses at 600 frames.
+- Named takes are stored in this browser, scoped to game, character and schema
+  version (up to 20). Keep a take before discarding or reloading an unsaved draft.
+  v7 takes remain available in v8: their values are retained and the four new
+  visual timers are inherited from the current character when loaded. They now
+  use the new movement-responsive gait; they are not replays of the old engine.
+- Only **Save character locally** writes character data, using the same
+  validation and stale-write checks as the balance editor. Reload the game to
+  use saved settings; deploying remains separate.
+
+`tools/circuit-workbench.c` compiles the actual game simulation and pose selector
+into a small development WASM module. It captures the game's own sprite draw
+rectangle, source cell and facing. The dashboard displays those existing atlas
+pixels at 1:1 inside the native viewport; CSS presentation uses integer physical
+pixel scales. Movement and pose selection are not duplicated in JavaScript.
+Each A/B instance has isolated simulation state. Deterministic reset/replay
+makes this useful for timing work; it is not a claim of platform-wide replay
+determinism or an implementation of a different character renderer.
+
+Verify with `node tools/animation-workbench-browser.cjs`. Native adapter checks
+also run under `make test`.
 
 ## Native artwork pipeline
 

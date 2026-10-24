@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "character": "arthur",
   "clips": [
     {
@@ -77,7 +77,7 @@
         1,
         0
       ],
-      "note": "Body bob is baked into pixels. Reverse traversal when retreating.",
+      "note": "Body bob is baked into pixels. Reverse traversal when retreating. Holds specify frames at full forward speed; actual travel advances the cycle. Push-off uses stance; stop plants wide-contact, then idle low and rise.",
       "first": 4,
       "source_sha256": "3dd9897ed2d34a56f68807c380a3bc44e72fe1efff15344db264cdc87db2bc9f"
     },

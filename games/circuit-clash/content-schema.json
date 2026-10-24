@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "format": "key=value",
   "unknown_fields": "reject",
   "duplicate_fields": "reject",
@@ -11,8 +11,8 @@
     {
       "key": "schema_version",
       "type": "integer",
-      "minimum": 7,
-      "maximum": 7,
+      "minimum": 8,
+      "maximum": 8,
       "required": true
     },
     {
@@ -55,6 +55,34 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "push_off_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
+      "required": true
+    },
+    {
+      "key": "stop_plant_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
+      "required": true
+    },
+    {
+      "key": "stop_sink_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
+      "required": true
+    },
+    {
+      "key": "stop_rise_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
       "required": true
     },
     {
