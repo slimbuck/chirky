@@ -78,6 +78,7 @@ test: $(GAME_TARGETS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/circuit_clash.c -o /tmp/circuit-clash-test
 	/tmp/circuit-clash-test
 	$(NODE) --test tests/circuit_art.cjs
+	$(NODE) --test dashboard/character-tuning.test.js
 	$(NODE) --test tests/launcher_art.cjs
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/console.c src/console.c -o /tmp/console-test
 	/tmp/console-test

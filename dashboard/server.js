@@ -122,12 +122,14 @@ function listGames() {
       const editors = loadEditors(entry.name).map(({ id, name, type, catalogKind, catalogId }) => ({ id, name, type, catalogKind, catalogId }));
       return { id: values.id || entry.name, name: values.name || entry.name,
         role: values.role || "game",
+        characterTuning: fs.existsSync(path.join(root,entry.name,"content-schema.json")) && fs.existsSync(path.join(assetsPath,"characters")),
         order: Number(values.launcher_order ?? 1000),
         description: values.description || "", artwork: fs.existsSync(path.join(assetsPath,"artwork","splash.png")) ? `/api/games/${encodeURIComponent(entry.name)}/artwork` : null, values, assets, editors, robotPreview: fs.existsSync(path.join(assetsPath,"models","robot.conf")) };
     }).filter(Boolean);
 }
 
 const launcherConfig=require("./launcher");
+const characterTuning=require("./character-tuning");
 const LAUNCHER_CONFIG=path.join(ROOT,"config","launcher.conf");
 let launcherSaving=false;
 async function readLauncher() {
@@ -268,7 +270,7 @@ const routes = {
       // scp overlays files, so explicitly retire the removed diagnostic package.
       const hasLauncher=(await ssh(`test -f ${config.remoteRoot}/config/launcher.conf && printf yes || true`)).stdout==="yes";
       if(!hasLauncher)await command("scp",[...scpArgs(),LAUNCHER_CONFIG,`${config.user}@${config.host}:${config.remoteRoot}/config/launcher.conf`]);
-      const built = await ssh(`cd ${config.remoteRoot} && rm -rf -- games/latency-test && rm -f -- build/games/latency-test.so include/frame_probe.h && make && sudo -n sh deploy/install-service.sh --user ${config.user}`, 60_000);
+      const built = await ssh(`cd ${config.remoteRoot} && rm -rf -- games/latency-test && rm -f -- build/games/latency-test.so include/frame_probe.h && make && sudo -n sh deploy/install-service.sh --user ${config.user}`, 180_000);
       legacyInstallation=false;
       json(response, 200, { ok: true, output: built.stdout || "Build is up to date." });
     } catch(error) { config.remoteRoot=previousRoot; throw error; }
@@ -356,16 +358,23 @@ async function handle(request, response) {
       return sendFile(response,path.join(ROOT,"build","robot-preview",path.basename(url.pathname)));
     if (request.method === "GET" && url.pathname === "/api/launcher") return json(response,200,await readLauncher());
     if (request.method === "PUT" && url.pathname === "/api/launcher") return await saveLauncher(request,response);
-    if (request.method === "GET" && url.pathname === "/api/status") return routes.status(request, response);
-    if (request.method === "GET" && url.pathname === "/api/games") return routes.games(request, response);
-    if (request.method === "PUT" && url.pathname === "/api/boot") return routes.boot(request, response);
-    if (request.method === "POST" && url.pathname === "/api/control") return routes.control(request, response);
-    if (request.method === "POST" && url.pathname === "/api/deploy") return routes.deploy(request, response);
-    if (request.method === "POST" && url.pathname === "/api/restart") return routes.restart(request, response);
-    if (request.method === "GET" && url.pathname === "/api/logs") return routes.logs(request, response);
-    if (request.method === "POST" && url.pathname === "/api/snapshot") return routes.snapshot(request, response);
+    if (request.method === "GET" && url.pathname === "/api/status") return await routes.status(request, response);
+    if (request.method === "GET" && url.pathname === "/api/games") return await routes.games(request, response);
+    if (request.method === "PUT" && url.pathname === "/api/boot") return await routes.boot(request, response);
+    if (request.method === "POST" && url.pathname === "/api/control") return await routes.control(request, response);
+    if (request.method === "POST" && url.pathname === "/api/deploy") return await routes.deploy(request, response);
+    if (request.method === "POST" && url.pathname === "/api/restart") return await routes.restart(request, response);
+    if (request.method === "GET" && url.pathname === "/api/logs") return await routes.logs(request, response);
+    if (request.method === "POST" && url.pathname === "/api/snapshot") return await routes.snapshot(request, response);
 
-    let match = /^\/api\/games\/([^/]+)\/config$/.exec(url.pathname);
+    let match = /^\/api\/games\/([^/]+)\/characters(?:\/([^/]+))?$/.exec(url.pathname);
+    if(match && request.method === "GET")return json(response,200,match[2]?
+      characterTuning.readCharacter(decodeURIComponent(match[1]),decodeURIComponent(match[2])):
+      characterTuning.listCharacters(decodeURIComponent(match[1])));
+    if(match && match[2] && request.method === "PUT")return json(response,200,
+      characterTuning.saveCharacter(decodeURIComponent(match[1]),decodeURIComponent(match[2]),await requestBody(request)));
+
+    match = /^\/api\/games\/([^/]+)\/config$/.exec(url.pathname);
     if (match && request.method === "GET") {
       const id = decodeURIComponent(match[1]);
       const file = path.join(gameDirectory(id), "game.conf");

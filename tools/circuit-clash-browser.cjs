@@ -6,6 +6,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function main(){
   const base=process.argv[2] || 'http://127.0.0.1:3030/play/';
   const out=path.resolve('build/circuit-clash-browser');fs.mkdirSync(out,{recursive:true});
+  const tuning=Object.fromEntries(fs.readFileSync('games/circuit-clash/assets/characters/arthur.conf','utf8').split(/\r?\n/).filter(l=>/^[a-z_0-9]+=\d+$/.test(l)).map(l=>{const [k,v]=l.split('=');return [k,+v];}));
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'chirky-fighter-'));
   const chrome=process.env.CHROME || (process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'chromium');
   const child=spawn(chrome,['--headless','--no-sandbox','--no-first-run','--use-angle=swiftshader',
@@ -107,8 +108,9 @@ async function main(){
     const moved=await page.eval('fighterProbe.fighters()');assert(moved[1].x<after[1].x-15);assert.equal(moved[0].x,after[0].x);
     await shot('independent-movement');
     await page.eval('testPads[0].buttons[0].pressed=true;fighterProbe.step()');await shot('punch-windup');
-    await page.eval('fighterProbe.step(4)');await shot('punch');
-    await page.eval('fighterProbe.step(2)');await shot('punch-retract');
+    await page.eval(`fighterProbe.step(${tuning.punch_startup_ticks})`);await shot('punch');
+    await page.eval(`fighterProbe.step(${tuning.punch_active_ticks})`);await shot('punch-followthrough');
+    await page.eval(`fighterProbe.step(${tuning.punch_followthrough_ticks})`);await shot('punch-retract');
     await page.eval('testPads[0].buttons[0].pressed=false;fighterProbe.step();testPads[1].buttons[12].pressed=true;fighterProbe.step(10)');await shot('jump');
     await page.eval('testPads[1].buttons[12].pressed=false;fighterProbe.step(55);testPads=testPads.slice(0,1);fighterProbe.step()');
     await shot('disconnected');
@@ -121,13 +123,13 @@ async function main(){
     await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'ArrowLeft',key:'ArrowLeft',windowsVirtualKeyCode:37});await page.eval('fighterProbe.step()');
     const keyboard=await page.eval('fighterProbe.fighters()');assert(keyboard[1].x<rejoined[1].x-10);assert.equal(keyboard[0].x,rejoined[0].x);
     assert.equal(await page.eval('fighterProbe.health()'),128);
-    for(let hit=0;hit<5;hit++){
+    for(let hit=0;hit<Math.ceil(tuning.health/tuning.punch_damage);hit++){
       await page.eval(`testPads[0].buttons[15].pressed=true;
         for(let i=0;i<100;i++){const f=fighterProbe.fighters();if(f[1].x-f[0].x<44)break;fighterProbe.step();}
         testPads[0].buttons[15].pressed=false;fighterProbe.step();
         testPads[0].buttons[0].pressed=true;fighterProbe.step(7);
         testPads[0].buttons[0].pressed=false;fighterProbe.step(24);`);
-      assert.equal(await page.eval('fighterProbe.health()'),Math.floor(128*(4-hit)/5));
+      assert.equal(await page.eval('fighterProbe.health()'),Math.floor(128*Math.max(0,tuning.health-(hit+1)*tuning.punch_damage)/tuning.health));
     }
     await shot('knockout');
     await page.eval('testPads[0].buttons[0].pressed=true;fighterProbe.step();testPads[0].buttons[0].pressed=false;fighterProbe.step()');
@@ -160,7 +162,9 @@ async function main(){
     }
     await page.call('Emulation.setDeviceMetricsOverride',{width:1000,height:800,deviceScaleFactor:1,mobile:false});
     await page.call('Emulation.setTouchEmulationEnabled',{enabled:false,maxTouchPoints:1});await delay(150);
-    await page.eval('fighterProbe.step(2)');await shot('punch-both-retract');
+    await page.eval(`fighterProbe.step(${tuning.punch_active_ticks})`);await shot('punch-both-followthrough');
+    fs.writeFileSync(path.join(out,'punch-followthrough.rgba'),Buffer.from(await page.eval('fighterProbe.pixels()')));
+    await page.eval(`fighterProbe.step(${tuning.punch_followthrough_ticks})`);await shot('punch-both-retract');
     await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyN',key:'n'});
     await page.eval('testPads[0].buttons[0].pressed=false;fighterProbe.step(8)');
     // A complete jump at native resolution, including both mirrored fighters.
@@ -186,11 +190,11 @@ async function main(){
     await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyM',key:'m'});
     await page.eval('testPads[0].buttons[2].pressed=true');
     assert.equal(await page.eval('fighterProbe.devices().filter(d=>d.mask&32).length'),2,'Pad and keyboard both request secondary');
-    for(let t=0;t<21;t++) {
+    for(let t=0;t<=tuning.kick_startup_ticks+tuning.kick_active_ticks+tuning.kick_recovery_ticks+2;t++) {
       await page.eval('fighterProbe.step()');
       fs.writeFileSync(path.join(out,`kick-${String(t).padStart(2,'0')}.rgba`),Buffer.from(await page.eval('fighterProbe.pixels()')));
-      if([0,6,9,18].includes(t))await shot('kick-phase-'+t);
-      if(t===6) {
+      if([0,tuning.kick_startup_ticks,tuning.kick_startup_ticks+tuning.kick_active_ticks,tuning.kick_startup_ticks+tuning.kick_active_ticks+tuning.kick_recovery_ticks].includes(t))await shot('kick-phase-'+t);
+      if(t===tuning.kick_startup_ticks) {
         await page.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2.625,mobile:true});
         await page.call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});await delay(200);
         await page.eval('window.ChirkyShell.resizePlayer()');await shot('kick-mobile-fractional');
@@ -210,11 +214,38 @@ async function main(){
     await page.eval('window.ChirkyShell.resizePlayer()');await shot('kneel-mobile-fractional');
     await page.call('Emulation.setDeviceMetricsOverride',{width:1000,height:800,deviceScaleFactor:1,mobile:false});
     await page.call('Emulation.setTouchEmulationEnabled',{enabled:false,maxTouchPoints:1});await delay(150);
-    // Both attacks rise from kneel with their standing collision body.
+    await page.eval('fighterProbe.step(5)');
+    for(const [name,button,code] of [['crouch_punch',0,'KeyN'],['crouch_kick',2,'KeyM']]) {
+      await page.call('Input.dispatchKeyEvent',{type:'keyDown',code,key:code});
+      await page.eval(`testPads[0].buttons[${button}].pressed=true;fighterProbe.step()`);await shot(name+'-windup');
+      await page.eval(`fighterProbe.step(${tuning[name+'_startup_ticks']})`);await shot(name+'-strike');
+      for(const [width,height,density,mobile] of [[390,844,2.625,true],[1000,800,1.25,false]]) {
+        await page.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:density,mobile});
+        await page.call('Emulation.setTouchEmulationEnabled',{enabled:mobile,maxTouchPoints:mobile?5:1});await delay(150);
+        await page.eval('window.ChirkyShell.resizePlayer()');await shot(name+(mobile?'-mobile':'-desktop')+'-fractional');
+      }
+      await page.call('Emulation.setDeviceMetricsOverride',{width:1000,height:800,deviceScaleFactor:1,mobile:false});await delay(150);
+      fs.writeFileSync(path.join(out,name+'.rgba'),Buffer.from(await page.eval('fighterProbe.pixels()')));
+      await page.eval(`fighterProbe.step(${tuning[name+'_active_ticks']})`);await shot(name+'-followthrough');
+      await page.eval(`fighterProbe.step(${tuning[name+'_followthrough_ticks']})`);await shot(name+'-retract');
+      await page.call('Input.dispatchKeyEvent',{type:'keyUp',code,key:code});
+      await page.eval(`testPads[0].buttons[${button}].pressed=false;fighterProbe.step(${tuning[name+'_recovery_ticks']+2})`);
+    }
+    await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyN',key:'n'});
     await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyM',key:'m'});
-    await page.eval('testPads[0].buttons[0].pressed=true;fighterProbe.step(7)');await shot('kneel-to-attacks');
+    await page.eval('testPads[0].buttons[0].pressed=testPads[0].buttons[2].pressed=true;fighterProbe.step(5)');await shot('crouch-block-both');
+    await page.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2.625,mobile:true});
+    await page.call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});await delay(150);
+    await page.eval('window.ChirkyShell.resizePlayer()');await shot('crouch-block-mobile');
+    await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'ArrowDown',key:'ArrowDown'});
+    await page.eval('testPads[0].buttons[13].pressed=false;fighterProbe.step(5)');await shot('block-mobile');
+    await page.call('Emulation.setDeviceMetricsOverride',{width:1000,height:800,deviceScaleFactor:1.25,mobile:false});
+    await page.call('Emulation.setTouchEmulationEnabled',{enabled:false,maxTouchPoints:1});await delay(150);
+    await page.eval('window.ChirkyShell.resizePlayer()');await shot('block-both');
+    await page.call('Emulation.setDeviceMetricsOverride',{width:1000,height:800,deviceScaleFactor:1,mobile:false});await delay(150);
+    await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyN',key:'n'});
     await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyM',key:'m'});
-    await page.eval('testPads[0].buttons[0].pressed=false;fighterProbe.step(20)');await shot('attacks-return-kneel');
+    await page.eval('testPads[0].buttons[0].pressed=testPads[0].buttons[2].pressed=false;fighterProbe.step(5)');
     await page.call('Input.dispatchKeyEvent',{type:'keyUp',code:'ArrowDown',key:'ArrowDown'});
     await page.eval('testPads[0].buttons[13].pressed=false;fighterProbe.step(5)');await shot('kneel-rise');
     // Air attacks use the approved native drawings, with independent timing.
@@ -224,7 +255,7 @@ async function main(){
     function poseRow(pixels,centre,frame,flip) {
       const left=Math.round(centre+.5)-48,samples=[];
       for(let y=0;y<96;y++)for(let x=0;x<96;x++) {
-        const a=(y*atlasWidth+frame*96+(flip?95-x:x))*4;
+        const a=((Math.floor(frame/manifest.atlas_columns)*96+y)*atlasWidth+(frame%manifest.atlas_columns)*96+(flip?95-x:x))*4;
         if(art[a+3])samples.push([x,y,a]);
       }
       for(let top=0;top<=144;top++) {
@@ -235,7 +266,7 @@ async function main(){
       }
       return -1;
     }
-    for(const [name,button,code,durations] of [['punch',0,'KeyN',[3,3,6]],['kick',2,'KeyM',[4,4,7]]]) {
+    for(const [name,button,code,durations] of [['punch',0,'KeyN',[tuning.air_punch_startup_ticks,tuning.air_punch_active_ticks,tuning.air_punch_recovery_ticks]],['kick',2,'KeyM',[tuning.air_kick_startup_ticks,tuning.air_kick_active_ticks,tuning.air_kick_recovery_ticks]]]) {
       await page.eval('fighterProbe.step(20)');
       await page.call('Input.dispatchKeyEvent',{type:'keyDown',code:'ArrowUp',key:'ArrowUp'});
       await page.eval('testPads[0].buttons[12].pressed=true;fighterProbe.step(3);testPads[0].buttons[12].pressed=false');
@@ -246,11 +277,12 @@ async function main(){
         await page.eval('fighterProbe.step()');
         const pixels=Buffer.from(await page.eval('fighterProbe.pixels()'));
         fs.writeFileSync(path.join(out,`air-${name}-${String(t).padStart(2,'0')}.rgba`),pixels);
-        if([0,durations[0],durations[0]+durations[1]].includes(t)) {
-          const phase=t===0?0:t===durations[0]?1:2;
-          const first=manifest.clips.find(c=>c.id===name).first;
+        const hold=tuning['air_'+name+'_followthrough_ticks'];
+        if([0,durations[0],durations[0]+durations[1],durations[0]+durations[1]+hold].includes(t)) {
+          const phase=t===0?0:t<durations[0]+durations[1]+hold?1:2;
+          const frame=manifest.clips.find(c=>c.id===(phase===1?'air_'+name:'jump')).first;
           const centres=await page.eval('fighterProbe.fighters()');
-          for(let p=0;p<2;p++)assert(poseRow(pixels,centres[p].x,first+phase,p===1)>=0,`Air ${name} phase ${phase}, facing ${p}`);
+          for(let p=0;p<2;p++)assert(poseRow(pixels,centres[p].x,frame,p===1)>=0,`Air ${name} phase ${phase}, facing ${p}`);
           await shot(`air-${name}-phase-${phase}`);
         }
         if(t===durations[0]) {
@@ -284,8 +316,8 @@ async function main(){
     assert(simultaneous[0].x>joined[0].x+10 && simultaneous[1].x<joined[1].x-10);
     await shot('two-keyboards');
     await key('ArrowDown');await page.eval('fighterProbe.step(6)');await shot('crouch');
-    await key('ArrowDown',false);await key('ArrowLeft');await page.eval('fighterProbe.step(6)');await shot('block');
-    await key('ArrowLeft',false);await page.eval('fighterProbe.step(4)');
+    await key('ArrowDown',false);await key('KeyN');await key('KeyM');await page.eval('fighterProbe.step(6)');await shot('block');
+    await key('KeyN',false);await key('KeyM',false);await page.eval('fighterProbe.step(4)');
     await tapKey('Escape');assert.notEqual(await page.eval('fighterProbe.state()'),4);
     await shot('keyboard-pause');
     await tapKey('Escape');assert.equal(await page.eval('fighterProbe.state()'),4);
@@ -299,13 +331,13 @@ async function main(){
     await key('ArrowLeft');await page.eval('fighterProbe.step(200)');await key('ArrowLeft',false);
     await page.eval('fighterProbe.step(3)');await shot('left-edge');
     assert.equal((await page.eval('fighterProbe.fighters()'))[0].x,41.5);
-    await key('KeyM');await page.eval('fighterProbe.step(7)');await shot('kick-left-edge');
-    await key('KeyM',false);await page.eval('fighterProbe.step(12)');
+    await key('KeyM');await page.eval(`fighterProbe.step(${tuning.kick_startup_ticks+1})`);await shot('kick-left-edge');
+    await key('KeyM',false);await page.eval(`fighterProbe.step(${tuning.kick_active_ticks+tuning.kick_recovery_ticks+1})`);
     await key('ArrowRight');await page.eval('fighterProbe.step(400)');await key('ArrowRight',false);
     await page.eval('fighterProbe.step(3)');await shot('right-edge');
     const edge=await page.eval('fighterProbe.fighters()');assert(edge[1].x<=278 && edge[1].x-edge[0].x>=40);
-    await key('KeyM');await page.eval('fighterProbe.step(7)');await shot('kick-right-edge');
-    await key('KeyM',false);await page.eval('fighterProbe.step(12)');
+    await key('KeyM');await page.eval(`fighterProbe.step(${tuning.kick_startup_ticks+1})`);await shot('kick-right-edge');
+    await key('KeyM',false);await page.eval(`fighterProbe.step(${tuning.kick_active_ticks+tuning.kick_recovery_ticks+1})`);
     await tapKey('Enter');await page.eval('fighterProbe.step(140)');await shot('practice-reset');
     assert.equal((await page.eval('fighterProbe.fighters()'))[0].x,87.5);
     for(const suffix of ['/circuit-clash.js','/circuit-clash.wasm','/characters/arthur.pam'])

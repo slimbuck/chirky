@@ -1,186 +1,167 @@
 # Circuit Clash
 
-A local fighting-game movement prototype with Arthur's approved 64-pixel-tall
-idle, bobbing walk, tucked jump, punch, kick and kneeling guard, solo practice,
-and two independent local players. Native Pi and
-browser use the same game code and tuning files. It is not a finished fighter.
+A local fighting-game prototype with Arthur's authored pixel art, six attacks,
+standing/crouching guard, solo practice and two independent local players.
+Native Pi and browser use the same portable game code and tuning definitions.
 
 ## Play
 
 Select Circuit Clash in the launcher. Release the launch button, then press
 Primary or Secondary to join. After joining alone, press Start for practice
 against a stationary dummy; Start resets the practice round. Alternatively,
-join a second input source for a local versus match.
+join a second input source. Both players press Primary to rematch after a KO.
 
 Default keyboard: P1 arrows + N/M; P2 WASD + F/G. Enter is Start, Escape is Menu.
-Bindings are remappable through the console. Controllers and browser touch use
-the same logical actions. A device can only own one player slot.
+Controller and browser touch controls use the same remappable logical actions.
 
-| Action | Control | Current behaviour |
+| Action | Control | Behaviour |
 | --- | --- | --- |
-| Walk | Left/right | Acceleration, braking, slower retreat; opposing directions cancel |
-| Jump | Up, fresh press | Quick takeoff, tucked rise, heavier descent, buffered input and landing recovery |
-| Kneel | Hold Down | One-knee guard; stops walking and lowers the collision body; transition timers lock attacks |
-| Punch | Primary | Fast attack on the ground or in the air, with startup, contact window and recovery |
-| Kick | Secondary | Stronger, compact side kick on the ground or in the air |
-| Block | Hold away from opponent | Retreating guard; Down + away crouch-blocks; no chip damage |
-| Reset practice | Start | Resets health, positions and countdown |
-| Pause | Menu | Normal console pause, available to either player |
+| Walk | Left/right | Acceleration, braking and slower retreat |
+| Jump | Fresh Up press | Quick launch, tucked rise, heavier descent and buffered input |
+| Crouch | Hold Down | One-knee pose and lower collision body |
+| Punch | Primary | Quick attack; different moves standing, crouching and airborne |
+| Kick | Secondary | Slower, stronger attack in each stance |
+| Block | Hold Primary + Secondary | Stationary frontal guard; add Down for crouching guard |
+| Practice reset | Start | Resets health, positions and countdown |
+| Pause | Menu | Shared console pause |
 
-Punch and kick can start while rising or falling. Air attacks retain jump
-momentum, steering and gravity, and use the approved attack drawings with
-separate phase timings. Their hitboxes follow their height, allowing air-to-air
-and jumping attacks against grounded opponents. Landing cancels an unfinished
-air attack before contact resolution and applies landing recovery. Attacking from kneel rises into the standing
-punch or kick, including the full standing collision body. Holding Down returns
-to kneel after recovery; dedicated low attacks are future work. One
-press gives one strike. Attack contacts resolve simultaneously, allowing trades
-and double KOs. Both players press Primary to rematch; practice needs one.
-Ground guard covers both grounded and aerial attacks; high/low mixups and air
-blocking are future work. Missing devices freeze play, preserve the round, and allow an unassigned
-source to claim the missing slot followed by release and a resume countdown.
+Backwards movement no longer blocks. The two-button chord tolerates slightly
+staggered presses by cancelling only the first configured startup frames,
+strictly before the attack becomes active. Active frames and recovery cannot
+be cancelled into guard. Releasing guard briefly locks actions; releasing one
+button does not attack. A fresh press is required.
 
-## Character and arena tuning
+Crouching attacks remain low for their full duration, including the collision
+body. Air attacks use tucked legs and retain steering, momentum and gravity.
+Their hitboxes follow their height, allowing air-to-air contacts. Touchdown
+cancels an unfinished air attack before contact resolution and applies landing
+recovery. One press gives one strike; another fresh press is allowed after
+recovery. Hitstun interrupts attacks and cannot be converted into guard.
 
-`game.conf` selects `player1_character`, `player2_character` and `stage` by stable
-ID. IDs resolve to `assets/characters/<id>.conf` and `assets/stages/<id>.conf`.
-The two player slots load independent definitions even when both select Arthur.
-To experiment with a different fighter's balance, duplicate Arthur's definition
-under a new ID, adjust it, and select that ID for either slot. It may initially
-share Arthur's atlas. Character selection UI is not implemented yet.
+Holding guard continues protection through blockstun. Standing and crouching
+guard currently cover all attack heights, without chip damage. High/low mixups,
+air guard, throws, hit-reaction and knockdown animations remain future work.
+Contacts resolve simultaneously, allowing trades and double KOs. Missing input
+devices freeze the round and allow an unassigned device to claim the vacant
+slot, followed by release and a resume countdown.
 
-All character/stage fields are required and validated on load. Unknown,
-duplicate, missing, out-of-range and nonnumeric numeric fields are rejected;
-invalid content fails initialization instead of silently playing with defaults.
-Characters use `schema_version=5`; stages remain at `schema_version=1`.
-Version 2 added four required walk durations and the eleven-cell animation atlas.
-Version 3 adds `fall_gravity_fp8`, `jump_buffer_ticks` and a twelfth cell for
-the airborne tuck. To migrate v2, add the two fields, select a compatible atlas
-and update the version. Version 4 adds three kick cells and one kneeling cell;
-v3 characters need a compatible sixteen-cell atlas and a version update, with
-no additional numeric fields. Version 5 adds `air_punch_startup_ticks`,
-`air_punch_active_ticks`, `air_punch_recovery_ticks`, the corresponding three
-`air_kick_*` fields, and `air_attack_landing_ticks`. To migrate v4, add these
-seven fields and update the version; the sixteen-cell atlas is unchanged.
-Tune crouching height to match the new pose
-(Arthur uses 47 px for his 53-pixel-tall kneel). To migrate v1, also add `walk_0_ticks` through
-`walk_3_ticks`. Files use `key=value` and
-whole-line `#` comments. Character display names are 1–23 printable ASCII bytes;
-atlas paths stay under the game's assets directory.
+## Character balance
 
-- `_ticks`: simulation updates, nominally 60 per second. Browser runs at 60 Hz;
-  native currently follows display presentation, as documented by the platform.
-  No claim of cross-platform replay determinism is made.
-- `_px`: framebuffer pixels. Collision dimensions are independent of art padding.
-- `_fp8`: eighths of a framebuffer pixel; velocities per update, acceleration
-  and gravity per update squared. `walk_speed_fp8=12` means 1.5 px/update
-  (90 px/second at 60 Hz). Drawing rounds to integer positions.
-- `weight_percent`: received knockback multiplier is `100 / weight_percent`.
-  200 means half normal knockback. Jump gravity is tuned separately.
-- `idle_0_ticks` through `idle_3_ticks`: each drawing's duration. The approved
-  200/160/220/160 ms preview is rounded to 12/10/13/10 updates. It is never used
-  to determine an attack's startup, hit window or recovery.
-- Punch/kick: startup, active and recovery durations; damage; horizontal reach
-  from the body centre; bottom/top of the hitbox above the feet; hitstun,
-  blockstun and knockback. Tick zero is the action's first startup tick; contact
-  is possible for `startup <= action_tick < startup + active`. Zero startup
-  allows immediate contact. Stun/recovery prevent starting a new action.
-- `walk_0_ticks` through `walk_3_ticks`: durations of contact, lead lift, wide
-  contact and rear follow. Arthur uses 10/4/10/4 ticks: held contacts with quick
-  passing poses. Retreat traverses the drawings in reverse. The cycle restarts
-  when movement starts or reverses, and stops at a wall or on interruption.
-- Arthur's primary punch holds wind-up/strike/retract for 4/2/7 ticks, about
-  0.22 seconds at 60 Hz. The strike drawing shares the exact active hit window;
-  changing combat timing also changes pose timing. There is no interpolation.
-- Secondary kick holds chamber/strike/recoil for 6/3/9 ticks, 0.30 seconds at
-  60 Hz. Recoil reuses the chamber drawing. The extended leg is shown only
-  during the active hit window. Kneel entry and exit retain their three-tick
-  action locks; the silhouette changes immediately with the collision body.
-- Air punch holds wind-up/strike/retract for 3/3/6 ticks; air kick uses 4/4/7.
-  These six `air_punch_*`/`air_kick_*` phase fields can be tuned independently
-  per character. Damage, reach, hitbox height, stun and knockback currently share
-  the corresponding grounded move's values. Finishing recovery permits another
-  fresh attack press in the same jump; holding a button never repeats it.
-  Touchdown during an air attack cancels it and locks actions for the larger of
-  `landing_ticks` and `air_attack_landing_ticks` (Arthur: four ticks). An attack
-  that finishes before touchdown uses ordinary landing recovery. Hitstun
-  interrupts air attacks. There is no air guard or attack-induced hover.
-- Movement: forward/back speed, ground acceleration/braking, air speed/control,
-  jump impulse/gravity/fall cap, takeoff, landing and crouch transition delays.
-- Jump: Arthur has one takeoff tick, about 39 px of rise, 23 updates from launch
-  to touchdown (about 0.38 seconds), and three landing ticks. `gravity_fp8`
-  controls ascent; `fall_gravity_fp8` controls descent. `jump_buffer_ticks=6`
-  retains a fresh Up press for up to 100 ms while waiting for a legal takeoff,
-  including landing recovery. Zero disables buffering. Holding Up never repeats
-  a jump. Receiving a hit clears the queued jump. Rise, apex, descent and landing
-  drawings follow physics; the air pose does not stretch or move the sprite origin.
-- Stage: floor height, wall inset, spawn percentages of the logical viewport,
-  countdown duration. Stage geometry is game-local; the host still owns CRT
-  safe-area centring. This prototype has one flat arena, not a tile level.
+Open **Edit games / Circuit Clash / Character balance** in the dashboard, or
+`/balance.html?game=circuit-clash`. It lists every character definition and
+shows all six moves side by side. Numeric controls cover timings, damage,
+reach, hitbox height, stun, knockback, movement, weight, guard and animation.
+Saves stay local, preserve comments, validate ranges/cross-field rules and
+reject stale writes. Restart the browser game after saving. Pi and public-site
+updates still require explicit deployment.
 
-`content-schema.json` exposes field types/ranges and cross-field constraints for
-future dashboard character/stage editors. It is generated from the same field
-list as the C validator (`tuning.h`), with regression coverage against drift.
-The existing dashboard can edit game settings; **character and stage editor UIs
-are future work**. No dashboard or network service is needed during play.
+`game.conf` selects `player1_character`, `player2_character` and `stage` by ID.
+Definitions live in `assets/characters/<id>.conf` and `assets/stages/<id>.conf`.
+Both player slots load independent values. Duplicate a character definition
+and select its ID in game settings to compare different balances. It can share
+Arthur's atlas. Character creation/roster selection and level-editor UIs are
+future work; this prototype has one flat arena.
 
-For local balance changes, edit the relevant `.conf`, refresh the browser page,
-and relaunch. Browser content is cached for the page lifetime, so pause/resume
-alone does not reload tuning. C changes require `make web`; static packaged web
-assets also need rebuilding. Pi changes use the dashboard's normal deployment
-and reload path. Definitions are loaded once and stay fixed for a round/session.
-Set `show_boxes=1` in `game.conf` to show collision bodies and active hitboxes.
+Starting Arthur balance, in simulation frames at nominal 60 Hz:
 
-## Artwork and remaining animation work
+| Move | Startup / active / recovery | Damage | Reach | On block, earliest contact |
+| --- | --- | --- | --- | --- |
+| Standing punch | 4 / 2 / 8 | 14 | 38 px | -5 |
+| Standing kick | 7 / 3 / 14 | 23 | 41 px | -9 |
+| Crouching punch | 3 / 2 / 7 | 10 | 32 px | -5 |
+| Crouching kick | 8 / 3 / 15 | 18 | 36 px | -11 |
+| Air punch | 4 / 3 / 9 | 12 | 41 px | -6 |
+| Air kick | 7 / 4 / 12 | 20 | 41 px | -8 |
 
-Animation direction: short, sharp limited animation, with strong held poses and
-quick transitions, taking the original Gorillaz *Clint Eastwood* video as a
-rhythm reference. Continue this approach for future moves; avoid soft tweening.
+Kicks commit longer for more damage; punches recover sooner. The on-block
+comparison is `blockstun - active - recovery`, assuming first-active-frame
+contact. Later contact improves it, and landing can shorten an air move.
+Actual punishes also depend on spacing, pushback and guard-release timing.
+These are starting values, not a claim of final competitive balance.
 
-The shipped atlas preserves the approved four idle frames exactly, including
-the one-pixel eye-highlight correction. Cells are 96x96 with transparent
-padding; the visible neutral character is 64 pixels tall. Source texels and
-destination pixels are always 1:1, with origin at (48,80). Grounded feet reach
-row 79; lifted walk feet have explicit per-frame rows in the manifest. There
-is no runtime scaling or additional bob. Walk contacts contain a one-pixel body
-dip, with lower legs left in place. Revised punch/kick frames let the torso, shoulders, arms and head
-move together: a pronounced backward lean counterbalances the kick, while the
-punch has a smaller wind-up and forward shoulder drive. White eye highlights
-are anchored to each moving face, rather than freezing the head in place.
-Punch retains its previous native lower-body pixels from row 56 downward.
-Kick v4 uses an intermediate leg length while retaining every other v2 pixel,
-including the lean and support foot. Its toe ends at cell x88; gameplay reach is
-41 px, nine pixels beyond v3 and five inside the original v2 kick.
-Previous art remains as reference sheets. Shipped attack sources are
-`punch-balanced-v2.png` and `kick-proportioned-v4.png`; the manifest records the
-kick's exact edited region and extent for regression checks.
+- All six move prefixes (`punch`, `kick`, `crouch_punch`, `crouch_kick`,
+  `air_punch`, `air_kick`) own eleven independent fields: startup, active,
+  recovery, visual followthrough, damage, reach, bottom/top, hitstun, blockstun and knockback.
+- Frame zero is the first startup frame; contact is possible for
+  `startup <= action_tick < startup + active`. Zero startup hits immediately.
+  Visual followthrough holds the strike pose into recovery without extending
+  the hit window, total move duration or action lock. Standing/crouching punches
+  add four followthrough frames and air punch adds three: each strike drawing
+  stays visible for six frames. Kicks currently add zero. Each move owns its
+  own `followthrough_ticks`, which must be smaller than its recovery so at least
+  one frame remains for retraction. Interrupted moves still leave the pose immediately.
+- The editor presents all timings as frames. Existing `_ticks` keys count these
+  same simulation frames, nominally 60 per second. Native currently
+  follows display presentation; cross-platform replay determinism is not claimed.
+- `_px` measures framebuffer pixels. Reach starts at the body centre; hitbox
+  bottom/top are relative to the fighter's ground origin, including in the air.
+- `_fp8` is eighths of a framebuffer pixel: velocity per update, acceleration
+  per update squared. Rendering rounds positions to integers.
+- `weight_percent` scales received knockback by `100 / weight_percent`.
+  `block_knockback_percent=50` halves it again when guarding.
+- `block_chord_ticks=2` is the early-startup allowance for the second button;
+  it cannot cancel a zero-startup move. `block_release_ticks=3` is guard recovery.
+- Jump uses one takeoff frame, approximately 39 px of rise, 23 frames from
+  launch to touchdown and three landing frames. `gravity_fp8` controls ascent,
+  `fall_gravity_fp8` descent, and `max_fall_speed_fp8` caps falling velocity.
+  `jump_buffer_ticks=6` retains fresh Up presses; holding Up does not repeat.
+- `air_attack_landing_ticks=5` applies to unfinished attacks on touchdown,
+  taking the larger of that and normal landing recovery.
+- Idle holds are 12/10/13/10 frames; walk holds are 10/4/10/4. Retreat reverses
+  the gait, which restarts on direction changes and stops at walls. The walk's
+  one-pixel body dip is baked into the art; no extra runtime bob is added.
 
-**Idle, walk, airborne tuck, punch, kick and kneel are authored.** Jump rises in the
-tucked pose, extends into neutral on descent and uses low idle for the brief
-takeoff/landing compression. Kneel uses a grounded one-knee guard with Arthur's
-approved upper body moved down eleven whole pixels. His face, fists and headband
-remain unchanged; the pose is retained through kneeling hit/block stun.
-The state labels and optional boxes make these mechanics inspectable. Dedicated
-air-specific attack silhouettes, standing block, low attacks, reaction and knockdown drawings are still
-needed; the prototype does not procedurally squash or redraw Arthur.
+Definitions use `key=value` and whole-line `#` comments. All fields are required;
+unknown, duplicate, missing and invalid values fail initialization. Character
+names are 1-23 printable ASCII bytes and atlas paths stay under `assets/`.
+`content-schema.json` is generated from the C field list in `tuning.h` and
+supplies the editor's ranges, move groups and cross-field constraints.
 
-One production export command (Python with Pillow installed):
+Characters now use `schema_version=7`; stages remain at 1. Migrate v6 by adding
+`followthrough_ticks` for each of the six move prefixes (zero preserves the old
+pose timing) and setting the version to 7. Migrate v5 by first adding
+the full crouching move definitions, seven missing power/geometry fields for
+each air move, and the three block fields, then select the 22-cell atlas.
+Older versions also require walk durations, fall gravity, jump buffering and
+the kick/kneel layout introduced in versions 2-4. Use Arthur's complete current
+definition as a reference. No dashboard or network connection is needed to play.
+
+## Native artwork pipeline
+
+Animation stays short and sharp: held poses with quick transitions, following
+the rhythm of the original Gorillaz *Clint Eastwood* video. The visible neutral
+Arthur is 64 pixels tall. All source and destination cells are exactly 96x96,
+with anchor (48,80), transparent gutters and grounded feet at row 79. Airborne
+and lifted feet have explicit per-frame rows in the manifest. No runtime
+scaling, interpolation or procedural redrawing is used.
+
+The revised ground punch has a small shoulder drive; the kick has a pronounced
+backward lean. `kick-proportioned-v4.png` ends at cell x88, between the earlier
+long/short variants. Air punch/kick tuck the supporting legs. Crouching punch
+and sweep stay low. Block poses close both arms in front of the face. White eye
+glints and the approved character palette are preserved at the native grid.
+
+One production command, using Python with Pillow:
 
 ```sh
 python tools/build-circuit-art.py
 ```
 
-It reads `art/clips.json`, copies the native idle, walk and punch PNG cells
-plus jump, kick and kneel into the 1536x96 portable RGBA PAM atlas, then writes `art/manifest.json`,
-`animation_layout.h` and `content-schema.json`. The layout assigns cells 0–3
-to idle, 4–7 to walk, 8–10 to punch, 11 to jump, 12–14 to kick and 15 to kneel. It does **not** regenerate
-AI artwork, resize the sprite or change its palette. `--output <directory>`
-exports into a temporary directory for byte comparisons. `art/manifest.json`
-records dimensions, frame order, baseline, hashes and pending clips. Intentional
-art changes require reviewing and replacing the approved source, then exporting.
-The generation prompts for all clips are retained in `art/arthur/*generation-prompts.json`;
-exploratory high-resolution sources/reduction scripts remain in `output/` and
-are not part of the runtime pipeline or the published package.
+It reads `art/clips.json`, copies the approved PNG cells into a 1536x192 RGBA
+PAM atlas, and writes `art/manifest.json`, `animation_layout.h` and the tuning
+schema. `--output <directory>` supports temporary, byte-compared regeneration.
+The 16-column atlas keeps indices 0-15 in their original order: idle, walk,
+punch, jump, kick, kneel. Row two holds air punch/kick, crouching punch/kick
+and standing/crouching block at indices 16-21; unused cells are transparent.
+Air/low attacks use jump/kneel guard drawings during startup and recovery,
+and their distinct strike drawing during active frames plus configured visual
+followthrough. Followthrough is part of recovery and cannot hit.
+
+The exporter never regenerates AI art, resizes sprites or changes their palette.
+Reviewed native source sheets and generation prompts live in `art/arthur/`.
+High-resolution sources and the established grid/palette reduction experiments
+live under ignored `output/`. Intentional art changes require reviewing the
+native result and updating the source and manifest, not manually patching PAMs.
 
 ## Validation
 
@@ -188,14 +169,13 @@ are not part of the runtime pipeline or the published package.
 wsl make test NODE=node.exe
 wsl make web NODE=node.exe
 node tools/circuit-clash-browser.cjs http://127.0.0.1:3030/play/
+node tools/character-balance-browser.cjs
 ```
 
-Tests cover device gates, disconnects/rejoins, rematches, practice reset,
-movement, jump arc, crouch transitions, independent tuning, exact attack windows
-and corresponding punch poses, configurable forward/reverse walk holds,
-air attack timing/steering/contacts, anti-air interruption, landing cancellation,
-blocking through blockstun, weight, collisions and 1:1 draws. Asset checks decode
-the authored PNGs and byte-compare runtime pixels, both foot baselines, binary
-alpha, gutters, the corrected highlight and preserved punch details. Browser
-checks capture every walk/punch drawing in both facings and run real WASM with
-simulated input devices; physical Pi/controller testing remains a separate step.
+Portable tests cover input ownership, guard chords/recovery, all six attack
+windows, crouching collision height, air movement/landing, trades, damage,
+weight, per-character tuning and 1:1 sprite draws. Asset tests compare runtime
+pixels with reviewed PNGs, dimensions, gutters, baselines and semantic details.
+Browser tests use real WASM, both facings and fractional desktop/mobile sizes.
+The balance editor tests saving, validation and stale-write protection. Physical
+Pi/controller verification remains a separate deployment step.

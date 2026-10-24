@@ -1,0 +1,10 @@
+main > .panel {min-width:0}
+.balance-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.balance-fields fieldset {min-width:0;margin:0}.balance-fields legend {font-size:18px;font-weight:650;padding:0 8px}
+.balance-inputs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.balance-inputs label {display:flex;flex-direction:column;gap:5px;color:var(--muted)}
+.balance-inputs input,select {min-width:0;max-width:100%;padding:8px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+.balance-inputs small {font-size:11px}.balance-scroll {overflow:auto}#comparison {width:100%;border-collapse:collapse;text-align:left;white-space:nowrap}
+#comparison th,#comparison td {padding:10px;border-bottom:1px solid var(--line)}#comparison th {color:var(--muted)}
+#status[data-error="true"] {color:var(--red)}#status {min-height:20px;color:var(--cyan)}
+@media(max-width:720px){.balance-fields{grid-template-columns:1fr}.topbar{padding:0 16px}.topbar h1{font-size:16px}.panel-head{flex-wrap:wrap}}

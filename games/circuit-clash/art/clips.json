@@ -1,61 +1,367 @@
 {
-  "version": 4,
-  "cell_size": [96, 96],
-  "anchor": [48, 80],
+  "version": 7,
+  "cell_size": [
+    96,
+    96
+  ],
+  "anchor": [
+    48,
+    80
+  ],
   "clips": [
     {
       "id": "idle",
       "source": "art/arthur/idle-approved.png",
-      "names": ["neutral", "descend", "low", "rise"],
-      "feet_rows": [[79, 79], [79, 79], [79, 79], [79, 79]],
-      "timing_fields": ["idle_0_ticks", "idle_1_ticks", "idle_2_ticks", "idle_3_ticks"]
+      "names": [
+        "neutral",
+        "descend",
+        "low",
+        "rise"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "idle_0_ticks",
+        "idle_1_ticks",
+        "idle_2_ticks",
+        "idle_3_ticks"
+      ]
     },
     {
       "id": "walk",
       "source": "art/arthur/walk-approved.png",
-      "names": ["stance", "lead-lift", "wide-contact", "rear-follow"],
-      "feet_rows": [[79, 79], [79, 73], [79, 79], [75, 79]],
-      "timing_fields": ["walk_0_ticks", "walk_1_ticks", "walk_2_ticks", "walk_3_ticks"],
-      "body_bob_px": [1, 0, 1, 0],
+      "names": [
+        "stance",
+        "lead-lift",
+        "wide-contact",
+        "rear-follow"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          73
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          75,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "walk_0_ticks",
+        "walk_1_ticks",
+        "walk_2_ticks",
+        "walk_3_ticks"
+      ],
+      "body_bob_px": [
+        1,
+        0,
+        1,
+        0
+      ],
       "note": "Body bob is baked into pixels. Reverse traversal when retreating."
     },
     {
       "id": "punch",
+      "followthrough_field": "punch_followthrough_ticks",
       "source": "art/arthur/punch-balanced-v2.png",
       "planted_reference": "art/arthur/punch-authored.png",
-      "eye_highlights": [[[49,34],[57,33]],[[59,35],[67,35]],[[52,34],[59,32]]],
-      "names": ["windup", "strike", "retract"],
-      "feet_rows": [[79, 79], [79, 79], [79, 79]],
-      "timing_fields": ["punch_startup_ticks", "punch_active_ticks", "punch_recovery_ticks"],
+      "eye_highlights": [
+        [
+          [
+            49,
+            34
+          ],
+          [
+            57,
+            33
+          ]
+        ],
+        [
+          [
+            59,
+            35
+          ],
+          [
+            67,
+            35
+          ]
+        ],
+        [
+          [
+            52,
+            34
+          ],
+          [
+            59,
+            32
+          ]
+        ]
+      ],
+      "names": [
+        "windup",
+        "strike",
+        "retract"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "punch_startup_ticks",
+        "punch_active_ticks",
+        "punch_recovery_ticks"
+      ],
       "note": "Small torso wind-up and forward shoulder drive. Native rows 56-95 retain the planted lower body. Poses follow gameplay phases; no interpolation or extra visual delay."
     },
     {
       "id": "jump",
       "source": "art/arthur/jump-authored.png",
-      "names": ["tuck"],
-      "feet_rows": [[68, 69]],
-      "timing_fields": [null],
+      "names": [
+        "tuck"
+      ],
+      "feet_rows": [
+        [
+          68,
+          69
+        ]
+      ],
+      "timing_fields": [
+        null
+      ],
       "note": "Tuck while rising; neutral feet extend on descent. Low idle at takeoff and landing. Physics drives pose selection; airborne feet intentionally clear the baseline."
     },
     {
       "id": "kick",
+      "followthrough_field": "kick_followthrough_ticks",
       "source": "art/arthur/kick-proportioned-v4.png",
       "planted_reference": "art/arthur/kick-balanced-v2.png",
-      "edited_region": {"frame": 1, "bounds": [59,48,96,72]},
+      "edited_region": {
+        "frame": 1,
+        "bounds": [
+          59,
+          48,
+          96,
+          72
+        ]
+      },
       "attack_extent_px": 41,
-      "eye_highlights": [[[45,35],[54,33]],[[39,35],[47,33]],[[45,35],[54,33]]],
-      "names": ["chamber", "strike", "recoil"],
-      "feet_rows": [[79, 67], [79, 66], [79, 67]],
-      "timing_fields": ["kick_startup_ticks", "kick_active_ticks", "kick_recovery_ticks"],
+      "eye_highlights": [
+        [
+          [
+            45,
+            35
+          ],
+          [
+            54,
+            33
+          ]
+        ],
+        [
+          [
+            39,
+            35
+          ],
+          [
+            47,
+            33
+          ]
+        ],
+        [
+          [
+            45,
+            35
+          ],
+          [
+            54,
+            33
+          ]
+        ]
+      ],
+      "names": [
+        "chamber",
+        "strike",
+        "recoil"
+      ],
+      "feet_rows": [
+        [
+          79,
+          67
+        ],
+        [
+          79,
+          66
+        ],
+        [
+          79,
+          67
+        ]
+      ],
+      "timing_fields": [
+        "kick_startup_ticks",
+        "kick_active_ticks",
+        "kick_recovery_ticks"
+      ],
       "note": "Medium-length kicking leg redrawn within the edited region; all other pixels retain v2's backward lean and planted support leg. Toe ends at cell x88, matching 41 px of reach from anchor x48: nine pixels longer than v3, five shorter than v2. Chamber reused for recoil."
     },
     {
       "id": "kneel",
       "source": "art/arthur/kneel-authored.png",
-      "names": ["guard"],
-      "feet_rows": [[79, 79]],
-      "timing_fields": [null],
+      "names": [
+        "guard"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        null
+      ],
       "note": "Hold Down. Rear knee and front foot share the ground line; approved upper body translated down 11 native pixels. Entry/exit locks use crouch_enter_ticks and crouch_exit_ticks."
+    },
+    {
+      "id": "air_punch",
+      "followthrough_field": "air_punch_followthrough_ticks",
+      "source": "art/arthur/air-punch-authored.png",
+      "names": [
+        "strike"
+      ],
+      "feet_rows": [
+        [
+          71,
+          74
+        ]
+      ],
+      "timing_fields": [
+        "air_punch_active_ticks"
+      ],
+      "phase_guard": "jump",
+      "attack_extent_px": 41
+    },
+    {
+      "id": "air_kick",
+      "followthrough_field": "air_kick_followthrough_ticks",
+      "source": "art/arthur/air-kick-authored.png",
+      "names": [
+        "strike"
+      ],
+      "feet_rows": [
+        [
+          69,
+          72
+        ]
+      ],
+      "timing_fields": [
+        "air_kick_active_ticks"
+      ],
+      "phase_guard": "jump",
+      "attack_extent_px": 41
+    },
+    {
+      "id": "crouch_punch",
+      "followthrough_field": "crouch_punch_followthrough_ticks",
+      "source": "art/arthur/crouch-punch-authored.png",
+      "names": [
+        "strike"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "crouch_punch_active_ticks"
+      ],
+      "phase_guard": "kneel",
+      "attack_extent_px": 32
+    },
+    {
+      "id": "crouch_kick",
+      "followthrough_field": "crouch_kick_followthrough_ticks",
+      "source": "art/arthur/crouch-kick-authored.png",
+      "names": [
+        "strike"
+      ],
+      "feet_rows": [
+        [
+          79,
+          77
+        ]
+      ],
+      "timing_fields": [
+        "crouch_kick_active_ticks"
+      ],
+      "phase_guard": "kneel",
+      "attack_extent_px": 36
+    },
+    {
+      "id": "block",
+      "source": "art/arthur/block-authored.png",
+      "names": [
+        "guard"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        null
+      ]
+    },
+    {
+      "id": "crouch_block",
+      "source": "art/arthur/crouch-block-authored.png",
+      "names": [
+        "guard"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        null
+      ]
     }
-  ]
+  ],
+  "atlas_columns": 16
 }

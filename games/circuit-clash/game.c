@@ -8,7 +8,7 @@
 
 static const struct chirky_host_api *host;
 struct fighter {
-    int x,y,vx,vy,health,facing,attack,action_tick,stun,transition,jump_wait,jump_buffer,landing;
+    int x,y,vx,vy,health,facing,attack,action_tick,stun,transition,jump_wait,jump_buffer,landing,guard_release;
     unsigned animation_tick,walk_tick;
     int walk_direction;
     bool hit,ready,crouch,blocking,guard_stun,air_attack;
@@ -78,7 +78,7 @@ static bool load_content(const char *config)
             artwork[p]=host->asset_request(host->context,path,CHIRKY_ASSET_IMAGE);
             if(!artwork[p] || host->asset_status(host->context,artwork[p])!=CHIRKY_ASSET_READY)return false;
             struct chirky_asset_view v=host->asset_data(host->context,artwork[p]);
-            if(v.width!=CC_ATLAS_WIDTH || v.height!=CC_CELL_SIZE)return false;
+            if(v.width!=CC_ATLAS_WIDTH || v.height!=CC_ATLAS_HEIGHT)return false;
         }
     }
     return true;
@@ -94,29 +94,23 @@ static bool init(const struct chirky_host_api *api,const char *config)
 }
 static void shutdown(void){release_art();host=NULL;}
 
-struct attack_tuning { int startup,active,recovery,damage,reach,bottom,top,hitstun,blockstun,knockback; };
+struct attack_tuning { int startup,active,recovery,damage,reach,bottom,top,hitstun,blockstun,knockback,followthrough; };
+#define CC_MOVE(prefix) ((struct attack_tuning){c->prefix##_startup_ticks,c->prefix##_active_ticks, \
+    c->prefix##_recovery_ticks,c->prefix##_damage,c->prefix##_reach_px,c->prefix##_bottom_px, \
+    c->prefix##_top_px,c->prefix##_hitstun_ticks,c->prefix##_blockstun_ticks,c->prefix##_knockback_px,c->prefix##_followthrough_ticks})
 static struct attack_tuning move_for(int p)
 {
-    const struct character_tuning *c=&characters[p];
-    struct attack_tuning a;
-    if(fighters[p].attack==2)a=(struct attack_tuning){c->kick_startup_ticks,c->kick_active_ticks,
-        c->kick_recovery_ticks,c->kick_damage,c->kick_reach_px,c->kick_bottom_px,c->kick_top_px,
-        c->kick_hitstun_ticks,c->kick_blockstun_ticks,c->kick_knockback_px};
-    else a=(struct attack_tuning){c->punch_startup_ticks,c->punch_active_ticks,c->punch_recovery_ticks,
-        c->punch_damage,c->punch_reach_px,c->punch_bottom_px,c->punch_top_px,
-        c->punch_hitstun_ticks,c->punch_blockstun_ticks,c->punch_knockback_px};
-    if(fighters[p].air_attack) {
-        bool kick=fighters[p].attack==2;
-        a.startup=kick?c->air_kick_startup_ticks:c->air_punch_startup_ticks;
-        a.active=kick?c->air_kick_active_ticks:c->air_punch_active_ticks;
-        a.recovery=kick?c->air_kick_recovery_ticks:c->air_punch_recovery_ticks;
-    }
-    return a;
+    const struct character_tuning *c=&characters[p];const struct fighter *f=&fighters[p];
+    if(f->air_attack)return f->attack==2?CC_MOVE(air_kick):CC_MOVE(air_punch);
+    if(f->crouch)return f->attack==2?CC_MOVE(crouch_kick):CC_MOVE(crouch_punch);
+    return f->attack==2?CC_MOVE(kick):CC_MOVE(punch);
 }
+#undef CC_MOVE
 static void start_attack(int p,bool airborne)
 {
     struct fighter *f=&fighters[p];
-    f->crouch=false;f->air_attack=airborne;
+    if(airborne)f->crouch=false;
+    f->air_attack=airborne;
     f->attack=controls[p].button_pressed[CHIRKY_BUTTON_PRIMARY]?1:2;
     f->action_tick=0;f->hit=false;
 }
@@ -142,7 +136,9 @@ static void simulate(void)
     for(int p=0;p<2;p++) {
         struct fighter *f=&fighters[p];const struct character_tuning *t=&characters[p];
         const struct chirky_device_input *c=&controls[p];
+        bool was_blocking=f->blocking;
         f->animation_tick++;f->blocking=false;
+        if(f->guard_release)f->guard_release--;
         if(f->jump_buffer)f->jump_buffer--;
         if(c->button_pressed[CHIRKY_BUTTON_UP])f->jump_buffer=t->jump_buffer_ticks;
         if(f->stun)f->stun--;
@@ -154,39 +150,45 @@ static void simulate(void)
         }
         if(!f->attack)f->facing=f->x<=fighters[1-p].x?1:-1;
         int direction=(int)c->buttons[CHIRKY_BUTTON_RIGHT]-(int)c->buttons[CHIRKY_BUTTON_LEFT];
-        /* Holding guard continues to protect during blockstun; ordinary hitstun
-           cannot be converted into guard until its recovery has completed. */
-        f->blocking=f->stun && f->guard_stun && direction==-f->facing;
-        bool locked=f->stun || f->attack || f->landing;
+        bool chord=c->buttons[CHIRKY_BUTTON_PRIMARY] && c->buttons[CHIRKY_BUTTON_SECONDARY];
+        bool grounded=!f->y && !f->vy && !f->jump_wait;
+        /* A slightly staggered two-button press may cancel only the initial
+           startup ticks, never contact or recovery. Single attacks stay immediate. */
+        if(grounded && chord && f->attack && !f->stun) {
+            struct attack_tuning a=move_for(p);
+            if(f->action_tick<=t->block_chord_ticks && f->action_tick<a.startup)f->attack=0;
+        }
+        if(was_blocking && !chord)f->guard_release=t->block_release_ticks;
+        f->blocking=grounded && chord && f->stun && f->guard_stun;
+        bool locked=f->stun || f->attack || f->landing || f->guard_release;
         if(f->jump_wait && !locked) {if(!--f->jump_wait)f->vy=t->jump_velocity_fp8;}
         if(!locked && !f->jump_wait && !f->y && !f->vy) {
             bool crouch=c->buttons[CHIRKY_BUTTON_DOWN];
             if(crouch!=f->crouch) {f->crouch=crouch;f->transition=crouch?t->crouch_enter_ticks:t->crouch_exit_ticks;}
-            if(!f->transition) {
+            if(chord) {f->blocking=true;f->jump_buffer=0;}
+            else if(!f->transition) {
                 if(!crouch && (c->button_pressed[CHIRKY_BUTTON_UP] || f->jump_buffer)) {
                     f->jump_buffer=0;
                     f->jump_wait=t->jump_startup_ticks;
                     if(!f->jump_wait)f->vy=t->jump_velocity_fp8;
                 } else if(c->button_pressed[CHIRKY_BUTTON_PRIMARY] || c->button_pressed[CHIRKY_BUTTON_SECONDARY]) {
-                    /* Current attacks rise into standing poses. Their collision
-                       body must rise too; low attack clips are not authored yet. */
                     start_attack(p,false);
-                } else f->blocking=direction==-f->facing;
+                }
             }
         }
         bool in_air=f->y>0 || f->vy>0;
-        if(in_air && !locked && !f->attack &&
+        if(in_air && !locked && !f->attack && !chord &&
            (c->button_pressed[CHIRKY_BUTTON_PRIMARY] || c->button_pressed[CHIRKY_BUTTON_SECONDARY]))
             start_attack(p,true);
         int target=0,accel=t->ground_brake_fp8;
         /* Air attacks retain ordinary air control and gravity throughout. */
-        if(!f->stun && !f->landing && (!f->attack || in_air) &&
+        if(!f->stun && !f->landing && !f->guard_release && !f->blocking && (!f->attack || in_air) &&
            !f->crouch && !f->transition && !f->jump_wait) {
             int speed=in_air?t->air_speed_fp8:direction==f->facing?t->walk_speed_fp8:t->back_speed_fp8;
             target=direction*speed;
             accel=in_air?t->air_accel_fp8:direction?t->ground_accel_fp8:t->ground_brake_fp8;
         }
-        f->vx=approach(f->vx,target,accel);f->x+=f->vx;
+        f->vx=f->blocking?0:approach(f->vx,target,accel);f->x+=f->vx;
         bool airborne=f->y>0 || f->vy>0;
         f->y+=f->vy;
         if(f->y>0) {
@@ -233,8 +235,8 @@ static void simulate(void)
         struct fighter *a=&fighters[p],*b=&fighters[1-p];struct attack_tuning m=moves[p];a->hit=true;
         if(!blocked[p])b->health-=m.damage;
         if(b->health<0)b->health=0;
-        b->stun=blocked[p]?m.blockstun:m.hitstun;b->guard_stun=blocked[p];b->attack=0;b->air_attack=false;b->jump_wait=0;b->jump_buffer=0;b->vx=0;
-        b->x+=a->facing*m.knockback*8*100/characters[1-p].weight_percent/(blocked[p]?2:1);
+        b->stun=blocked[p]?m.blockstun:m.hitstun;b->guard_stun=blocked[p];b->blocking=blocked[p];b->attack=0;b->air_attack=false;b->jump_wait=0;b->jump_buffer=0;b->guard_release=0;b->vx=0;
+        b->x+=a->facing*m.knockback*8*(blocked[p]?characters[1-p].block_knockback_percent:100)/characters[1-p].weight_percent;
         clamp_fighter(b);
     }
     for(int p=0;p<2;p++) {
@@ -242,7 +244,7 @@ static void simulate(void)
         int direction=(int)controls[p].buttons[CHIRKY_BUTTON_RIGHT]-(int)controls[p].buttons[CHIRKY_BUTTON_LEFT];
         int gait=direction && (f->x-old_x[p])*direction>0 && f->vx*direction>0 &&
             !f->y && !f->attack && !f->stun && !f->crouch && !f->transition &&
-            !f->jump_wait && !f->landing && f->health>0 ? direction*f->facing : 0;
+            !f->jump_wait && !f->landing && !f->blocking && !f->guard_release && f->health>0 ? direction*f->facing : 0;
         /* Restart on a direction change, and stop at a wall or on interruption.
            Opponent pushes and knockback must not animate a self-propelled step. */
         f->walk_tick=gait && gait==f->walk_direction?f->walk_tick+1:0;
@@ -326,12 +328,13 @@ static const char *state_name(int p)
     const struct fighter *f=&fighters[p];
     if(f->health<=0)return "KO";
     if(f->stun)return f->guard_stun?"GUARD":"HIT";
-    if(f->attack)return f->air_attack?(f->attack==1?"AIR PUNCH":"AIR KICK"):(f->attack==1?"PUNCH":"KICK");
+    if(f->blocking)return f->crouch?"LOW BLOCK":"BLOCK";
+    if(f->guard_release)return "GUARD RELEASE";
+    if(f->attack)return f->air_attack?(f->attack==1?"AIR PUNCH":"AIR KICK"):(f->crouch?(f->attack==1?"LOW PUNCH":"LOW KICK"):(f->attack==1?"PUNCH":"KICK"));
     if(f->jump_wait)return "TAKEOFF";
     if(f->y)return f->vy>0?"JUMP":"FALL";
     if(f->landing)return "LAND";
     if(f->crouch)return "KNEEL";
-    if(f->blocking)return "BLOCK / BACK";
     return f->vx?"WALK":"IDLE";
 }
 static int idle_frame(int p)
@@ -345,11 +348,16 @@ static int idle_frame(int p)
 static int fighter_frame(int p)
 {
     const struct fighter *f=&fighters[p];const struct character_tuning *c=&characters[p];
+    if(f->blocking || (f->stun && f->guard_stun))return f->crouch?CC_CROUCH_BLOCK_FIRST:CC_BLOCK_FIRST;
     if(f->stun || f->health<=0)return f->crouch?CC_KNEEL_FIRST:CC_IDLE_FIRST;
     if(f->attack) {
         struct attack_tuning a=move_for(p);
+        /* Visual followthrough occupies recovery; collision keeps its own window. */
+        bool extended=f->action_tick>=a.startup && f->action_tick<a.startup+a.active+a.followthrough;
+        if(f->air_attack)return extended?(f->attack==1?CC_AIR_PUNCH_FIRST:CC_AIR_KICK_FIRST):CC_JUMP_FIRST;
+        if(f->crouch)return extended?(f->attack==1?CC_CROUCH_PUNCH_FIRST:CC_CROUCH_KICK_FIRST):CC_KNEEL_FIRST;
         int first=f->attack==1?CC_PUNCH_FIRST:CC_KICK_FIRST;
-        return first+(f->action_tick<a.startup?0:f->action_tick<a.startup+a.active?1:2);
+        return first+(f->action_tick<a.startup?0:extended?1:2);
     }
     /* Unauthored actions still use approved placeholders at native size. */
     if(f->y)return f->vy>=0?CC_JUMP_FIRST:CC_IDLE_FIRST;
@@ -375,7 +383,7 @@ static void draw_fighter(int p)
     int frame=fighter_frame(p);
     if(artwork[p] && host->draw_sprite)
         host->draw_sprite(host->context,artwork[p],x-48,y-16,96,96,
-                          frame*96,0,96,96,255,255,255,255,f->facing<0);
+                          (frame%CC_ATLAS_COLUMNS)*96,(frame/CC_ATLAS_COLUMNS)*96,96,96,255,255,255,255,f->facing<0);
     if(show_boxes) {
         int half=characters[p].body_half_width_px;
         outline(x-half,y,half*2,body_height(p),f->blocking?0x80c8ff:colour(p));
@@ -404,6 +412,7 @@ static void render(void)
                 text(x+8,h-94,"JOINED",1,colour(p));
                 label_line(x+8,87,p,CHIRKY_BUTTON_PRIMARY,"PUNCH");
                 label_line(x+8,72,p,CHIRKY_BUTTON_SECONDARY,"KICK");
+                text(x+8,57,"BOTH: BLOCK",1,0x9baec2);
             } else {
                 text(x+8,h-88,"PRESS AN ACTION",1,0xf6eed9);
                 text(x+8,h-103,"TO JOIN",1,0xf6eed9);
@@ -426,7 +435,7 @@ static void render(void)
         if(!(practice && p==1)) {
             label_line(x,26,p,CHIRKY_BUTTON_PRIMARY,"PUNCH");
             label_line(x,12,p,CHIRKY_BUTTON_SECONDARY,"KICK");
-        } else {text(x,26,"START RESET",1,0x9baec2);text(x,12,"BACK BLOCKS",1,0x9baec2);}
+        } else {text(x,26,"START RESET",1,0x9baec2);text(x,12,"BOTH BLOCK",1,0x9baec2);}
         draw_fighter(p);
     }
     if(winner!=-1) {

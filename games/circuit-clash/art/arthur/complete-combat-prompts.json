@@ -1,0 +1,35 @@
+{
+  "tool": "built-in image_gen",
+  "jobs": [
+    {
+      "id": "air-punch",
+      "ref": "C:/dev/chirky/output/arthur-attack-balance-v2/source/punch-strike.png",
+      "prompt": "Use case: precise-object-edit. Arthur game sprite, same crisp pixel-art style, chubby baby in white nappy with red headband. Preserve identity, face and blue eye glints. Same 1448x1086 transparent canvas and source scale, no recentering or resizing, no effects, shadows, extra limbs or text. Turn this punch into a proper airborne punch. Keep the ENTIRE upper body and extended arm exactly unchanged. Change ONLY legs below nappy: both knees bent and feet tucked upward in a compact airborne pose; rear leg folded back, leading knee forward slightly. Feet should end near y880, clearly above the former ground y1044. Keep nappy fixed. Punch arm points right."
+    },
+    {
+      "id": "air-kick",
+      "ref": "C:/dev/chirky/output/arthur-kick-v4/source/kick-strike.png",
+      "prompt": "Use case: precise-object-edit. Arthur game sprite, same crisp pixel-art style, chubby baby in white nappy with red headband. Preserve identity, face and blue eye glints. Same 1448x1086 transparent canvas and source scale, no recentering or resizing, no effects, shadows, extra limbs or text. Turn this into a flying side kick. Keep head, backward lean, guard arms, nappy and extended RIGHT kicking leg EXACTLY unchanged, including its length. Change ONLY the planted image-left leg: fold its knee up and tuck its foot back underneath the nappy. Foot should end around y880 rather than former ground1044. There is no grounded leg; strong airborne tuck, leg disconnected from ground."
+    },
+    {
+      "id": "crouch-punch",
+      "ref": "C:/dev/chirky/output/arthur-kick-kneel-v1/source/kneel.png",
+      "prompt": "Use case: precise-object-edit. Arthur game sprite, same crisp pixel-art style, chubby baby in white nappy with red headband. Preserve identity, face and blue eye glints. Same 1448x1086 transparent canvas and source scale, no recentering or resizing, no effects, shadows, extra limbs or text. Create a low crouching punch while remaining on one knee. Keep head at the same height, keep nappy and kneeling legs fixed, foot and knee soles on y1044. Extend the image-right fist horizontally to x1240 at roughly y650, elbow straightening with a small forward shoulder turn. Other fist guards cheek. Do NOT stand up or raise body. Keep baby-sized arm length, same head and low silhouette."
+    },
+    {
+      "id": "crouch-kick",
+      "ref": "C:/dev/chirky/output/arthur-kick-kneel-v1/source/kneel.png",
+      "prompt": "Use case: precise-object-edit. Arthur game sprite, same crisp pixel-art style, chubby baby in white nappy with red headband. Preserve identity, face and blue eye glints. Same 1448x1086 transparent canvas and source scale, no recentering or resizing, no effects, shadows, extra limbs or text. Create a proper low sweeping kick from this crouched stance: remain low, weight on bent rear image-left leg, lean upper body back slightly and extend image-right leg forward just ABOVE ground, with heel around x1250,y1020 and toes raised to y900. Keep top of head near y200, knee and support foot ground at y1044. Nappy fully covers hips. Compact baby leg proportions, visible knee, guard fists protecting face. Do not stand up or elongate leg."
+    },
+    {
+      "id": "block",
+      "ref": "C:/dev/chirky/output/arthur-idle-v1/source/00-neutral.png",
+      "prompt": "Use case: precise-object-edit. Arthur game sprite, same crisp pixel-art style, chubby baby in white nappy with red headband. Preserve identity, face and blue eye glints. Same 1448x1086 transparent canvas and source scale, no recentering or resizing, no effects, shadows, extra limbs or text. Draw a clear standing defensive BLOCK pose. Keep head, nappy, legs and planted feet exactly fixed. Bring both forearms up together in front of upper chest and chin, near-vertical and braced, fists close together around lower face. Eyes still visible. Slightly tuck chin, determined friendly expression. Obvious closed guard silhouette distinct from open idle fists. Feet remain at y1044."
+    },
+    {
+      "id": "crouch-block",
+      "ref": "C:/dev/chirky/output/arthur-kick-kneel-v1/source/kneel.png",
+      "prompt": "Use case: precise-object-edit. Arthur game sprite, same crisp pixel-art style, chubby baby in white nappy with red headband. Preserve identity, face and blue eye glints. Same 1448x1086 transparent canvas and source scale, no recentering or resizing, no effects, shadows, extra limbs or text. Draw a clear crouching defensive BLOCK pose. Keep head height, nappy, kneeling legs and grounded feet exactly fixed. Bring both forearms up close together braced in front of upper chest and chin, fists around lower face, eyes still visible. Obvious closed guard silhouette distinct from open idle fists. Stay on one knee; foot and knee ground at y1044."
+    }
+  ]
+}

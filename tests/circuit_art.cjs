@@ -25,29 +25,29 @@ function rgba(png) {
 test('Arthur runtime copies authored clips exactly, preserving native cells, feet and highlight',()=>{
   const manifest=JSON.parse(fs.readFileSync(root+'art/manifest.json'));
   const layout=JSON.parse(fs.readFileSync(root+'art/clips.json'));
-  const width=1536,png=Buffer.alloc(width*96*4);
+  const width=1536,height=192,columns=16,png=Buffer.alloc(width*height*4);
   let first=0;
   for(const [index,clip] of layout.clips.entries()) {
     const source=fs.readFileSync(root+clip.source),pixels=rgba(source),stride=clip.names.length*96*4;
     assert.equal(hash(source),manifest.clips[index].source_sha256);
     assert.equal(manifest.clips[index].first,first);
     assert.equal(source.readUInt32BE(16),clip.names.length*96);assert.equal(source.readUInt32BE(20),96);
-    for(let y=0;y<96;y++)pixels.copy(png,(y*width+first*96)*4,y*stride,(y+1)*stride);
+    for(let y=0;y<96;y++)pixels.copy(png,(((Math.floor(first/columns)*96+y)*width)+(first%columns)*96)*4,y*stride,(y+1)*stride);
     first+=clip.names.length;
   }
-  assert.equal(first,16);
-  assert.deepEqual(manifest.atlas_size,[width,96]);assert.deepEqual(manifest.cell_size,[96,96]);
+  assert.equal(first,22);
+  assert.deepEqual(manifest.atlas_size,[width,height]);assert.deepEqual(manifest.cell_size,[96,96]);
   assert.deepEqual(manifest.cell_size,manifest.draw_size);
   const pam=fs.readFileSync(root+manifest.runtime),offset=pam.indexOf('ENDHDR\n')+7;
-  assert.equal(pam.subarray(0,offset).toString(),`P7\nWIDTH ${width}\nHEIGHT 96\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n`);
+  assert.equal(pam.subarray(0,offset).toString(),`P7\nWIDTH ${width}\nHEIGHT ${height}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n`);
   assert(pam.subarray(offset).equals(png),'Runtime must copy every approved pixel without scaling');
   assert.equal(hash(png),manifest.rgba_sha256);
   const palette=new Set();
   const expectedFeet=layout.clips.flatMap(c=>c.feet_rows);
-  for(let f=0;f<16;f++) {
+  for(let f=0;f<22;f++) {
     const soles=[-1,-1];
     for(let y=0;y<96;y++)for(let x=0;x<96;x++) {
-      const i=(y*width+f*96+x)*4,a=png[i+3];assert(a===0||a===255);
+      const i=((Math.floor(f/columns)*96+y)*width+(f%columns)*96+x)*4,a=png[i+3];assert(a===0||a===255);
       if(x===0||x===95||y===0||y>=80)assert.equal(a,0,'Transparent gutter');
       if(a){soles[x<48?0:1]=y;palette.add(png.subarray(i,i+3).toString('hex'));}
     }
@@ -55,6 +55,7 @@ test('Arthur runtime copies authored clips exactly, preserving native cells, fee
     assert.deepEqual(manifest.frames[f].feet_rows,soles);
   }
   assert(palette.size<=52);
+  for(let y=96;y<height;y++)for(let x=6*96;x<width;x++)assert.equal(png[(y*width+x)*4+3],0,'Unused atlas cells are transparent');
   assert.deepEqual([...png.subarray((34*width+244)*4,(34*width+244)*4+4)],[246,242,240,255]);
   // Attack upper bodies are intentionally reauthored. Freeze the reviewed new
   // pixels above via source hashes; preserve the grounded art below separately.
@@ -80,6 +81,12 @@ test('Arthur runtime copies authored clips exactly, preserving native cells, fee
   assert.equal(manifest.frames[kick.first+1].bounds[2]-manifest.anchor[0],kick.attack_extent_px);
   const tuning=fs.readFileSync(root+'assets/characters/arthur.conf','utf8');
   assert.equal(+/^kick_reach_px=(\d+)/m.exec(tuning)[1],kick.attack_extent_px,'Kick reach follows the authored leg');
+  for(const id of ['air_punch','air_kick','crouch_punch','crouch_kick']) {
+    const clip=manifest.clips.find(c=>c.id===id);
+    assert.equal(manifest.frames[clip.first].bounds[2]-48,clip.attack_extent_px);
+    assert.equal(+new RegExp('^'+id+'_reach_px=(\\d+)','m').exec(tuning)[1],clip.attack_extent_px);
+    if(id.startsWith('air_'))assert(manifest.frames[clip.first].feet_rows.every(y=>y<79),'Air attacks tuck feet above ground');
+  }
   // New tucked legs must not drift the approved head, fists, or upper torso.
   for(let y=0;y<54;y++) {
     const a=y*width*4,b=(y*width+11*96)*4;

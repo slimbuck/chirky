@@ -10,7 +10,7 @@
 /* This field list also generates the future editor's numeric schema. Speeds
    use eighths of a pixel per update; timers count game updates (nominally 60Hz). */
 #define CC_CHARACTER_FIELDS(X) \
- X(schema_version,5,5) \
+ X(schema_version,7,7) \
  X(health,1,10000) \
  X(weight_percent,25,400) \
  X(walk_speed_fp8,1,64) \
@@ -30,9 +30,14 @@
  X(air_punch_startup_ticks,0,120) \
  X(air_punch_active_ticks,1,120) \
  X(air_punch_recovery_ticks,1,120) \
+ X(air_punch_followthrough_ticks,0,119) \
  X(air_kick_startup_ticks,0,120) \
  X(air_kick_active_ticks,1,120) \
  X(air_kick_recovery_ticks,1,120) \
+ X(air_kick_followthrough_ticks,0,119) \
+ X(block_release_ticks,0,60) \
+ X(block_chord_ticks,0,6) \
+ X(block_knockback_percent,0,100) \
  X(crouch_enter_ticks,0,60) \
  X(crouch_exit_ticks,0,60) \
  X(body_half_width_px,1,24) \
@@ -49,6 +54,7 @@
  X(punch_startup_ticks,0,120) \
  X(punch_active_ticks,1,120) \
  X(punch_recovery_ticks,1,120) \
+ X(punch_followthrough_ticks,0,119) \
  X(punch_damage,0,1000) \
  X(punch_reach_px,1,96) \
  X(punch_bottom_px,0,64) \
@@ -59,13 +65,50 @@
  X(kick_startup_ticks,0,120) \
  X(kick_active_ticks,1,120) \
  X(kick_recovery_ticks,1,120) \
+ X(kick_followthrough_ticks,0,119) \
  X(kick_damage,0,1000) \
  X(kick_reach_px,1,96) \
  X(kick_bottom_px,0,64) \
  X(kick_top_px,1,96) \
  X(kick_hitstun_ticks,1,180) \
  X(kick_blockstun_ticks,1,180) \
- X(kick_knockback_px,0,64)
+ X(kick_knockback_px,0,64) \
+ X(crouch_punch_startup_ticks,0,120) \
+ X(crouch_punch_active_ticks,1,120) \
+ X(crouch_punch_recovery_ticks,1,120) \
+ X(crouch_punch_followthrough_ticks,0,119) \
+ X(crouch_punch_damage,0,1000) \
+ X(crouch_punch_reach_px,1,96) \
+ X(crouch_punch_bottom_px,0,64) \
+ X(crouch_punch_top_px,1,96) \
+ X(crouch_punch_hitstun_ticks,1,180) \
+ X(crouch_punch_blockstun_ticks,1,180) \
+ X(crouch_punch_knockback_px,0,64) \
+ X(crouch_kick_startup_ticks,0,120) \
+ X(crouch_kick_active_ticks,1,120) \
+ X(crouch_kick_recovery_ticks,1,120) \
+ X(crouch_kick_followthrough_ticks,0,119) \
+ X(crouch_kick_damage,0,1000) \
+ X(crouch_kick_reach_px,1,96) \
+ X(crouch_kick_bottom_px,0,64) \
+ X(crouch_kick_top_px,1,96) \
+ X(crouch_kick_hitstun_ticks,1,180) \
+ X(crouch_kick_blockstun_ticks,1,180) \
+ X(crouch_kick_knockback_px,0,64) \
+ X(air_punch_damage,0,1000) \
+ X(air_punch_reach_px,1,96) \
+ X(air_punch_bottom_px,0,64) \
+ X(air_punch_top_px,1,96) \
+ X(air_punch_hitstun_ticks,1,180) \
+ X(air_punch_blockstun_ticks,1,180) \
+ X(air_punch_knockback_px,0,64) \
+ X(air_kick_damage,0,1000) \
+ X(air_kick_reach_px,1,96) \
+ X(air_kick_bottom_px,0,64) \
+ X(air_kick_top_px,1,96) \
+ X(air_kick_hitstun_ticks,1,180) \
+ X(air_kick_blockstun_ticks,1,180) \
+ X(air_kick_knockback_px,0,64)
 #define CC_STAGE_FIELDS(X) \
  X(schema_version,1,1) \
  X(floor_y_px,32,60) \
@@ -109,7 +152,7 @@ static bool read_tuning(const struct chirky_host_api *api,const char *path,void 
 {
     struct chirky_file file=chirky_file_open(api,path);
     if(!file.stream)return false;
-    bool seen[64]={0},named=false,art=false,ok=true;
+    bool seen[CC_COUNT(character_fields)]={0},named=false,art=false,ok=true;
     char line[512];
     while(ok && fgets(line,sizeof(line),file.stream)) {
         if(!strchr(line,'\n') && !feof(file.stream)){ok=false;break;}
@@ -141,7 +184,18 @@ static bool read_character(const struct chirky_host_api *api,const char *path,st
     struct character_tuning value={0};
     if(!read_tuning(api,path,&value,character_fields,CC_COUNT(character_fields),value.name,value.atlas) ||
        value.crouching_height_px>value.standing_height_px ||
-       value.punch_bottom_px>=value.punch_top_px || value.kick_bottom_px>=value.kick_top_px)return false;
+       value.punch_bottom_px>=value.punch_top_px ||
+       value.kick_bottom_px>=value.kick_top_px ||
+       value.crouch_punch_bottom_px>=value.crouch_punch_top_px ||
+       value.crouch_kick_bottom_px>=value.crouch_kick_top_px ||
+       value.air_punch_bottom_px>=value.air_punch_top_px ||
+       value.air_kick_bottom_px>=value.air_kick_top_px ||
+       value.punch_followthrough_ticks>=value.punch_recovery_ticks ||
+       value.kick_followthrough_ticks>=value.kick_recovery_ticks ||
+       value.crouch_punch_followthrough_ticks>=value.crouch_punch_recovery_ticks ||
+       value.crouch_kick_followthrough_ticks>=value.crouch_kick_recovery_ticks ||
+       value.air_punch_followthrough_ticks>=value.air_punch_recovery_ticks ||
+       value.air_kick_followthrough_ticks>=value.air_kick_recovery_ticks)return false;
     *out=value;return true;
 }
 static bool read_stage(const struct chirky_host_api *api,const char *path,struct stage_tuning *out)

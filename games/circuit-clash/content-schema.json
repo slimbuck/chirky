@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 7,
   "format": "key=value",
   "unknown_fields": "reject",
   "duplicate_fields": "reject",
@@ -11,8 +11,8 @@
     {
       "key": "schema_version",
       "type": "integer",
-      "minimum": 5,
-      "maximum": 5,
+      "minimum": 7,
+      "maximum": 7,
       "required": true
     },
     {
@@ -149,6 +149,13 @@
       "required": true
     },
     {
+      "key": "air_punch_followthrough_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 119,
+      "required": true
+    },
+    {
       "key": "air_kick_startup_ticks",
       "type": "integer",
       "minimum": 0,
@@ -167,6 +174,34 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "air_kick_followthrough_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 119,
+      "required": true
+    },
+    {
+      "key": "block_release_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "required": true
+    },
+    {
+      "key": "block_chord_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6,
+      "required": true
+    },
+    {
+      "key": "block_knockback_percent",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
       "required": true
     },
     {
@@ -282,6 +317,13 @@
       "required": true
     },
     {
+      "key": "punch_followthrough_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 119,
+      "required": true
+    },
+    {
       "key": "punch_damage",
       "type": "integer",
       "minimum": 0,
@@ -352,6 +394,13 @@
       "required": true
     },
     {
+      "key": "kick_followthrough_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 119,
+      "required": true
+    },
+    {
       "key": "kick_damage",
       "type": "integer",
       "minimum": 0,
@@ -401,6 +450,258 @@
       "required": true
     },
     {
+      "key": "crouch_punch_startup_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_active_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_recovery_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_followthrough_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 119,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_damage",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_reach_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_bottom_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_top_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_hitstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_blockstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_knockback_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_startup_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_active_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_recovery_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_followthrough_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 119,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_damage",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_reach_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_bottom_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_top_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_hitstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_blockstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_knockback_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "air_punch_damage",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "required": true
+    },
+    {
+      "key": "air_punch_reach_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "air_punch_bottom_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "air_punch_top_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "air_punch_hitstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "air_punch_blockstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "air_punch_knockback_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "air_kick_damage",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "required": true
+    },
+    {
+      "key": "air_kick_reach_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "air_kick_bottom_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
+      "key": "air_kick_top_px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 96,
+      "required": true
+    },
+    {
+      "key": "air_kick_hitstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "air_kick_blockstun_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180,
+      "required": true
+    },
+    {
+      "key": "air_kick_knockback_px",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "required": true
+    },
+    {
       "key": "name",
       "type": "string",
       "minLength": 1,
@@ -415,7 +716,7 @@
         96,
         96
       ],
-      "frameCount": 16
+      "frameCount": 22
     }
   ],
   "stage": [
@@ -472,6 +773,42 @@
   "constraints": [
     "crouching_height_px <= standing_height_px",
     "punch_bottom_px < punch_top_px",
-    "kick_bottom_px < kick_top_px"
+    "kick_bottom_px < kick_top_px",
+    "crouch_punch_bottom_px < crouch_punch_top_px",
+    "crouch_kick_bottom_px < crouch_kick_top_px",
+    "air_punch_bottom_px < air_punch_top_px",
+    "air_kick_bottom_px < air_kick_top_px",
+    "punch_followthrough_ticks < punch_recovery_ticks",
+    "kick_followthrough_ticks < kick_recovery_ticks",
+    "crouch_punch_followthrough_ticks < crouch_punch_recovery_ticks",
+    "crouch_kick_followthrough_ticks < crouch_kick_recovery_ticks",
+    "air_punch_followthrough_ticks < air_punch_recovery_ticks",
+    "air_kick_followthrough_ticks < air_kick_recovery_ticks"
+  ],
+  "moves": [
+    {
+      "id": "punch",
+      "label": "Standing punch"
+    },
+    {
+      "id": "kick",
+      "label": "Standing kick"
+    },
+    {
+      "id": "crouch_punch",
+      "label": "Crouching punch"
+    },
+    {
+      "id": "crouch_kick",
+      "label": "Crouching kick"
+    },
+    {
+      "id": "air_punch",
+      "label": "Air punch"
+    },
+    {
+      "id": "air_kick",
+      "label": "Air kick"
+    }
   ]
 }
