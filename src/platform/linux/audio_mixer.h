@@ -32,6 +32,10 @@ struct audio_mixer_info audio_mixer_get_info(struct audio_mixer *m);
 bool audio_mixer_play(struct audio_mixer *m, const void *data, size_t size,
                       unsigned rate, unsigned channels);
 
+/* Linear per-play gain: 0 silently succeeds without enqueueing; above 100 clamps. */
+bool audio_mixer_play_volume(struct audio_mixer *m, const void *data, size_t size,
+                      unsigned rate, unsigned channels, unsigned volume_percent);
+
 /* Synchronous unload barrier: discard queued/active/buffered audio and release
    every sample reference before returning. The worker remains reusable unless
    the device has failed. Call BEFORE clearing the asset store.

@@ -377,20 +377,23 @@ static void draw_sprite(void *context,chirky_asset image,int x,int y,int w,int h
     image_cache_draw(&host->images,&host->renderer,&host->api,image,x,y,w,h,sx,sy,sw,sh,r,g,b,a,flip,
         host->safe_x+host->safe_offset_x,host->safe_y+host->safe_offset_y);
 }
-static void sound_play(void *context,chirky_asset sound)
+static void sound_play_volume(void *context,chirky_asset sound,unsigned volume_percent)
 {
     struct host *host=context;
     chirky_scope(&host->api,"audio.enqueue",true);
-    if(host->audio && asset_store_state(host->assets,sound)==CHIRKY_ASSET_READY) {
+    if(volume_percent && host->audio && asset_store_state(host->assets,sound)==CHIRKY_ASSET_READY) {
         struct chirky_asset_view view=asset_store_view(host->assets,sound);
         size_t i=0;
         while(i<host->sound_pin_count && host->sound_pins[i]!=sound)i++;
         if(i==host->sound_pin_count && i<ASSET_STORE_SLOTS && view.rate && view.channels &&
             asset_store_retain(host->assets,sound))host->sound_pins[host->sound_pin_count++]=sound;
-        if(i<host->sound_pin_count)audio_mixer_play(host->audio,view.data,view.size,view.rate,view.channels);
+        if(i<host->sound_pin_count)audio_mixer_play_volume(host->audio,view.data,view.size,view.rate,view.channels,volume_percent);
     }
     chirky_scope(&host->api,"audio.enqueue",false);
 }
+
+static void sound_play(void *context,chirky_asset sound)
+{ sound_play_volume(context,sound,100); }
 
 static bool director_connect_api(void *context, const char *url,
                                  const char *game, const char *world)
@@ -1954,7 +1957,7 @@ int main(void)
         .context=&host,.fill_rect=fill_rect,.play_sound=play_sound,
         .draw_text=draw_text,.button_label=button_label,.asset_request=request_asset,
         .asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=draw_sprite,.sound_play=sound_play,.draw_mesh=draw_mesh,.image_create=create_image,.draw_text_outlined=draw_text_outlined,
+        .draw_sprite=draw_sprite,.sound_play=sound_play,.sound_play_volume=sound_play_volume,.draw_mesh=draw_mesh,.image_create=create_image,.draw_text_outlined=draw_text_outlined,
         .draw_sprite_projected=projected_sprite,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_store_read,.save_write=save_store_write};

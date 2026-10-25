@@ -1,9 +1,12 @@
+import {WorkbenchAudio} from './workbench-audio.js';
+const sound=new WorkbenchAudio();
 const $=id=>document.getElementById(id);
 const game=new URLSearchParams(location.search).get('game');
 const phaseNames=['Idle','Startup','Active','Follow-through','Recovery'];
 const phaseClasses=['idle','startup','active','followthrough','recovery'];
 const motionNames=['Idle','Push-off','Walk','Plant / brake','Sink','Rise'];
 const groups=[
+ ['Combat sound', ['punch','kick','block','miss'].map(name=>[`${name}_sound_percent`,name[0].toUpperCase()+name.slice(1)+' level','0–100% · 0 silences this cue'])],
  ['Punch contact',[
   ['punch_hitstop_ticks','Hit-stop','Extra frozen frames after a hit; both fighters'],
   ['punch_blockstop_ticks','Block hit-stop','Extra frozen frames on guarded contact'],
@@ -11,6 +14,13 @@ const groups=[
   ['punch_recoil_ticks','Recoil duration','Ease-out travel; 0 = instant. Capped below stun length'],
   ['punch_hitstun_ticks','Hitstun','Recovery frames for the opponent, excluding hit-stop'],
   ['punch_blockstun_ticks','Blockstun','Opponent’s guard recovery, excluding hit-stop']]],
+ ['Kick contact',[
+  ['kick_hitstop_ticks','Hit-stop','Extra frozen frames after a kick'],
+  ['kick_blockstop_ticks','Block hit-stop','Extra frozen frames on guarded contact'],
+  ['kick_knockback_px','Knockback','Total travel in pixels at normal weight'],
+  ['kick_recoil_ticks','Recoil duration','Ease-out travel; capped below stun length'],
+  ['kick_hitstun_ticks','Hitstun','Opponent recovery, excluding hit-stop'],
+  ['kick_blockstun_ticks','Blockstun','Guard recovery, excluding hit-stop']]],
  ['Hit reaction artwork',[
   ['hit_reaction_style','Reaction style','Grounded hits only; movement and stun stay unchanged'],
   ['hit_impact_ticks','Impact pose','Frames after hit-stop; short stuns truncate the drawing holds'],
@@ -26,6 +36,9 @@ const groups=[
  ['Punch rhythm',[
   ['punch_startup_ticks','Wind-up','Frames before the hit window'],['punch_active_ticks','Active hitbox','Frames that can connect'],
   ['punch_followthrough_ticks','Extended follow-through','Recovery frames holding the strike pose'],['punch_recovery_ticks','Total recovery','Includes follow-through; at least 1 retract frame']]],
+ ['Kick rhythm',[
+  ['kick_startup_ticks','Wind-up','Frames before the hit window'],['kick_active_ticks','Active hitbox','Frames that can connect'],
+  ['kick_followthrough_ticks','Extended follow-through','Recovery frames holding the strike pose'],['kick_recovery_ticks','Total recovery','Includes follow-through; at least 1 retract frame']]],
  ['Idle drawings',[0,1,2,3].map((n)=>[`idle_${n}_ticks`,['Neutral','Descend','Low','Rise'][n],'Hold in frames'])],
  ['Walk drawings',[0,1,2,3].map((n)=>[`walk_${n}_ticks`,['Stance','Lead lift','Wide contact','Rear follow'][n],'Frames at full forward speed; slower travel stretches the hold'])]
 ];
@@ -44,16 +57,18 @@ function validate(values){
 function config(values){return schema.character.map(f=>`${f.key}=${values[f.key]}`).join('\n')+'\n';}
 function numeric(values){return Object.fromEntries(schema.character.filter(f=>f.type==='integer' && f.minimum!==f.maximum).map(f=>[f.key,+values[f.key]]));}
 function same(a,b){return JSON.stringify(numeric(a))===JSON.stringify(numeric(b));}
-function snapshot(engine){const p=engine._wb_state()/4;return Array.from(engine.HEAP32.subarray(p,p+85));}
+function snapshot(engine){const p=engine._wb_state()/4;return Array.from(engine.HEAP32.subarray(p,p+89));}
 function setupEngine(engine,values){engine.FS.writeFile('/character.conf',config(values));engine.FS.writeFile('/stage.conf',descriptor.stage);if(!engine._wb_load())throw Error('The game rejected this character configuration.');engine._wb_configure(+$('opponent').value,+$('gap').value);engine._wb_reset(facing);}
 function sequence(){
  const names=['idle','step','stop','tail'],v={};
  for(const name of names){const el=$('seq-'+name);if(!el.checkValidity())throw Error('Sequence lengths must be whole frames within the displayed limits.');v[name]=+el.value;}
- const attackLength=values=>+values.punch_startup_ticks + +values.punch_active_ticks + Math.max(+values.punch_recovery_ticks,+values.punch_hitstun_ticks,+values.punch_blockstun_ticks) + Math.max(+values.punch_hitstop_ticks,+values.punch_blockstop_ticks);
+ const move=$('attack').value;
+ const attackLength=values=>+values[move+'_startup_ticks'] + +values[move+'_active_ticks'] + Math.max(+values[move+'_recovery_ticks'],+values[move+'_hitstun_ticks'],+values[move+'_blockstun_ticks']) + Math.max(+values[move+'_hitstop_ticks'],+values[move+'_blockstop_ticks']);
  const punch=v.idle+v.step+v.stop,total=punch+Math.max(attackLength(draft),attackLength(reference))+v.tail;
- return Array.from({length:total},(_,t)=>t>=v.idle&&t<v.idle+v.step?(facing>0?2:1):t===punch?16:0);
+ return Array.from({length:total},(_,t)=>t>=v.idle&&t<v.idle+v.step?(facing>0?2:1):t===punch?(move==='kick'?32:16):0);
 }
 function rebuild(keepFrame=true){
+ sound.stop();
  if(!ready)return;
  try{
   validate(draft);validate(reference);
@@ -68,17 +83,19 @@ function rebuild(keepFrame=true){
   renderTimeline();render();
  }catch(e){valid=false;pause();$('save').disabled=true;$('keep-take').disabled=true;status(e.message+' Preview retains the last valid take.',true);}
 }
-function pause(){playing=false;accumulator=0;$('play').textContent='Play';}
+function pause(){sound.stop();playing=false;accumulator=0;$('play').textContent='Play';}
 function seek(n){pause();frame=Math.max(0,Math.min(inputFrames.length,n));render();}
 function activeMask(){let mask=keyboard;for(const v of pointers.values())mask|=v;return mask;}
+function audition(){if(playing&&!document.hidden)sound.sample(samples[+$("listen").value][frame]);}
 function advance(){
  if($('live').checked){
-  if(frame<inputFrames.length){frame++;return;}
+  if(frame<inputFrames.length){frame++;audition();return;}
   if(inputFrames.length>=600){pause();status('600 frames recorded. Scrub to review, or Restart for a new recording.');return;}
   const mask=activeMask();inputFrames.push(mask);
   engines.forEach((engine,i)=>{engine._wb_step(mask);samples[i].push(snapshot(engine));});frame++;
   renderTimeline();
  }else frame=(frame+1)%samples[1].length;
+ audition();
 }
 function labelFor(s){return s[34]<=0?'KO':s[35]?(s[36]?'Blockstun':s[37]<s[38]?'Recoil':'Hit recovery'):s[36]?'Guard':s[9]?phaseNames[s[9]]:s[32]?motionNames[s[32]]:s[1]?'Airborne':descriptor.manifest.frames[s[4]].clip.replaceAll('_',' ');}
 function motionClass(s){return s[36]?'guard':s[35]?'hit':s[9]?phaseClasses[s[9]]:s[32]>=3?'stop':s[32]?'walk':'idle';}
@@ -142,11 +159,12 @@ function track(name,entries){
 function renderTimeline(){
  const rows=[track('Input',[["Ready",'idle'],...inputFrames.map((m,n)=>{
   const seqStop=+$('seq-idle').value + +$('seq-step').value;
-  return m&16?['Punch','active']:m&3?['Step','walk']:m?['Input '+m,'walk']:
+  return m&16?['Punch','active']:m&32?['Kick','active']:m&3?['Step','walk']:m?['Input '+m,'walk']:
    !$('live').checked&&n>=seqStop&&n<seqStop + +$('seq-stop').value?['Stop','stop']:['Idle','idle'];
  })])];
  for(const i of ($('compare').checked?[0,1]:[1])){
   const name=i?'B':'A';
+  rows.push(track(name+' sound',samples[i].map(s=>{const cue=s[85]||s[87];return [cue?['','Punch','Kick','Block','Miss'][cue]:'',cue?'freeze':'idle'];})));
   rows.push(track(name+' contact',samples[i].map(s=>s[82]?[s[82]&3?'Hit':'Blocked','freeze']:s[81]?['Hit-stop','freeze']:['','idle'])));
   for(const p of (samples[i][0][83]?[0,1]:[0])) {
    rows.push(track(name+' P'+(p+1)+' motion',samples[i].map(s=>{const f=s.slice(p*40,p*40+40);return [labelFor(f),motionClass(f)];})));
@@ -207,7 +225,7 @@ async function loadCharacter(id){
   for(const id of ['play','restart','previous','next','scrub','keep-take','reset-draft'])$(id).disabled=false;
  }finally{$('character').disabled=false;}
 }
-$('play').onclick=()=>{if(!ready||!valid)return;playing=!playing;accumulator=0;$('play').textContent=playing?'Pause':'Play';};
+$('play').onclick=()=>{if(!ready||!valid)return;if(playing){pause();return;}playing=true;accumulator=0;$('play').textContent='Pause';};
 $('restart').onclick=()=>{keyboard=0;pointers.clear();if($('live').checked)inputFrames=[];frame=0;rebuild(false);accumulator=0;};
 $('previous').onclick=()=>seek(frame-1);
 $('next').onclick=()=>{pause();if(ready&&valid){if($('live').checked&&frame===inputFrames.length)advance();else frame=Math.min(inputFrames.length,frame+1);render();}};
@@ -216,14 +234,26 @@ $('facing').onclick=()=>{facing=-facing;$('facing').textContent=facing===1?'Face
 $('compare').onchange=()=>{$('reference-view').hidden=!$('compare').checked;$('views').classList.toggle('compare',$('compare').checked);fit();renderTimeline();render();};
 for(const id of ['onion','guides','boxes'])$(id).onchange=render;
 for(const id of ['idle','step','stop','tail'])$('seq-'+id).oninput=()=>{rebuild();};
-for(const id of ['opponent','gap'])$(id).onchange=()=>rebuild(false);
+for(const id of ['opponent','gap','attack'])$(id).onchange=()=>rebuild(false);
 $('miss').onclick=()=>{$('opponent').value='1';$('gap').value=120;rebuild(false);};
 $('contact').onclick=()=>{const n=samples[1].findIndex(s=>s[82]);if(n>=0)seek(n);else status('No contact in this recording. Reduce the gap or step farther.');};
-$('live').onchange=()=>{keyboard=0;pointers.clear();inputFrames=[];$('live-pad').hidden=!$('live').checked;document.querySelectorAll('.sequence-fields input').forEach(e=>e.disabled=$('live').checked);rebuild(false);$('views').focus();};
+$('live').onchange=()=>{keyboard=0;pointers.clear();inputFrames=[];$('live-pad').hidden=!$('live').checked;document.querySelectorAll('.sequence-fields input, #attack').forEach(e=>e.disabled=$('live').checked);rebuild(false);$('views').focus();};
 const keys={ArrowLeft:1,ArrowRight:2,ArrowUp:4,ArrowDown:8,KeyN:16,KeyM:32};
 window.addEventListener('keydown',e=>{if(!$('live').checked||!keys[e.code]||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;e.preventDefault();keyboard|=keys[e.code];});
 window.addEventListener('keyup',e=>{if(keys[e.code])keyboard&=~keys[e.code];});
-window.addEventListener('blur',()=>{keyboard=0;pointers.clear();});
+window.addEventListener('blur',()=>{keyboard=0;pointers.clear();pause();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();last=0;accumulator=0;});
+$('listen').onchange=()=>{sound.stop();};
+$('sound').onchange=async()=>{
+ sound.enabled=false;sound.stop();
+ if(!$('sound').checked){$('sound-status').textContent='Sound off';return;}
+ $('sound-status').textContent='Loading sounds…';
+ try{
+  await sound.enable(`/play/runtime/games/${encodeURIComponent(game)}/assets/sounds`);
+  sound.enabled=$('sound').checked;
+  $('sound-status').textContent=sound.enabled?'Sound on · playback only':'Sound off';
+ }catch(error){$('sound').checked=false;$('sound-status').textContent=error.message;}
+};
 document.querySelectorAll('[data-mask]').forEach(button=>{
  button.onpointerdown=e=>{e.preventDefault();button.setPointerCapture(e.pointerId);pointers.set(e.pointerId,+button.dataset.mask);$('views').focus();};
  button.onpointerup=button.onpointercancel=button.onlostpointercapture=e=>pointers.delete(e.pointerId);

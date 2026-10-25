@@ -1,7 +1,7 @@
-# Platform API 16
+# Platform API 17
 
 `include/chirky.h` defines the shared native/browser contract. Both host and
-game report `CHIRKY_ABI_VERSION == 16`. Native games export
+game report `CHIRKY_ABI_VERSION == 17`. Native games export
 `chirky_game_entry()` from a shared library; browser builds link the same game
 entry point into a WASM side module loaded by the persistent Emscripten host.
 `src/runtime.c` owns the same lifecycle on both platforms; `src/console.c` owns
@@ -94,6 +94,7 @@ Relative paths resolve from the repository root in the normal host setup.
 | `draw_sprite(context, image, x, y, width, height, sx, sy, sw, sh, r, g, b, a, flip_x)` | Draws an IMAGE source rectangle with tint, alpha, horizontal flip, scaling, and viewport clipping. An unready image is skipped. |
 | `draw_sprite_projected(context, image, x, y, scale, sx, sy, sw, sh, r, g, b, a, flip_x)` | Draws with rounded camera-projected texel edges; retains fractional camera coordinates until sampling. |
 | `sound_play(context, sound)` | Plays a preloaded SOUND handle. There is no device/path argument or playback-completion result. Unavailable sound may be skipped. |
+| `sound_play_volume(context, sound, volume_percent)` | Optional ABI 17 per-play linear gain: 0 skips playback, 100 is unity, values above 100 clamp. Same preload, lifetime, duplicate suppression and voice limits as `sound_play`. |
 
 The asset view contains `const void *data`, byte count `size`, and unsigned
 `width`, `height`, `rate`, and `channels` metadata:
@@ -190,6 +191,18 @@ releasing its handle. Without an asset API, the helper uses ordinary `fopen`.
 Consequently, init-time parser paths must match prefetched paths exactly;
 out-of-directory paths or alternate spellings need preparation before init.
 
+## Per-play sound level (ABI 17)
+
+Circuit Clash uses `sound_play_volume` for character-configured punch, kick,
+block and miss levels. Both hosts implement it; the original `sound_play`
+remains a unity-gain wrapper. Gain is linear amplitude, not decibels. A silent
+play does not enqueue, pin an asset or consume a voice. An already playing
+sample is not restarted or changed by another request, even at a different level.
+The native mixer scales each interpolated voice before mixing; the browser uses
+a per-source GainNode. Neither path edits the cached sample. Hosts without the
+optional callback leave these cues silent. Audio may be unavailable without
+preventing gameplay. Rebuild the host and every game module together for ABI 17.
+
 ## Native audio and unload
 
 The host resolves SOUND handles and pins each distinct sound used for playback.
@@ -271,7 +284,7 @@ or invalid; hosts do not rasterize triangles in software.
 
 Phosphor Run evaluates its small rigid skeleton on the CPU and submits the actor
 once. Lighting, triangle coverage and depth resolution run on the GPU. All hosts
-and game modules must be rebuilt together for ABI 16.
+and game modules must be rebuilt together for ABI 17.
 
 ## Load-time images and atlas text (ABI 15)
 
@@ -324,7 +337,7 @@ games; P2 adds only its Start/Menu bindings to combined input. Start/Menu may sh
 No network service is introduced.
 
 Player assignment, joining and disconnect policy belong to the consuming game.
-Rebuild the host and all modules together for ABI 16.
+Rebuild the host and all modules together for ABI 17.
 
 Circuit Clash claims devices only after a neutral observation followed by a
 Primary or Secondary press. A device cannot own both slots. Disconnect freezes the local

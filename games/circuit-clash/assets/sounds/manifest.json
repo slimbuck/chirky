@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "generator": "tools/build-circuit-sounds.py",
+  "sample_rate": 24000,
+  "channels": 1,
+  "bits": 16,
+  "sounds": [
+    {
+      "cue": 1,
+      "name": "punch",
+      "file": "punch.wav",
+      "frames": 2280,
+      "sha256": "9af4194a5f4a957e894b1fe521644327d711213c3096d4905219ea87e694eef3"
+    },
+    {
+      "cue": 2,
+      "name": "kick",
+      "file": "kick.wav",
+      "frames": 3240,
+      "sha256": "997dcc2ec47c8537e023064092191bccca51dada2ec1ca2f00df2ff5ca3c0f84"
+    },
+    {
+      "cue": 3,
+      "name": "block",
+      "file": "block.wav",
+      "frames": 1800,
+      "sha256": "3e598c63ceeb77d454782096102278bc2d61554a601de36ce8caf0616d5d1c88"
+    },
+    {
+      "cue": 4,
+      "name": "miss",
+      "file": "miss.wav",
+      "frames": 2040,
+      "sha256": "57042b914417f081b0d22ef0742fe6f34ef06b1ffcf51ba95ee6c1355e9b2592"
+    }
+  ]
+}

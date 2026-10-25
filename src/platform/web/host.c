@@ -45,7 +45,7 @@ EM_JS(void, sound, (const char *path), { Module.onSound(UTF8ToString(path)); });
 EM_JS(void, prepare_sound, (unsigned handle,const void *data,unsigned size,unsigned rate,unsigned channels), {
     Module.onAssetReady(handle,data,size,rate,channels);
 });
-EM_JS(void, play_asset_sound, (unsigned handle), { Module.onAssetSound(handle); });
+EM_JS(void, play_asset_sound, (unsigned handle,unsigned volume), { Module.onAssetSound(handle,volume); });
 EM_JS(int, connect_director, (const char *url,const char *game,const char *world), {
     return Module.onDirectorConnect(UTF8ToString(url),UTF8ToString(game),UTF8ToString(world)) ? 1 : 0;
 });
@@ -87,7 +87,9 @@ static void sprite(void *unused,chirky_asset image,int x,int y,int w,int h,
         CHIRKY_SAFE_X,CHIRKY_SAFE_Y);
 }
 static void sound_play(void *unused,chirky_asset asset)
-{ (void)unused;play_asset_sound(asset); }
+{ (void)unused;play_asset_sound(asset,100); }
+static void sound_play_volume(void *unused,chirky_asset asset,unsigned volume)
+{ (void)unused;if(volume)play_asset_sound(asset,volume>100?100:volume); }
 static void projected_sprite(void *unused,chirky_asset image,float x,float y,float scale,int sx,int sy,int sw,int sh,
     unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
 {
@@ -173,7 +175,7 @@ EMSCRIPTEN_KEEPALIVE int web_init(const char *config)
         .screen_width=CHIRKY_VIEWPORT_WIDTH,.screen_height=CHIRKY_VIEWPORT_HEIGHT,
         .fill_rect=fill,.play_sound=play,.draw_text=text,.button_label=label,
         .asset_request=request_asset,.asset_status=status_asset,.asset_data=data_asset,.asset_release=release_asset,
-        .draw_sprite=sprite,.sound_play=sound_play,.draw_mesh=mesh,.image_create=create_image,.draw_text_outlined=outlined,
+        .draw_sprite=sprite,.sound_play=sound_play,.sound_play_volume=sound_play_volume,.draw_mesh=mesh,.image_create=create_image,.draw_text_outlined=outlined,
         .draw_sprite_projected=projected_sprite,
         .director_connect=director_connect_api,.director_event=director_event_api,
         .director_state=director_state_api,.save_read=save_read_api,.save_write=save_write_api};

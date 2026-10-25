@@ -30,6 +30,20 @@ static int hitstop;
 static unsigned buffered_presses[2];
 static bool frozen_frame;
 static unsigned contact_mask;
+enum combat_cue { CUE_NONE, CUE_PUNCH, CUE_KICK, CUE_BLOCK, CUE_MISS, CUE_COUNT };
+static chirky_asset sound_assets[CUE_COUNT];
+/* One event per attacker per update. The workbench records these, without audio
+   callbacks, so replay and scrubbing never retrigger the simulation's sounds. */
+static struct { int cue,volume; } sound_events[2];
+static void combat_sound(int p,int cue)
+{
+    const struct character_tuning *c=&characters[p];
+    int volume=cue==CUE_PUNCH?c->punch_sound_percent:cue==CUE_KICK?c->kick_sound_percent:
+        cue==CUE_BLOCK?c->block_sound_percent:c->miss_sound_percent;
+    sound_events[p].cue=cue;sound_events[p].volume=volume;
+    if(volume && sound_assets[cue] && host->sound_play_volume)
+        host->sound_play_volume(host->context,sound_assets[cue],(unsigned)volume);
+}
 struct join_gate { uint32_t id; bool neutral; };
 static struct join_gate gates[CHIRKY_INPUT_DEVICES];
 
@@ -44,10 +58,14 @@ static void reset_round(void)
     fighters[1]=(struct fighter){.x=host->screen_width*8*stage.spawn_right_percent/100,.health=characters[1].health,.facing=-1};
     countdown=stage.countdown_ticks;round_ticks=0;winner=-1;release_gate=true;
     hitstop=0;memset(buffered_presses,0,sizeof(buffered_presses));
-    frozen_frame=false;contact_mask=0;
+    frozen_frame=false;contact_mask=0;memset(sound_events,0,sizeof(sound_events));
 }
 static void release_art(void)
 {
+    for(int s=1;s<CUE_COUNT;s++) {
+        if(sound_assets[s] && host && host->asset_release)host->asset_release(host->context,sound_assets[s]);
+        sound_assets[s]=0;
+    }
     for(int p=0;p<2;p++) {
         if(artwork[p] && host && host->asset_release)host->asset_release(host->context,artwork[p]);
         artwork[p]=0;
@@ -89,12 +107,19 @@ static bool load_content(const char *config)
             if(v.width!=CC_ATLAS_WIDTH || v.height!=CC_ATLAS_HEIGHT)return false;
         }
     }
+    if(host->asset_request && host->sound_play_volume) {
+        const char *names[]={"", "punch", "kick", "block", "miss"};
+        for(int s=1;s<CUE_COUNT;s++) {
+            snprintf(path,sizeof(path),"%s/assets/sounds/%s.wav",directory,names[s]);
+            sound_assets[s]=host->asset_request(host->context,path,CHIRKY_ASSET_SOUND);
+        }
+    }
     return true;
 }
 static bool init(const struct chirky_host_api *api,const char *config)
 {
     if(!api || api->abi_version!=CHIRKY_ABI_VERSION || !api->fill_rect || !api->draw_text)return false;
-    host=api;memset(artwork,0,sizeof(artwork));practice=false;
+    host=api;memset(artwork,0,sizeof(artwork));memset(sound_assets,0,sizeof(sound_assets));practice=false;
     if(!load_content(config)){release_art();host=NULL;return false;}
     memset(players,0,sizeof(players));memset(controls,0,sizeof(controls));
     memset(connected,0,sizeof(connected));memset(gates,0,sizeof(gates));
@@ -187,7 +212,7 @@ static void update_locomotion(int p,int old_x)
 }
 static void simulate(void)
 {
-    frozen_frame=false;contact_mask=0;
+    frozen_frame=false;contact_mask=0;memset(sound_events,0,sizeof(sound_events));
     /* Contact is rendered once, followed by exactly N extra frozen updates.
        Preserve fresh button edges without advancing physics or combat timers. */
     if(hitstop) {
@@ -301,6 +326,7 @@ static void simulate(void)
     }
     /* Snapshot both contacts and guards before applying either: fair trades. */
     bool strikes[2]={false,false},blocked[2]={false,false};
+    int attacks[2]={fighters[0].attack,fighters[1].attack};
     struct attack_tuning moves[2]={move_for(0),move_for(1)};
     for(int p=0;p<2;p++) {
         struct fighter *a=&fighters[p],*b=&fighters[1-p];struct attack_tuning m=moves[p];
@@ -312,6 +338,7 @@ static void simulate(void)
     }
     for(int p=0;p<2;p++)if(strikes[p]) {
         contact_mask|=1u<<(p+(blocked[p]?2:0));
+        combat_sound(p,blocked[p]?CUE_BLOCK:attacks[p]==1?CUE_PUNCH:CUE_KICK);
         struct fighter *a=&fighters[p],*b=&fighters[1-p];struct attack_tuning m=moves[p];a->hit=true;
         if(!blocked[p])b->health-=m.damage;
         if(b->health<0)b->health=0;
@@ -323,7 +350,14 @@ static void simulate(void)
         int stop=blocked[p]?m.blockstop:m.hitstop;if(stop>hitstop)hitstop=stop;
         clamp_fighter(b);
     }
-    for(int p=0;p<2;p++)update_locomotion(p,old_x[p]);
+    for(int p=0;p<2;p++) {
+        /* Wait until the final active frame to distinguish a true miss from
+           contact later in the hit window. Interrupted attacks stay silent. */
+        if(fighters[p].attack && !fighters[p].hit && !fighters[p].stun &&
+           fighters[p].action_tick==moves[p].startup+moves[p].active-1)
+            combat_sound(p,CUE_MISS);
+        update_locomotion(p,old_x[p]);
+    }
     if(fighters[0].health<=0 || fighters[1].health<=0) {
         winner=fighters[0].health<=0?(fighters[1].health<=0?2:1):0;release_gate=!hitstop;
     }

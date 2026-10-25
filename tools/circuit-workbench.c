@@ -8,7 +8,7 @@
 #define WB_EXPORT
 #endif
 
-enum { WB_FIGHTER_SIZE=40, WB_SAMPLE_SIZE=85 };
+enum { WB_FIGHTER_SIZE=40, WB_SAMPLE_SIZE=89 };
 static int wb_previous,wb_facing=1,wb_mode,wb_gap=78,wb_drawing;
 static int wb_sample[WB_SAMPLE_SIZE];
 static void wb_rect(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
@@ -58,7 +58,7 @@ WB_EXPORT void wb_step(int mask)
     if(wb_mode==2)controls[1].buttons[CHIRKY_BUTTON_PRIMARY]=controls[1].buttons[CHIRKY_BUTTON_SECONDARY]=true;
     if(!wb_mode)fighters[1].y=1000000;
     if(winner==-1 || hitstop)simulate();
-    else {frozen_frame=false;contact_mask=0;}
+    else {frozen_frame=false;contact_mask=0;memset(sound_events,0,sizeof(sound_events));}
 }
 WB_EXPORT const int *wb_state(void)
 {
@@ -80,5 +80,6 @@ WB_EXPORT const int *wb_state(void)
     }
     wb_sample[80]=hitstop;wb_sample[81]=frozen_frame;wb_sample[82]=contact_mask;
     wb_sample[83]=wb_mode;wb_sample[84]=round_ticks;
+    for(int p=0;p<2;p++){wb_sample[85+p*2]=sound_events[p].cue;wb_sample[86+p*2]=sound_events[p].volume;}
     return wb_sample;
 }

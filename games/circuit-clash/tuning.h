@@ -10,7 +10,11 @@
 /* This field list also generates the future editor's numeric schema. Speeds
    use eighths of a pixel per update; timers count game updates (nominally 60Hz). */
 #define CC_CHARACTER_FIELDS(X) \
- X(schema_version,10,10) \
+ X(schema_version,11,11) \
+ X(punch_sound_percent,0,100) \
+ X(kick_sound_percent,0,100) \
+ X(block_sound_percent,0,100) \
+ X(miss_sound_percent,0,100) \
  X(hit_reaction_style,0,2) \
  X(hit_impact_ticks,1,12) \
  X(hit_recover_ticks,1,12) \

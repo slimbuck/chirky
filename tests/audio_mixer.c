@@ -183,14 +183,14 @@ static void test_mix(void)
     unsigned count = 0;
     const int samples[] = {-32768, 32767, 1200, -2400, 0, 0, -1, 1};
     for (unsigned i = 0; i < 8; ++i) put_sample(pcm, i, samples[i]);
-    audio_add_voice(voices, &count, (struct audio_command){pcm, 4, 48000, 2});
+    audio_add_voice(voices, &count, (struct audio_command){pcm, 4, 48000, 2,100});
     audio_mix(voices, &count, output, 5);
     for (unsigned i = 0; i < 8; ++i) assert(get_sample(output, i) == samples[i]);
     assert(get_sample(output, 8) == 0 && get_sample(output, 9) == 0 && count == 0);
 
     put_sample(pcm, 0, 0);
     put_sample(pcm, 1, 12000);
-    audio_add_voice(voices, &count, (struct audio_command){pcm, 2, 24000, 1});
+    audio_add_voice(voices, &count, (struct audio_command){pcm, 2, 24000, 1,100});
     audio_mix(voices, &count, output, 5);
     const int interpolated[] = {0, 6000, 12000, 12000, 0};
     for (unsigned i = 0; i < 5; ++i)
@@ -203,16 +203,33 @@ static void test_mix(void)
     unsigned char distinct[8][4];
     for (unsigned i = 0; i < 8; ++i) {
         memcpy(distinct[i],pcm,4);
-        audio_add_voice(voices, &count, (struct audio_command){distinct[i], 1, 48000, 2});
+        audio_add_voice(voices, &count, (struct audio_command){distinct[i], 1, 48000, 2,100});
     }
     audio_mix(voices, &count, output, 1);
     assert(get_sample(output, 0) == 32767 && get_sample(output, 1) == -32768);
 
     for (unsigned i = 0; i < 4; ++i) put_sample(pcm, i, (int)i * 1000);
-    audio_add_voice(voices, &count, (struct audio_command){pcm, 4, 96000, 1});
+    audio_add_voice(voices, &count, (struct audio_command){pcm, 4, 96000, 1,100});
     audio_mix(voices, &count, output, 3);
     assert(get_sample(output, 0) == 0 && get_sample(output, 2) == 2000);
     assert(get_sample(output, 4) == 0 && count == 0);
+}
+
+static void test_volume(void)
+{
+    unsigned char pcm[4],output[4];
+    put_sample(pcm,0,20000);put_sample(pcm,1,-12000);
+    struct audio_voice voices[AUDIO_VOICES]={0};unsigned count=0;
+    audio_add_voice(voices,&count,(struct audio_command){pcm,1,48000,2,35});
+    audio_mix(voices,&count,output,1);
+    assert(get_sample(output,0)==7000 && get_sample(output,1)==-4200 && !count);
+    struct audio_mixer m={0};
+    assert(!pthread_mutex_init(&m.mutex,NULL));assert(!pthread_cond_init(&m.wake,NULL));
+    assert(audio_mixer_play_volume(&m,pcm,4,48000,2,0) && !m.count);
+    assert(audio_mixer_play_volume(&m,pcm,4,48000,2,150));
+    assert(m.commands[0].volume_percent==100);
+    assert(audio_mixer_play(&m,pcm,4,48000,2));assert(m.commands[1].volume_percent==100);
+    pthread_cond_destroy(&m.wake);pthread_mutex_destroy(&m.mutex);
 }
 
 static void test_repeated_sound(void)
@@ -220,7 +237,7 @@ static void test_repeated_sound(void)
     unsigned char pcm[16],other[4],output[16];
     for(unsigned i=0;i<8;i++)put_sample(pcm,i,1000+(int)i*100);
     put_sample(other,0,200);put_sample(other,1,-200);
-    struct audio_command sample={pcm,4,48000,2};
+    struct audio_command sample={pcm,4,48000,2,100};
     struct audio_voice voices[AUDIO_VOICES]={0};unsigned count=0;
     for(unsigned i=0;i<32;i++)audio_add_voice(voices,&count,sample);
     assert(count==1);
@@ -228,7 +245,7 @@ static void test_repeated_sound(void)
     assert(get_sample(output,0)==1000 && get_sample(output,1)==1100);
     for(unsigned i=0;i<32;i++)audio_add_voice(voices,&count,sample);
     assert(count==1 && voices[0].frame==1);
-    audio_add_voice(voices,&count,(struct audio_command){other,1,48000,2});
+    audio_add_voice(voices,&count,(struct audio_command){other,1,48000,2,100});
     assert(count==2);
     audio_mix(voices,&count,output,3);
     assert(get_sample(output,0)==1400 && get_sample(output,1)==1100);
@@ -247,7 +264,7 @@ static void test_rates(void)
     for (unsigned r = 0; r < sizeof(rates) / sizeof(rates[0]); ++r) {
         struct audio_voice voices[AUDIO_VOICES] = {0};
         unsigned count = 0, rendered = 0;
-        audio_add_voice(voices, &count, (struct audio_command){pcm, 1000, rates[r], 1});
+        audio_add_voice(voices, &count, (struct audio_command){pcm, 1000, rates[r], 1,100});
         for (unsigned block = 0; block < 16; ++block) {
             audio_mix(voices, &count, output, 137);
             for (unsigned f = 0; f < 137; ++f, ++rendered) {
@@ -273,7 +290,7 @@ static void test_voice_bounds(void)
     unsigned count = 0;
     for (unsigned i = 0; i < 10; ++i) {
         put_sample(pcm[i], 0, (int)i + 1);
-        audio_add_voice(voices, &count, (struct audio_command){pcm[i], 1, 48000, 1});
+        audio_add_voice(voices, &count, (struct audio_command){pcm[i], 1, 48000, 1,100});
         assert(count <= AUDIO_VOICES);
     }
     assert(count == 8 && voices[0].sample.data == pcm[2]);
@@ -566,6 +583,7 @@ static void test_null_device(void)
 int main(int argc, char **argv)
 {
     test_mix();
+    test_volume();
     test_repeated_sound();
     test_rates();
     test_voice_bounds();

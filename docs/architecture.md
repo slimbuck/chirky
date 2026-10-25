@@ -172,6 +172,13 @@ at game init. Both hosts use the same renderer-owned glyph atlases for 5×7 text
 and one-pixel outlines. Font atlases survive game switches; game scenery atlases
 do not. The original rectangle paths remain pixel oracles and headless fallbacks.
 
+Circuit Clash's character sound levels use the optional ABI 17
+`sound_play_volume` callback. The portable game selects a preloaded cue and
+linear gain on the contact/miss update. Linux applies it in the existing mixer;
+WebAudio applies it per source. The workbench records the same cue events and
+only auditions the selected A/B take during playback, never during rebuilding
+or scrubbing. No platform-specific audio code lives in the game.
+
 ## Local multiplayer (ABI 16)
 
 The combined input remains the default for existing games and all console menus.

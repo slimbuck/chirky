@@ -117,13 +117,14 @@ function prepareAssetSound(handle,pointer,size,rate,channels){
     assetSounds.set(handle,buffer);
   }catch(error){console.warn("Sound unavailable",handle,error);}
 }
-function playAssetSound(handle){
-  if(!audio || muted || paused || leaving)return;
+function playAssetSound(handle,volume=100){
+  if(!audio || muted || paused || leaving || !Number.isFinite(volume) || volume<=0)return;
   const buffer=assetSounds.get(handle);if(!buffer)return;
   for(const source of sources)if(source.buffer===buffer)return;
   if(sources.size>=8){const oldest=sources.values().next().value;oldest.stop();sources.delete(oldest);}
-  const source=audio.createBufferSource();source.buffer=buffer;source.connect(audio.destination);
-  sources.add(source);source.onended=()=>sources.delete(source);source.start();
+  const source=audio.createBufferSource(),gain=audio.createGain();
+  source.buffer=buffer;gain.gain.value=Math.min(100,volume)/100;source.connect(gain);gain.connect(audio.destination);
+  sources.add(source);source.onended=()=>{sources.delete(source);source.disconnect();gain.disconnect();};source.start();
 }
 const {inputNames,defaultKeys,settingsKey,validKeys,keyName,renderInputSettings,initialSettings,resizePlayer}=window.ChirkyShell;
 let inputSettings=initialSettings,bindings={};

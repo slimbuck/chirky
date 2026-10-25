@@ -37,7 +37,7 @@ struct audio_alsa {
 struct audio_command {
     const unsigned char *data;
     size_t frames;
-    unsigned rate, channels;
+    unsigned rate, channels, volume_percent;
 };
 
 struct audio_voice {
@@ -116,8 +116,9 @@ static void audio_mix(struct audio_voice voices[AUDIO_VOICES], unsigned *count,
                 unsigned source = s->channels == 1 ? 0 : ch;
                 int first = audio_sample(s, voice->frame, source);
                 int second = audio_sample(s, next, source);
-                mixed[ch] += first + (int)((int64_t)(second - first) *
+                int value = first + (int)((int64_t)(second - first) *
                                            voice->fraction / AUDIO_RATE);
+                mixed[ch] += value * (int)s->volume_percent / 100;
             }
             /* Rational phase keeps rates exact without float drift or a
                whole-clip phase accumulator that can overflow on long sounds. */
@@ -321,22 +322,28 @@ struct audio_mixer_info audio_mixer_get_info(struct audio_mixer *m)
     return info;
 }
 
-bool audio_mixer_play(struct audio_mixer *m, const void *data, size_t size,
-                      unsigned rate, unsigned channels)
+bool audio_mixer_play_volume(struct audio_mixer *m, const void *data, size_t size,
+                      unsigned rate, unsigned channels, unsigned volume_percent)
 {
     if (!m || !data || !size || !rate || (channels != 1 && channels != 2) ||
         size % (channels * 2)) return false;
+    if (!volume_percent) return true;
+    if (volume_percent>100) volume_percent=100;
     if (pthread_mutex_trylock(&m->mutex)) return false;
     bool accepted = (!m->started || m->alive) && !m->stopping && !m->resetting && m->count < AUDIO_COMMANDS;
     if (accepted) {
         unsigned slot = (m->head + m->count) % AUDIO_COMMANDS;
-        m->commands[slot] = (struct audio_command){data, size / (channels * 2), rate, channels};
+        m->commands[slot] = (struct audio_command){data, size / (channels * 2), rate, channels, volume_percent};
         ++m->count;
         pthread_cond_signal(&m->wake);
     }
     pthread_mutex_unlock(&m->mutex);
     return accepted;
 }
+
+bool audio_mixer_play(struct audio_mixer *m, const void *data, size_t size,
+                      unsigned rate, unsigned channels)
+{ return audio_mixer_play_volume(m,data,size,rate,channels,100); }
 
 void audio_mixer_reset(struct audio_mixer *m)
 {

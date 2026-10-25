@@ -132,7 +132,10 @@ names are 1-23 printable ASCII bytes and atlas paths stay under `assets/`.
 `content-schema.json` is generated from the C field list in `tuning.h` and
 supplies the editor's ranges, move groups and cross-field constraints.
 
-Characters now use `schema_version=10`; stages remain at 1. Migrate v9 by adding
+Characters now use `schema_version=11`; stages remain at 1. Migrate v10 by adding
+`punch_sound_percent`, `kick_sound_percent`, `block_sound_percent` and
+`miss_sound_percent` (0–100), then setting the version to 11. Zero preserves
+silent playback; Arthur defaults to 70/80/55/35 respectively. Migrate v9 by adding
 `hit_reaction_style=1`, `hit_impact_ticks=2`, `hit_recover_ticks=2`, selecting the
 28-cell atlas and setting the version to 10. Style 0 retains the borrowed poses;
 1 is restrained and 2 exaggerated. Migrate v8 by adding
@@ -189,8 +192,9 @@ separate from the public player and is not installed on the Pi.
 The initial study holds idle for 45 frames, walks forward for 18, releases
 movement for 12, presses punch once, then returns to idle for 45. The sequence
 allows the longer A/B attack, hit-stop and defender stun before the final idle hold. Sequence lengths are
-editable; both takes always receive identical inputs. It isolates one fighter
-with real wall limits, without an opponent's collision or combat reactions.
+editable; both takes always receive identical inputs. Solo movement isolates
+one fighter with real wall limits; the other modes include opponent collision
+and combat reactions.
 
 - Each A/B preview now contains an attacker and an opponent using that take's
   character settings. **Takes the hit**, **Blocks** and **Solo movement** select
@@ -200,7 +204,7 @@ with real wall limits, without an opponent's collision or combat reactions.
 - Separate P1/P2 motion and pose tracks plus a contact/hit-stop track share one
   time ruler. Readouts show health, stun, recoil progression and freeze remaining.
   The contact frame is followed by the configured number of extra frozen samples.
-- Punch contact controls tune hit-stop, block hit-stop, knockback distance,
+- Punch and kick contact controls tune hit-stop, block hit-stop, knockback distance,
   recoil duration, hitstun and blockstun. The Hit reaction artwork group compares
   borrowed, restrained and exaggerated drawings with editable impact/recovery
   holds, independently of combat timings. Pre-v10 takes retain borrowed poses.
@@ -212,6 +216,13 @@ with real wall limits, without an opponent's collision or combat reactions.
   push-off, walk, plant/brake, sink and rise from the actual drawing names.
 - A starts from the character loaded from disk. Compare side by side, or choose
   a named take as A. Saving B does not replace A during that session.
+- Choose Punch or Kick for the shared sequence. Enable Sound with a click and
+  choose Listen to A or B; only that take is audible. Combat sound levels are
+  stored with the character and named takes. Older takes inherit these new
+  fields from the loaded character. Sound events have their own timeline row.
+  Playback runs cues once on their recorded frames, at normal pitch even in slow
+  motion. Rebuild, scrub, frame step and paused previews are silent. Switching
+  takes, pausing, or leaving the tab stops active sources; returning stays paused.
 - Pause, single-frame step, scrub or slow playback to 1/2, 1/4 or 1/10 speed.
   The input, motion-phase and sprite timelines share the same frame cursor.
 - Onion skins show samples two frames before/after the cursor, where available.
@@ -240,6 +251,29 @@ determinism or an implementation of a different character renderer.
 
 Verify with `node tools/animation-workbench-browser.cjs`. Native adapter checks
 also run under `make test`.
+
+## Combat sound pipeline
+
+`python tools/build-circuit-sounds.py` builds four original synthetic effects
+using only Python's standard library. `--output <directory>` supports clean
+regeneration; `tests/circuit_sounds.py` byte-compares it with the shipped WAVs
+and manifest, and checks format, headroom and faded endings. Sources are the
+oscillator/noise recipes in that single generator. Runtime assets and the
+machine-readable cue IDs, sizes and hashes live in `assets/sounds/`.
+
+Each is mono 24 kHz PCM16, 75–135 ms long, with peak amplitude capped at 21000.
+Punch has a quick pop, kick a lower thump, block a short clack, and miss a soft
+noise swish. There are no external recordings or runtime synthesis costs.
+Game init acquires four SOUND handles, and shutdown releases them. Missing
+sound or unavailable audio never prevents play. Both native and browser hosts
+use ABI 17 per-play volume, so a full host/module rebuild is required.
+
+The shared simulation emits punch/kick or block exactly on contact, for standing,
+crouching and airborne attacks. A miss emits only on the final active frame if
+there was no contact; interrupted wind-ups stay silent. Hit-stop never repeats
+an event. Audio continues while the animation freezes. Trades preserve both
+original attack types. Block level belongs to the attacking character, like the
+move's contact tuning. These four cue levels apply across all six move variants.
 
 ## Native artwork pipeline
 

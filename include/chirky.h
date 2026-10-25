@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CHIRKY_ABI_VERSION 16
+#define CHIRKY_ABI_VERSION 17
 
 /* Unindexed triangle list in logical pixels; z is [-1,1], larger is nearer.
    Normals are in screen axes (+x right, +y up, +z toward viewer).
@@ -136,6 +136,9 @@ struct chirky_host_api {
     void (*draw_sprite_projected)(void *context,chirky_asset image,float x,float y,float scale,
                                  int sx,int sy,int sw,int sh,unsigned char r,unsigned char g,
                                  unsigned char b,unsigned char a,bool flip_x);
+    /* Optional linear gain: 0 silent, 100 unity; values above 100 clamp.
+       Same lifetime and voice limits as sound_play. */
+    void (*sound_play_volume)(void *context,chirky_asset sound,unsigned volume_percent);
 };
 
 static inline void chirky_scope(const struct chirky_host_api *api,const char *name,bool begin)

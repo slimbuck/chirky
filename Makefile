@@ -80,6 +80,8 @@ test: $(GAME_TARGETS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/circuit_workbench.c -o /tmp/circuit-workbench-test
 	/tmp/circuit-workbench-test
 	$(NODE) --test tests/circuit_art.cjs
+	python3 tests/circuit_sounds.py
+	$(NODE) --test tests/workbench_audio.cjs
 	$(NODE) --test dashboard/character-tuning.test.js
 	$(NODE) --test tests/launcher_art.cjs
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/console.c src/console.c -o /tmp/console-test

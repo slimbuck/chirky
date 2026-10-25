@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "format": "key=value",
   "unknown_fields": "reject",
   "duplicate_fields": "reject",
@@ -11,8 +11,36 @@
     {
       "key": "schema_version",
       "type": "integer",
-      "minimum": 10,
-      "maximum": 10,
+      "minimum": 11,
+      "maximum": 11,
+      "required": true
+    },
+    {
+      "key": "punch_sound_percent",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "required": true
+    },
+    {
+      "key": "kick_sound_percent",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "required": true
+    },
+    {
+      "key": "block_sound_percent",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "required": true
+    },
+    {
+      "key": "miss_sound_percent",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
       "required": true
     },
     {

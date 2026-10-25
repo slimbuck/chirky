@@ -77,7 +77,11 @@ int main(void)
         wb_step(16);int contact=-1,frozen=0;
         for(int i=0;i<40;i++) {
             wb_step(0);const int *s=wb_state();
-            if(s[82])contact=i;
+            if(s[82]) {
+                contact=i;assert(s[85]==(mode==1?CUE_PUNCH:CUE_BLOCK));
+                assert(s[86]==(mode==1?characters[0].punch_sound_percent:characters[0].block_sound_percent));
+            } else assert(!s[85]);
+            assert(!s[87] && !s[88]);
             frozen+=s[81];
             assert(s[56]==96 && s[57]==96 && s[60]==96 && s[61]==96);
             assert(s[22]==(facing<0) && s[62]==(facing>0));

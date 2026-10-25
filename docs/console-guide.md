@@ -126,7 +126,7 @@ that model has a saved profile. `input_version=5` keyboard settings use `key_*` 
 bindings migrate to Primary/Secondary/Menu; earlier action mappings still migrate.
 Explicit new names take precedence. Conflicting new defaults are left unbound.
 Retired A/X/L/R bindings are removed when saving. Host and all games must be
-rebuilt together for ABI 16. `safe_x` and `safe_y` retain display margins.
+rebuilt together for ABI 17. `safe_x` and `safe_y` retain display margins.
 
 ## Game configuration and Pi snapshots
 

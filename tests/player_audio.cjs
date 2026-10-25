@@ -22,9 +22,10 @@ function player() {
     fetch: () => new Promise(() => {}),
     fakeAudio: {
       destination: {},
+      createGain() { return {gain:{value:1},connect(){},disconnect(){}}; },
       createBufferSource() {
         const source = {
-          starts: 0, stops: 0, connect() {},
+          starts: 0, stops: 0, connect(node) { this.gain=node.gain; }, disconnect() {},
           start() { this.starts++; }, stop() { this.stops++; },
         };
         created.push(source);
@@ -52,6 +53,14 @@ test('rapid repeats neither stack nor interrupt, while distinct sounds mix', () 
   run('playAssetSound(1);');
   assert.equal(created.length, 3);
   assert.equal(run('sources.size'), 2);
+});
+
+test('per-play gain preserves legacy unity, clamps and skips silent voices', () => {
+  const {run,created}=player();
+  run('playAssetSound(1,0); playAssetSound(2,-1); playAssetSound(3,NaN);');
+  assert.equal(created.length,0);
+  run('playAssetSound(1,35); playAssetSound(2,150); playAssetSound(3);');
+  assert.deepEqual(created.map(s=>s.gain.value),[.35,1,1]);
 });
 
 test('voice bound, pause and mute release sources so sounds can play again', () => {

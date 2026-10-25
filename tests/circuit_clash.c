@@ -556,6 +556,51 @@ static void contact_feedback(const struct chirky_host_api *api)
     reset_round();assert(!hitstop && !buffered_presses[0] && !fighters[1].recoil_ticks);
     shutdown();
 }
+static int sound_calls,last_sound,last_volume;
+static void test_sound_play(void *context,chirky_asset asset,unsigned volume)
+{(void)context;sound_calls++;last_sound=(int)asset;last_volume=(int)volume;}
+static void combat_audio(const struct chirky_host_api *api)
+{
+    struct chirky_host_api audible=*api;audible.sound_play_volume=test_sound_play;
+    assert(init(&audible,"games/circuit-clash/game.conf"));
+    for(int cue=1;cue<CUE_COUNT;cue++)sound_assets[cue]=(chirky_asset)cue;
+    for(int mode=0;mode<3;mode++)for(int kind=1;kind<=2;kind++)for(int outcome=0;outcome<3;outcome++) {
+        clean_simulation();sound_calls=0;
+        fighters[0].attack=kind;fighters[0].crouch=mode==1;fighters[0].air_attack=mode==2;
+        if(mode==2)fighters[0].y=16*8;
+        if(outcome==2)fighters[1].x=230*8;
+        if(outcome==1)controls[1].buttons[CHIRKY_BUTTON_PRIMARY]=controls[1].buttons[CHIRKY_BUTTON_SECONDARY]=true;
+        struct attack_tuning move=move_for(0);
+        fighters[0].action_tick=move.startup-1;
+        int expected=outcome==1?CUE_BLOCK:outcome==2?CUE_MISS:kind;
+        int events=0;
+        for(int frame=0;frame<45;frame++) {
+            simulate();
+            if(sound_events[0].cue) {
+                events++;assert(sound_events[0].cue==expected);
+                assert(!frozen_frame);
+                assert(outcome==2?fighters[0].action_tick==move.startup+move.active-1:contact_mask!=0);
+            }
+        }
+        assert(events==1 && sound_calls==1 && last_sound==expected);
+        assert(last_volume==(expected==CUE_PUNCH?70:expected==CUE_KICK?80:expected==CUE_BLOCK?55:35));
+    }
+    /* Trade cues retain the original move even after the first contact clears it. */
+    clean_simulation();sound_calls=0;fighters[0].attack=1;fighters[1].attack=2;
+    fighters[0].action_tick=characters[0].punch_startup_ticks-1;
+    fighters[1].action_tick=characters[1].kick_startup_ticks-1;
+    simulate();assert(sound_calls==2 && sound_events[0].cue==CUE_PUNCH && sound_events[1].cue==CUE_KICK);
+    clean_simulation();sound_calls=0;characters[0].punch_sound_percent=0;
+    fighters[0].attack=1;fighters[0].action_tick=characters[0].punch_startup_ticks-1;
+    simulate();assert(!sound_calls && sound_events[0].cue==CUE_PUNCH && !sound_events[0].volume);
+    /* Cancelled wind-up never produces a miss; render cannot enqueue audio. */
+    clean_simulation();sound_calls=0;fighters[0].attack=1;fighters[0].action_tick=0;
+    controls[0].buttons[CHIRKY_BUTTON_PRIMARY]=controls[0].buttons[CHIRKY_BUTTON_SECONDARY]=true;
+    for(int n=0;n<30;n++){simulate();render();}
+    assert(!sound_calls);reset_round();assert(!sound_events[0].cue && !sound_events[1].cue);
+    shutdown();
+}
+
 int main(void)
 {
     struct chirky_host_api api={.abi_version=CHIRKY_ABI_VERSION,.screen_width=288,.screen_height=216,.fill_rect=fill,.draw_text=draw,.draw_sprite=sprite};
@@ -601,5 +646,6 @@ int main(void)
     shutdown();api.screen_width=288;api.screen_height=216;
     movement_and_balance(&api);animation_timing(&api);responsive_locomotion(&api);jump_response(&api);kick_and_kneel(&api);aerial_attacks(&api);explicit_guard_and_balance(&api);malformed_tuning();
     contact_feedback(&api);
+    combat_audio(&api);
     puts("Circuit Clash: movement, combat, exact hit-stop, eased recoil, trades, guard, walls, buffered input, KO and 1:1 sprites passed.");
 }
