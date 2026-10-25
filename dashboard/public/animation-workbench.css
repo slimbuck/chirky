@@ -2,3 +2,6 @@ main{width:min(1460px,calc(100% - 32px))}h2,h3,p{margin-top:0}.introduction{disp
 .workbench-layout,.preview-column>*,.tuning-panel{min-width:0}
 @media(max-width:1000px){.workbench-layout{grid-template-columns:minmax(0,1fr)}.tuning-panel{position:static;max-height:none}#tuning{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.topbar h1{font-size:16px}}
 @media(max-width:600px){main{width:calc(100% - 20px);margin-top:12px}.topbar{padding:10px;height:auto;gap:10px}.brand h1{font-size:13px}.brand p{display:none}.topbar .button{font-size:11px}.introduction{align-items:stretch;flex-direction:column}.introduction h2{font-size:19px}.views.compare{grid-template-columns:minmax(0,1fr)}.sequence-fields{grid-template-columns:repeat(2,minmax(0,1fr))}#tuning{grid-template-columns:minmax(0,1fr)}.panel{padding:12px}.toolbar .button{font-size:12px}.screen-well{padding:4px;min-height:180px}}
+
+.exchange-options #gap{width:64px}.segment.freeze{background:#965270;color:#fff}.segment.hit{background:#9b5145;color:#fff}.segment.guard{background:#386b91;color:#fff}
+.tuning-field select{grid-column:1/-1;width:100%}

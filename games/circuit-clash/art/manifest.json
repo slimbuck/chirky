@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 10,
   "character": "arthur",
   "clips": [
     {
@@ -378,10 +378,76 @@
       ],
       "first": 21,
       "source_sha256": "43b16ddbfd09c0e1620afe6ee904cafa1d3cb899ffc517db9daa3d094ef03be2"
+    },
+    {
+      "id": "hit_restrained",
+      "source": "art/arthur/hit-restrained-v1.png",
+      "names": [
+        "impact",
+        "recoil",
+        "recover"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "hit_impact_ticks",
+        null,
+        "hit_recover_ticks"
+      ],
+      "planted_reference": "art/arthur/idle-approved.png",
+      "planted_from_row": 68,
+      "note": "Dedicated grounded reaction. Impact holds through hit-stop; subsequent holds fit within hitstun. Lower legs retain approved pixel anchors; no added runtime bob or interpolation.",
+      "first": 22,
+      "source_sha256": "533a14f28a7a99ab83791937d439a82c7de482a62b0d138428727da99b1cf975"
+    },
+    {
+      "id": "hit_exaggerated",
+      "source": "art/arthur/hit-exaggerated-v1.png",
+      "names": [
+        "impact",
+        "recoil",
+        "recover"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "hit_impact_ticks",
+        null,
+        "hit_recover_ticks"
+      ],
+      "planted_reference": "art/arthur/idle-approved.png",
+      "planted_from_row": 68,
+      "note": "Dedicated grounded reaction. Impact holds through hit-stop; subsequent holds fit within hitstun. Lower legs retain approved pixel anchors; no added runtime bob or interpolation.",
+      "first": 25,
+      "source_sha256": "74e3f181d859dac914765ca71cd7efff6b29f9e721916cb5884cc6d5d2530d9d"
     }
   ],
   "runtime": "assets/characters/arthur.pam",
-  "rgba_sha256": "1af77baf42583c833ac293adac80dcadff1711f283d3780fd0ac147893086432",
+  "rgba_sha256": "c9c11c8cb1d62ae031398de5e90367e6e3cd17c2914bc1b811b573a95136e62f",
   "atlas_size": [
     1536,
     192
@@ -753,12 +819,109 @@
         79
       ],
       "timing_field": null
+    },
+    {
+      "index": 22,
+      "clip": "hit_restrained",
+      "name": "impact",
+      "bounds": [
+        16,
+        18,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "hit_impact_ticks"
+    },
+    {
+      "index": 23,
+      "clip": "hit_restrained",
+      "name": "recoil",
+      "bounds": [
+        15,
+        18,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": null
+    },
+    {
+      "index": 24,
+      "clip": "hit_restrained",
+      "name": "recover",
+      "bounds": [
+        20,
+        20,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "hit_recover_ticks"
+    },
+    {
+      "index": 25,
+      "clip": "hit_exaggerated",
+      "name": "impact",
+      "bounds": [
+        14,
+        18,
+        75,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "hit_impact_ticks"
+    },
+    {
+      "index": 26,
+      "clip": "hit_exaggerated",
+      "name": "recoil",
+      "bounds": [
+        13,
+        19,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": null
+    },
+    {
+      "index": 27,
+      "clip": "hit_exaggerated",
+      "name": "recover",
+      "bounds": [
+        30,
+        20,
+        74,
+        80
+      ],
+      "feet_rows": [
+        79,
+        79
+      ],
+      "timing_field": "hit_recover_ticks"
     }
   ],
   "timing": "assets/characters/arthur.conf",
   "pending_clips": [
-    "hit",
+    "air_hit",
+    "crouch_hit",
     "knockdown"
   ],
-  "provenance": "Native idle, body-bobbing walk, punch, airborne tuck, kick and kneeling guard. Already reduced to the final native grid; this export copies pixels exactly."
+  "provenance": "Native idle, body-bobbing walk, punch, airborne tuck, kick and kneeling guard. Two dedicated grounded hit-reaction studies. Already reduced to the final native grid; this export copies pixels exactly."
 }

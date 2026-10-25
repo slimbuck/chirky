@@ -4,6 +4,17 @@ const phaseNames=['Idle','Startup','Active','Follow-through','Recovery'];
 const phaseClasses=['idle','startup','active','followthrough','recovery'];
 const motionNames=['Idle','Push-off','Walk','Plant / brake','Sink','Rise'];
 const groups=[
+ ['Punch contact',[
+  ['punch_hitstop_ticks','Hit-stop','Extra frozen frames after a hit; both fighters'],
+  ['punch_blockstop_ticks','Block hit-stop','Extra frozen frames on guarded contact'],
+  ['punch_knockback_px','Knockback','Total travel in pixels at normal weight'],
+  ['punch_recoil_ticks','Recoil duration','Ease-out travel; 0 = instant. Capped below stun length'],
+  ['punch_hitstun_ticks','Hitstun','Recovery frames for the opponent, excluding hit-stop'],
+  ['punch_blockstun_ticks','Blockstun','Opponent’s guard recovery, excluding hit-stop']]],
+ ['Hit reaction artwork',[
+  ['hit_reaction_style','Reaction style','Grounded hits only; movement and stun stay unchanged'],
+  ['hit_impact_ticks','Impact pose','Frames after hit-stop; short stuns truncate the drawing holds'],
+  ['hit_recover_ticks','Recovery pose','Final stun frames; reserves a recoil frame when possible']]],
  ['Ground movement',[
   ['walk_speed_fp8','Forward speed','Eighths of a pixel / frame'],['back_speed_fp8','Retreat speed','Eighths of a pixel / frame'],
   ['ground_accel_fp8','Acceleration','Eighths of a pixel / frame²'],['ground_brake_fp8','Braking','Eighths of a pixel / frame²']]],
@@ -33,12 +44,12 @@ function validate(values){
 function config(values){return schema.character.map(f=>`${f.key}=${values[f.key]}`).join('\n')+'\n';}
 function numeric(values){return Object.fromEntries(schema.character.filter(f=>f.type==='integer' && f.minimum!==f.maximum).map(f=>[f.key,+values[f.key]]));}
 function same(a,b){return JSON.stringify(numeric(a))===JSON.stringify(numeric(b));}
-function snapshot(engine){const p=engine._wb_state()/4;return Array.from(engine.HEAP32.subarray(p,p+34));}
-function setupEngine(engine,values){engine.FS.writeFile('/character.conf',config(values));engine.FS.writeFile('/stage.conf',descriptor.stage);if(!engine._wb_load())throw Error('The game rejected this character configuration.');engine._wb_reset(facing);}
+function snapshot(engine){const p=engine._wb_state()/4;return Array.from(engine.HEAP32.subarray(p,p+85));}
+function setupEngine(engine,values){engine.FS.writeFile('/character.conf',config(values));engine.FS.writeFile('/stage.conf',descriptor.stage);if(!engine._wb_load())throw Error('The game rejected this character configuration.');engine._wb_configure(+$('opponent').value,+$('gap').value);engine._wb_reset(facing);}
 function sequence(){
  const names=['idle','step','stop','tail'],v={};
  for(const name of names){const el=$('seq-'+name);if(!el.checkValidity())throw Error('Sequence lengths must be whole frames within the displayed limits.');v[name]=+el.value;}
- const attackLength=values=>+values.punch_startup_ticks + +values.punch_active_ticks + +values.punch_recovery_ticks;
+ const attackLength=values=>+values.punch_startup_ticks + +values.punch_active_ticks + Math.max(+values.punch_recovery_ticks,+values.punch_hitstun_ticks,+values.punch_blockstun_ticks) + Math.max(+values.punch_hitstop_ticks,+values.punch_blockstop_ticks);
  const punch=v.idle+v.step+v.stop,total=punch+Math.max(attackLength(draft),attackLength(reference))+v.tail;
  return Array.from({length:total},(_,t)=>t>=v.idle&&t<v.idle+v.step?(facing>0?2:1):t===punch?16:0);
 }
@@ -46,6 +57,7 @@ function rebuild(keepFrame=true){
  if(!ready)return;
  try{
   validate(draft);validate(reference);
+  if(!$('gap').checkValidity())throw Error('Starting gap must be 40–160 whole pixels.');
   const nextInput=$('live').checked?inputFrames:sequence();
   engines.forEach((engine,i)=>setupEngine(engine,i===0?reference:draft));
   samples=engines.map(engine=>[snapshot(engine)]);inputFrames=nextInput;
@@ -68,8 +80,8 @@ function advance(){
   renderTimeline();
  }else frame=(frame+1)%samples[1].length;
 }
-function labelFor(s){return s[9]?phaseNames[s[9]]:s[32]?motionNames[s[32]]:s[1]?'Airborne':descriptor.manifest.frames[s[4]].clip.replaceAll('_',' ');}
-function motionClass(s){return s[9]?phaseClasses[s[9]]:s[32]>=3?'stop':s[32]?'walk':'idle';}
+function labelFor(s){return s[34]<=0?'KO':s[35]?(s[36]?'Blockstun':s[37]<s[38]?'Recoil':'Hit recovery'):s[36]?'Guard':s[9]?phaseNames[s[9]]:s[32]?motionNames[s[32]]:s[1]?'Airborne':descriptor.manifest.frames[s[4]].clip.replaceAll('_',' ');}
+function motionClass(s){return s[36]?'guard':s[35]?'hit':s[9]?phaseClasses[s[9]]:s[32]>=3?'stop':s[32]?'walk':'idle';}
 function drawSprite(ctx,s,alpha=1){
  const [x,y,w,h,sx,sy,sw,sh,flip]=s.slice(14,23),dx=s[26]+x,dy=s[29]-s[27]-y-h;
  ctx.save();ctx.globalAlpha=alpha;ctx.imageSmoothingEnabled=false;
@@ -89,17 +101,23 @@ function drawView(i){
   ctx.fillStyle='#627e8d';ctx.fillRect(safeX,ground,s[30],1);
   const origin=safeX+Math.trunc(samples[i][0][0]/8);ctx.fillStyle='#405768';ctx.fillRect(origin,ground-6,1,13);
  }
- if($('onion').checked){for(const n of [frame-2,frame+2])if(samples[i][n])drawSprite(ctx,samples[i][n],.2);}
- drawSprite(ctx,s);
- const x=safeX+Math.trunc(s[0]/8),y=ground-Math.trunc(s[1]/8);
- if($('guides').checked){ctx.fillStyle='#3ddbd9';ctx.fillRect(x-3,y,7,1);ctx.fillRect(x,y-3,1,7);}
- if($('boxes').checked){
-  ctx.lineWidth=1;ctx.strokeStyle='#6ca3c5';ctx.strokeRect(x-s[12]+.5,y-s[11]+.5,s[12]*2,s[11]);
-  if(s[8]){ctx.strokeStyle='#f3b845';ctx.strokeRect((s[5]>0?x:x-s[23])+.5,y-s[25]+.5,s[23],s[25]-s[24]);}
+ for(const p of (s[83]?[0,1]:[0])) {
+  const f=s.slice(p*40,p*40+40);
+  if($('onion').checked){for(const n of [frame-2,frame+2])if(samples[i][n])drawSprite(ctx,samples[i][n].slice(p*40,p*40+40),.2);}
+  drawSprite(ctx,f);
+  const x=safeX+Math.trunc(f[0]/8),y=ground-Math.trunc(f[1]/8);
+  ctx.fillStyle=p?'#ff795c':'#52dccb';ctx.fillRect(x-8,ground+3,16,2);
+  if($('guides').checked){ctx.fillRect(x-3,y,7,1);ctx.fillRect(x,y-3,1,7);}
+  if($('boxes').checked){
+   ctx.lineWidth=1;ctx.strokeStyle=p?'#ff795c':'#6ca3c5';ctx.strokeRect(x-f[12]+.5,y-f[11]+.5,f[12]*2,f[11]);
+   if(f[8]){ctx.strokeStyle='#f3b845';ctx.strokeRect((f[5]>0?x:x-f[23])+.5,y-f[25]+.5,f[23],f[25]-f[24]);}
+  }
  }
  ctx.restore();
  const pose=descriptor.manifest.frames[s[4]],dx=(s[0]-samples[i][0][0])/8;
- $('readout-'+(i?'b':'a')).textContent=`${labelFor(s)} · ${pose.clip.replaceAll('_',' ')} / ${pose.name} · x ${dx.toFixed(2)} px · v ${(s[2]/8).toFixed(2)} px/f`;
+ const opponent=s.slice(40,80),contact=s[82]?(s[82]&3?'HIT':'BLOCK'):s[81]?'HIT-STOP':'';
+ $('readout-'+(i?'b':'a')).textContent=`${contact?contact+' · ':''}P1 ${labelFor(s)} / ${pose.name} · x ${dx.toFixed(2)} px · v ${(s[2]/8).toFixed(2)} px/f`+
+  (s[83]?` | P2 ${labelFor(opponent)} · HP ${opponent[34]} · recoil ${opponent[37]}/${opponent[38]} · stun ${opponent[35]} · freeze left ${s[80]}`:'');
 }
 function render(){
  if(!ready || !samples[1].length)return;
@@ -128,8 +146,12 @@ function renderTimeline(){
    !$('live').checked&&n>=seqStop&&n<seqStop + +$('seq-stop').value?['Stop','stop']:['Idle','idle'];
  })])];
  for(const i of ($('compare').checked?[0,1]:[1])){
-  rows.push(track((i?'B':'A')+' motion',samples[i].map(s=>[labelFor(s),motionClass(s)])));
-  rows.push(track((i?'B':'A')+' drawing',samples[i].map(s=>{const p=descriptor.manifest.frames[s[4]];return [p.name,motionClass(s)];})));
+  const name=i?'B':'A';
+  rows.push(track(name+' contact',samples[i].map(s=>s[82]?[s[82]&3?'Hit':'Blocked','freeze']:s[81]?['Hit-stop','freeze']:['','idle'])));
+  for(const p of (samples[i][0][83]?[0,1]:[0])) {
+   rows.push(track(name+' P'+(p+1)+' motion',samples[i].map(s=>{const f=s.slice(p*40,p*40+40);return [labelFor(f),motionClass(f)];})));
+   rows.push(track(name+' P'+(p+1)+' pose',samples[i].map(s=>{const f=s.slice(p*40,p*40+40);return [descriptor.manifest.frames[f[4]].name,motionClass(f)];})));
+  }
  }
  $('timeline').replaceChildren(...rows);
 }
@@ -146,19 +168,22 @@ function fields(){
  for(const [name,items] of groups){const group=document.createElement('fieldset');group.className='tuning-group';const legend=document.createElement('legend');legend.textContent=name;group.append(legend);
   for(const [key,label,hint] of items){const f=schema.character.find(f=>f.key===key);if(!f)continue;
    const row=document.createElement('label');row.className='tuning-field';const span=document.createElement('span');span.textContent=label;const small=document.createElement('small');small.textContent=hint;span.append(small);
-   const input=document.createElement('input');Object.assign(input,{type:'number',name:key,min:f.minimum,max:f.maximum,step:1,value:draft[key]});input.required=true;
-   input.oninput=()=>{draft[key]=input.valueAsNumber;status('Unsaved draft. Preview updated; saved character unchanged.');rebuild();};row.append(span,input);group.append(row);
+   const input=document.createElement(key==='hit_reaction_style'?'select':'input');input.name=key;
+   if(key==='hit_reaction_style')for(const [value,text] of ['Borrowed poses','Restrained','Exaggerated'].entries()){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option);}
+   else Object.assign(input,{type:'number',min:f.minimum,max:f.maximum,step:1});
+   input.value=draft[key];input.required=true;
+   input.oninput=()=>{draft[key]=+input.value;status('Unsaved draft. Preview updated; saved character unchanged.');rebuild();};row.append(span,input);group.append(row);
   }$('tuning').append(group);
  }
 }
 function loadLibrary(){
  try{library=JSON.parse(localStorage.getItem(takesKey)||'[]');if(!Array.isArray(library))library=[];}catch{library=[];}
- // v7 takes have the same numeric fields except the four new visual timers.
- // Merge those from the current character when loading; retain the original take.
+ // Older takes inherit newly introduced fields from the current character.
  library=library.filter(t=>typeof t.name==='string'&&typeof t.id==='string'&&
-  (+t.version===+saved.schema_version || (+t.version===7 && +saved.schema_version===8))&&
+  (+t.version>=7 && +t.version<=+saved.schema_version)&&
   t.values&&typeof t.values==='object').slice(-20);
 }
+function takeValues(base,take){return {...base,...(+take.version<10?{hit_reaction_style:0}:{}),...take.values};}
 function libraryOptions(){
  const refValue=$('reference').value,takeValue=$('takes').value;
  for(const [id,label] of [['reference','Saved at load'],['takes','Choose a take']]){const select=$(id);select.replaceChildren();const option=document.createElement('option');option.value=id==='reference'?'saved':'';option.textContent=label;select.append(option);
@@ -191,6 +216,9 @@ $('facing').onclick=()=>{facing=-facing;$('facing').textContent=facing===1?'Face
 $('compare').onchange=()=>{$('reference-view').hidden=!$('compare').checked;$('views').classList.toggle('compare',$('compare').checked);fit();renderTimeline();render();};
 for(const id of ['onion','guides','boxes'])$(id).onchange=render;
 for(const id of ['idle','step','stop','tail'])$('seq-'+id).oninput=()=>{rebuild();};
+for(const id of ['opponent','gap'])$(id).onchange=()=>rebuild(false);
+$('miss').onclick=()=>{$('opponent').value='1';$('gap').value=120;rebuild(false);};
+$('contact').onclick=()=>{const n=samples[1].findIndex(s=>s[82]);if(n>=0)seek(n);else status('No contact in this recording. Reduce the gap or step farther.');};
 $('live').onchange=()=>{keyboard=0;pointers.clear();inputFrames=[];$('live-pad').hidden=!$('live').checked;document.querySelectorAll('.sequence-fields input').forEach(e=>e.disabled=$('live').checked);rebuild(false);$('views').focus();};
 const keys={ArrowLeft:1,ArrowRight:2,ArrowUp:4,ArrowDown:8,KeyN:16,KeyM:32};
 window.addEventListener('keydown',e=>{if(!$('live').checked||!keys[e.code]||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;e.preventDefault();keyboard|=keys[e.code];});
@@ -200,7 +228,7 @@ document.querySelectorAll('[data-mask]').forEach(button=>{
  button.onpointerdown=e=>{e.preventDefault();button.setPointerCapture(e.pointerId);pointers.set(e.pointerId,+button.dataset.mask);$('views').focus();};
  button.onpointerup=button.onpointercancel=button.onlostpointercapture=e=>pointers.delete(e.pointerId);
 });
-$('reference').onchange=()=>{const take=library.find(t=>t.id===$('reference').value);reference=take?{...baseline,...take.values}:{...baseline};rebuild();};
+$('reference').onchange=()=>{const take=library.find(t=>t.id===$('reference').value);reference=take?takeValues(baseline,take):{...baseline};rebuild();};
 $('takes').onchange=()=>{$('load-take').disabled=!$('takes').value;};
 $('keep-take').onclick=()=>{
  try{validate(draft);const name=$('take-name').value.trim();if(!name)throw Error('Give this take a name first.');
@@ -210,7 +238,7 @@ $('keep-take').onclick=()=>{
   $('takes').value=take.id;$('load-take').disabled=false;status(`Kept “${name}” in this browser. Select it as reference A to compare.`);
  }catch(e){status(e.message,true);}
 };
-$('load-take').onclick=()=>{const take=library.find(t=>t.id===$('takes').value);if(!take)return;draft={...saved,...take.values};fields();rebuild();if(valid)status(`Loaded “${take.name}” into draft B.`);};
+$('load-take').onclick=()=>{const take=library.find(t=>t.id===$('takes').value);if(!take)return;draft=takeValues(saved,take);fields();rebuild();if(valid)status(`Loaded “${take.name}” into draft B.`);};
 $('reset-draft').onclick=()=>{draft={...saved};fields();rebuild();status('Draft B restored to the saved character.');};
 $('save').onclick=async()=>{
  $('save').disabled=true;

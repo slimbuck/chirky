@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 10,
   "format": "key=value",
   "unknown_fields": "reject",
   "duplicate_fields": "reject",
@@ -11,8 +11,29 @@
     {
       "key": "schema_version",
       "type": "integer",
-      "minimum": 8,
-      "maximum": 8,
+      "minimum": 10,
+      "maximum": 10,
+      "required": true
+    },
+    {
+      "key": "hit_reaction_style",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2,
+      "required": true
+    },
+    {
+      "key": "hit_impact_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "hit_recover_ticks",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12,
       "required": true
     },
     {
@@ -184,6 +205,27 @@
       "required": true
     },
     {
+      "key": "air_punch_hitstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "air_punch_blockstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "air_punch_recoil_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
+      "required": true
+    },
+    {
       "key": "air_kick_startup_ticks",
       "type": "integer",
       "minimum": 0,
@@ -209,6 +251,27 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 119,
+      "required": true
+    },
+    {
+      "key": "air_kick_hitstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "air_kick_blockstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "air_kick_recoil_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
       "required": true
     },
     {
@@ -352,6 +415,27 @@
       "required": true
     },
     {
+      "key": "punch_hitstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "punch_blockstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "punch_recoil_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
+      "required": true
+    },
+    {
       "key": "punch_damage",
       "type": "integer",
       "minimum": 0,
@@ -426,6 +510,27 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 119,
+      "required": true
+    },
+    {
+      "key": "kick_hitstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "kick_blockstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "kick_recoil_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
       "required": true
     },
     {
@@ -506,6 +611,27 @@
       "required": true
     },
     {
+      "key": "crouch_punch_hitstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_blockstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "crouch_punch_recoil_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
+      "required": true
+    },
+    {
       "key": "crouch_punch_damage",
       "type": "integer",
       "minimum": 0,
@@ -580,6 +706,27 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 119,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_hitstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_blockstop_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12,
+      "required": true
+    },
+    {
+      "key": "crouch_kick_recoil_ticks",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30,
       "required": true
     },
     {
@@ -744,7 +891,7 @@
         96,
         96
       ],
-      "frameCount": 22
+      "frameCount": 28
     }
   ],
   "stage": [

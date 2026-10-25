@@ -35,7 +35,7 @@ test('Arthur runtime copies authored clips exactly, preserving native cells, fee
     for(let y=0;y<96;y++)pixels.copy(png,(((Math.floor(first/columns)*96+y)*width)+(first%columns)*96)*4,y*stride,(y+1)*stride);
     first+=clip.names.length;
   }
-  assert.equal(first,22);
+  assert.equal(first,28);
   assert.deepEqual(manifest.atlas_size,[width,height]);assert.deepEqual(manifest.cell_size,[96,96]);
   assert.deepEqual(manifest.cell_size,manifest.draw_size);
   const pam=fs.readFileSync(root+manifest.runtime),offset=pam.indexOf('ENDHDR\n')+7;
@@ -44,7 +44,7 @@ test('Arthur runtime copies authored clips exactly, preserving native cells, fee
   assert.equal(hash(png),manifest.rgba_sha256);
   const palette=new Set();
   const expectedFeet=layout.clips.flatMap(c=>c.feet_rows);
-  for(let f=0;f<22;f++) {
+  for(let f=0;f<28;f++) {
     const soles=[-1,-1];
     for(let y=0;y<96;y++)for(let x=0;x<96;x++) {
       const i=((Math.floor(f/columns)*96+y)*width+(f%columns)*96+x)*4,a=png[i+3];assert(a===0||a===255);
@@ -55,7 +55,15 @@ test('Arthur runtime copies authored clips exactly, preserving native cells, fee
     assert.deepEqual(manifest.frames[f].feet_rows,soles);
   }
   assert(palette.size<=52);
-  for(let y=96;y<height;y++)for(let x=6*96;x<width;x++)assert.equal(png[(y*width+x)*4+3],0,'Unused atlas cells are transparent');
+  for(let y=96;y<height;y++)for(let x=12*96;x<width;x++)assert.equal(png[(y*width+x)*4+3],0,'Unused atlas cells are transparent');
+  for(const id of ['hit_restrained','hit_exaggerated']) {
+    const clip=manifest.clips.find(c=>c.id===id),reference=rgba(fs.readFileSync(root+clip.planted_reference));
+    assert.deepEqual(clip.names,['impact','recoil','recover']);
+    for(let n=0;n<3;n++)for(let y=clip.planted_from_row;y<96;y++)for(let x=0;x<96;x++) {
+      const a=(y*384+x)*4,b=((Math.floor((clip.first+n)/columns)*96+y)*width+((clip.first+n)%columns)*96+x)*4;
+      assert(reference.subarray(a,a+4).equals(png.subarray(b,b+4)),`${id} planted lower leg ${n}:${x},${y}`);
+    }
+  }
   assert.deepEqual([...png.subarray((34*width+244)*4,(34*width+244)*4+4)],[246,242,240,255]);
   // Attack upper bodies are intentionally reauthored. Freeze the reviewed new
   // pixels above via source hashes; preserve the grounded art below separately.

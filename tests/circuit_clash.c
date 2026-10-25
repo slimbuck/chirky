@@ -2,6 +2,20 @@
 #include "../games/circuit-clash/game.c"
 #include "local_input.h"
 
+/* These existing cases measure unfrozen combat/legacy instant knockback.
+   Enabled contact feedback has separate exact-frame coverage below. */
+static bool init_without_impact(const struct chirky_host_api *api,const char *path)
+{
+    if(!init(api,path))return false;
+    for(int p=0;p<2;p++) {
+#define NO_IMPACT(m) characters[p].m##_hitstop_ticks=characters[p].m##_blockstop_ticks=characters[p].m##_recoil_ticks=0
+        NO_IMPACT(punch);NO_IMPACT(kick);NO_IMPACT(crouch_punch);
+        NO_IMPACT(crouch_kick);NO_IMPACT(air_punch);NO_IMPACT(air_kick);
+#undef NO_IMPACT
+    }
+    return true;
+}
+
 static unsigned rectangles,texts,sprites;
 static void sprite(void *ctx,chirky_asset image,int x,int y,int w,int h,int sx,int sy,int sw,int sh,
                    unsigned char r,unsigned char g,unsigned char b,unsigned char a,bool flip)
@@ -34,7 +48,7 @@ static void clean_simulation(void)
 }
 static void movement_and_balance(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));
     struct character_tuning approved=characters[0];
     clean_simulation();
     /* Per-player tuning, acceleration and neutral braking. */
@@ -99,7 +113,7 @@ static void movement_and_balance(const struct chirky_host_api *api)
     artwork[0]=artwork[1]=1;show_boxes=true;render();assert(sprites==2);
     artwork[0]=artwork[1]=0;shutdown();
     /* Join once, start practice, reset, then disconnect/rejoin the solo slot. */
-    memset(&bank,0,sizeof(bank));assert(init(api,"games/circuit-clash/game.conf"));
+    memset(&bank,0,sizeof(bank));assert(init_without_impact(api,"games/circuit-clash/game.conf"));
     tick(0,256,256);tick(16,256,256);tick(0,256,256);tick(64,256,256);
     assert(practice && !waiting && players[0]==1 && !players[1]);
     tick(0,256,256);for(int i=0;i<90;i++)tick(0,256,256);
@@ -140,7 +154,7 @@ static void malformed_tuning(void)
 }
 static void animation_timing(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));
     /* At full forward speed, distance-based holds equal the configured frames.
        Enter on a passing foot after push-off, reverse traversal when retreating. */
     struct character_tuning approved=characters[0];
@@ -193,7 +207,7 @@ static void animation_timing(const struct chirky_host_api *api)
 }
 static void responsive_locomotion(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));
     struct character_tuning approved=characters[0];
     int fast[18];
     for(int take=0;take<2;take++) {
@@ -248,7 +262,7 @@ static void responsive_locomotion(const struct chirky_host_api *api)
 }
 static void jump_response(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));clean_simulation();
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));clean_simulation();
     fighters[1].x=230*8;
     controls[0].buttons[CHIRKY_BUTTON_UP]=true;
     controls[0].button_pressed[CHIRKY_BUTTON_UP]=true;simulate();
@@ -288,7 +302,7 @@ static void jump_response(const struct chirky_host_api *api)
 }
 static void aerial_attacks(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));
     struct fighter arc[30];
     clean_simulation();fighters[0].x=60*8;fighters[1].x=230*8;
     controls[0].buttons[CHIRKY_BUTTON_RIGHT]=true;
@@ -365,7 +379,7 @@ static void aerial_attacks(const struct chirky_host_api *api)
 }
 static void kick_and_kneel(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));clean_simulation();
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));clean_simulation();
     const struct character_tuning *c=&characters[0];
     /* Hit the inner edge of the authored reach, but not its outer boundary. */
     int limit=c->kick_reach_px+characters[1].body_half_width_px;
@@ -412,7 +426,7 @@ static void kick_and_kneel(const struct chirky_host_api *api)
 }
 static void explicit_guard_and_balance(const struct chirky_host_api *api)
 {
-    assert(init(api,"games/circuit-clash/game.conf"));
+    assert(init_without_impact(api,"games/circuit-clash/game.conf"));
     for(int low=0;low<2;low++) {
         clean_simulation();controls[0].buttons[CHIRKY_BUTTON_DOWN]=low;
         controls[0].buttons[CHIRKY_BUTTON_PRIMARY]=controls[0].buttons[CHIRKY_BUTTON_SECONDARY]=true;
@@ -476,10 +490,76 @@ static void explicit_guard_and_balance(const struct chirky_host_api *api)
     assert(move_for(1).damage==37 && characters[0].crouch_punch_damage==10);
     shutdown();
 }
+static void contact_feedback(const struct chirky_host_api *api)
+{
+    assert(init(api,"games/circuit-clash/game.conf"));
+    /* All six moves, mirrored, with independent hit/block freezes. */
+    for(int mode=0;mode<3;mode++)for(int kind=1;kind<=2;kind++)
+    for(int guard=0;guard<2;guard++)for(int facing=-1;facing<=1;facing+=2) {
+        clean_simulation();fighters[0].x=144*8;fighters[1].x=(144+40*facing)*8;
+        fighters[0].facing=facing;fighters[1].facing=-facing;
+        fighters[0].attack=kind;fighters[0].crouch=mode==1;fighters[0].air_attack=mode==2;
+        /* Guard is grounded. Air hits can reach its upper body from 10 px. */
+        if(mode==2){fighters[0].y=10*8;fighters[0].vy=24;}
+        controls[1].buttons[CHIRKY_BUTTON_PRIMARY]=controls[1].buttons[CHIRKY_BUTTON_SECONDARY]=guard;
+        struct attack_tuning m=move_for(0);fighters[0].action_tick=m.startup-1;
+        int start=fighters[1].x;simulate();
+        assert(contact_mask==(guard?4u:1u));assert(fighters[1].health==100-(guard?0:m.damage));
+        assert(hitstop==(guard?m.blockstop:m.hitstop) && !frozen_frame);
+        assert(fighters[1].x==start && fighters[1].recoil_ticks>0);
+        struct fighter frozen[2];memcpy(frozen,fighters,sizeof(frozen));unsigned round=round_ticks;
+        int stops=hitstop;
+        for(int n=0;n<stops;n++) {
+            simulate();assert(frozen_frame && hitstop==stops-n-1 && !contact_mask);
+            assert(!memcmp(frozen,fighters,sizeof(frozen)) && round_ticks==round);
+        }
+        int duration=fighters[1].recoil_ticks,first_delta=0,last_delta=0;
+        for(int n=0;n<duration;n++) {
+            int before=fighters[1].x;simulate();last_delta=abs(fighters[1].x-before);
+            if(!n)first_delta=last_delta;
+            assert(!frozen_frame && fighters[1].health==100-(guard?0:m.damage));
+        }
+        int distance=m.knockback*8*(guard?characters[1].block_knockback_percent:100)/characters[1].weight_percent;
+        assert(fighters[1].x==start+facing*distance && first_delta>=last_delta);
+    }
+    /* A miss never freezes or recoils. */
+    clean_simulation();fighters[1].x=220*8;fighters[0].attack=1;
+    fighters[0].action_tick=characters[0].punch_startup_ticks-1;simulate();
+    assert(!hitstop && !contact_mask && fighters[1].health==100 && !fighters[1].recoil_ticks);
+    /* Simultaneous contact stays symmetric; use the larger freeze, not a sum. */
+    clean_simulation();characters[1].punch_hitstop_ticks=5;
+    for(int p=0;p<2;p++){fighters[p].attack=1;fighters[p].action_tick=characters[p].punch_startup_ticks-1;}
+    simulate();assert(contact_mask==3 && hitstop==5 && fighters[0].health==86 && fighters[1].health==86);
+    /* A buffered edge is replayed once on resume; holding does not auto-jump. */
+    clean_simulation();characters[0].punch_hitstun_ticks=1;
+    fighters[0].attack=1;fighters[0].action_tick=characters[0].punch_startup_ticks-1;simulate();
+    controls[1].button_pressed[CHIRKY_BUTTON_UP]=true;simulate();
+    controls[1].button_pressed[CHIRKY_BUTTON_UP]=false;
+    while(hitstop)simulate();
+    simulate();
+    assert(fighters[1].jump_wait==characters[1].jump_startup_ticks && !buffered_presses[1]);
+    for(int n=0;n<70;n++)simulate();
+    assert(!fighters[1].jump_wait && !fighters[1].y);
+    characters[0].punch_hitstun_ticks=8;
+    /* Walls consume recoil instead of storing a delayed burst of movement. */
+    clean_simulation();fighters[1].x=(host->screen_width-stage.wall_margin_px)*8;
+    fighters[0].x=fighters[1].x-40*8;int wall=fighters[1].x;
+    fighters[0].attack=1;fighters[0].action_tick=characters[0].punch_startup_ticks-1;simulate();
+    for(int n=0;n<30;n++){simulate();assert(fighters[1].x==wall);}
+    /* KO must finish its freeze even while an attack button remains held. */
+    clean_simulation();fighters[1].health=1;fighters[0].attack=1;
+    fighters[0].action_tick=characters[0].punch_startup_ticks-1;
+    controls[0].buttons[CHIRKY_BUTTON_PRIMARY]=true;simulate();
+    assert(winner==0 && hitstop && !release_gate);
+    while(hitstop)simulate();
+    assert(release_gate);
+    reset_round();assert(!hitstop && !buffered_presses[0] && !fighters[1].recoil_ticks);
+    shutdown();
+}
 int main(void)
 {
     struct chirky_host_api api={.abi_version=CHIRKY_ABI_VERSION,.screen_width=288,.screen_height=216,.fill_rect=fill,.draw_text=draw,.draw_sprite=sprite};
-    assert(init(&api,"games/circuit-clash/game.conf"));
+    assert(init_without_impact(&api,"games/circuit-clash/game.conf"));
     tick(16,0,0);assert(!players[0]); /* Held launch press cannot join. */
     tick(0,0,0);tick(64,64,0);assert(!players[0] && !players[1]);
     tick(0,0,0);tick(16,0,0);assert(players[0]==1 && !players[1]);
@@ -515,10 +595,11 @@ int main(void)
     fighters[0].health=fighters[1].health=characters[0].punch_damage;
     tick(16,256,16);for(int i=0;i<6;i++)tick(0,256,0);
     assert(winner==2 && fighters[0].health==0 && fighters[1].health==0);
-    shutdown();assert(init(&api,"games/circuit-clash/game.conf") && !players[0] && !players[1]);
+    shutdown();assert(init_without_impact(&api,"games/circuit-clash/game.conf") && !players[0] && !players[1]);
     api.screen_width=256;api.screen_height=192;tick(0,0,0);tick(16,16,0);tick(0,0,0);
     assert(rectangles && texts);
     shutdown();api.screen_width=288;api.screen_height=216;
     movement_and_balance(&api);animation_timing(&api);responsive_locomotion(&api);jump_response(&api);kick_and_kneel(&api);aerial_attacks(&api);explicit_guard_and_balance(&api);malformed_tuning();
-    puts("Circuit Clash: joins, practice, movement, crouch, jump, attack windows, guard, weight, collision, KO, tuning validation and 1:1 sprites passed.");
+    contact_feedback(&api);
+    puts("Circuit Clash: movement, combat, exact hit-stop, eased recoil, trades, guard, walls, buffered input, KO and 1:1 sprites passed.");
 }

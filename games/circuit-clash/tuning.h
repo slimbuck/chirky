@@ -10,7 +10,10 @@
 /* This field list also generates the future editor's numeric schema. Speeds
    use eighths of a pixel per update; timers count game updates (nominally 60Hz). */
 #define CC_CHARACTER_FIELDS(X) \
- X(schema_version,8,8) \
+ X(schema_version,10,10) \
+ X(hit_reaction_style,0,2) \
+ X(hit_impact_ticks,1,12) \
+ X(hit_recover_ticks,1,12) \
  X(health,1,10000) \
  X(weight_percent,25,400) \
  X(walk_speed_fp8,1,64) \
@@ -35,10 +38,16 @@
  X(air_punch_active_ticks,1,120) \
  X(air_punch_recovery_ticks,1,120) \
  X(air_punch_followthrough_ticks,0,119) \
+ X(air_punch_hitstop_ticks,0,12) \
+ X(air_punch_blockstop_ticks,0,12) \
+ X(air_punch_recoil_ticks,0,30) \
  X(air_kick_startup_ticks,0,120) \
  X(air_kick_active_ticks,1,120) \
  X(air_kick_recovery_ticks,1,120) \
  X(air_kick_followthrough_ticks,0,119) \
+ X(air_kick_hitstop_ticks,0,12) \
+ X(air_kick_blockstop_ticks,0,12) \
+ X(air_kick_recoil_ticks,0,30) \
  X(block_release_ticks,0,60) \
  X(block_chord_ticks,0,6) \
  X(block_knockback_percent,0,100) \
@@ -59,6 +68,9 @@
  X(punch_active_ticks,1,120) \
  X(punch_recovery_ticks,1,120) \
  X(punch_followthrough_ticks,0,119) \
+ X(punch_hitstop_ticks,0,12) \
+ X(punch_blockstop_ticks,0,12) \
+ X(punch_recoil_ticks,0,30) \
  X(punch_damage,0,1000) \
  X(punch_reach_px,1,96) \
  X(punch_bottom_px,0,64) \
@@ -70,6 +82,9 @@
  X(kick_active_ticks,1,120) \
  X(kick_recovery_ticks,1,120) \
  X(kick_followthrough_ticks,0,119) \
+ X(kick_hitstop_ticks,0,12) \
+ X(kick_blockstop_ticks,0,12) \
+ X(kick_recoil_ticks,0,30) \
  X(kick_damage,0,1000) \
  X(kick_reach_px,1,96) \
  X(kick_bottom_px,0,64) \
@@ -81,6 +96,9 @@
  X(crouch_punch_active_ticks,1,120) \
  X(crouch_punch_recovery_ticks,1,120) \
  X(crouch_punch_followthrough_ticks,0,119) \
+ X(crouch_punch_hitstop_ticks,0,12) \
+ X(crouch_punch_blockstop_ticks,0,12) \
+ X(crouch_punch_recoil_ticks,0,30) \
  X(crouch_punch_damage,0,1000) \
  X(crouch_punch_reach_px,1,96) \
  X(crouch_punch_bottom_px,0,64) \
@@ -92,6 +110,9 @@
  X(crouch_kick_active_ticks,1,120) \
  X(crouch_kick_recovery_ticks,1,120) \
  X(crouch_kick_followthrough_ticks,0,119) \
+ X(crouch_kick_hitstop_ticks,0,12) \
+ X(crouch_kick_blockstop_ticks,0,12) \
+ X(crouch_kick_recoil_ticks,0,30) \
  X(crouch_kick_damage,0,1000) \
  X(crouch_kick_reach_px,1,96) \
  X(crouch_kick_bottom_px,0,64) \

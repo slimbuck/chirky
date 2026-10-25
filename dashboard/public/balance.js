@@ -31,7 +31,11 @@ async function load(id){
     span.textContent=label(f.key.replace(/^(crouch_|air_)?(punch|kick)_/,''));input.type='number';input.name=f.key;input.min=f.minimum;input.max=f.maximum;input.step=1;input.required=true;input.value=current.values[f.key];
     hint.textContent=/^walk_\d_ticks$/.test(f.key)?'Frames at full forward speed; actual travel advances the drawing.':
      /^(push_off|stop_plant|stop_sink|stop_rise)_ticks$/.test(f.key)?'Visual frames only; no input lock. Plant lasts through braking.':
-     f.key.endsWith('_followthrough_ticks')?'Extra strike-pose frames during recovery; no hitbox.':`${f.minimum}–${f.maximum}`;l.append(span,input,hint);grid.append(l);
+     f.key.endsWith('_followthrough_ticks')?'Extra strike-pose frames during recovery; no hitbox.':
+     /_(hitstop|blockstop)_ticks$/.test(f.key)?'Extra frozen frames on hit / block. Both fighters pause; no freeze on a miss.':
+     f.key.endsWith('_recoil_ticks')?'Ease-out knockback duration, capped below stun length. 0 = instant.':
+     f.key==='hit_reaction_style'?'0 borrowed poses, 1 restrained, 2 exaggerated. Grounded hits only.':
+     /^hit_(impact|recover)_ticks$/.test(f.key)?'Drawing holds within hitstun; never extends the action lock.':`${f.minimum}–${f.maximum}`;l.append(span,input,hint);grid.append(l);
    }fieldset.append(grid);$('#fields').append(fieldset);
   }
   dirty=false;compare();status('Saved values loaded.');

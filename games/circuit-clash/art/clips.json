@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 10,
   "cell_size": [
     96,
     96
@@ -361,6 +361,68 @@
       "timing_fields": [
         null
       ]
+    },
+    {
+      "id": "hit_restrained",
+      "source": "art/arthur/hit-restrained-v1.png",
+      "names": [
+        "impact",
+        "recoil",
+        "recover"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "hit_impact_ticks",
+        null,
+        "hit_recover_ticks"
+      ],
+      "planted_reference": "art/arthur/idle-approved.png",
+      "planted_from_row": 68,
+      "note": "Dedicated grounded reaction. Impact holds through hit-stop; subsequent holds fit within hitstun. Lower legs retain approved pixel anchors; no added runtime bob or interpolation."
+    },
+    {
+      "id": "hit_exaggerated",
+      "source": "art/arthur/hit-exaggerated-v1.png",
+      "names": [
+        "impact",
+        "recoil",
+        "recover"
+      ],
+      "feet_rows": [
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ],
+        [
+          79,
+          79
+        ]
+      ],
+      "timing_fields": [
+        "hit_impact_ticks",
+        null,
+        "hit_recover_ticks"
+      ],
+      "planted_reference": "art/arthur/idle-approved.png",
+      "planted_from_row": 68,
+      "note": "Dedicated grounded reaction. Impact holds through hit-stop; subsequent holds fit within hitstun. Lower legs retain approved pixel anchors; no added runtime bob or interpolation."
     }
   ],
   "atlas_columns": 16

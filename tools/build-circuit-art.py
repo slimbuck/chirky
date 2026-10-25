@@ -14,7 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 GAME = ROOT / 'games/circuit-clash'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, default=GAME)
-out = parser.parse_args().output
+parser.add_argument('--import-hit-sources', type=Path, help='Offline import of six generated poses; writes review sheets to --output, then exits.')
+args = parser.parse_args()
+out = args.output
+if args.import_hit_sources:
+    from circuit_reaction_import import import_reactions
+    import_reactions(GAME, args.import_hit_sources, out)
+    raise SystemExit(0)
 layout = json.loads((GAME / 'art/clips.json').read_text())
 assert layout['cell_size'] == [96, 96] and layout['anchor'] == [48, 80]
 count = sum(len(clip['names']) for clip in layout['clips'])
@@ -50,8 +56,9 @@ manifest = {
     'atlas_size': list(image.size), 'atlas_columns': columns, 'cell_size': [96, 96], 'draw_size': [96, 96],
     'anchor': [48, 80], 'baseline_row': 79, 'alpha': 'binary',
     'frames': frames, 'timing': 'assets/characters/arthur.conf',
-    'pending_clips': ['hit', 'knockdown'],
+    'pending_clips': ['air_hit', 'crouch_hit', 'knockdown'],
     'provenance': 'Native idle, body-bobbing walk, punch, airborne tuck, kick and kneeling guard. '
+                  'Two dedicated grounded hit-reaction studies. '
                   'Already reduced to the final native grid; this export copies pixels exactly.'
 }
 (out / 'art').mkdir(parents=True, exist_ok=True)

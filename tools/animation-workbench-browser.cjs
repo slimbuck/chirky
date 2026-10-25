@@ -20,6 +20,22 @@ async function main(){
   for(let n=0;n<150;n++){if(await page.eval('window.animationWorkbench?.ready'))break;await delay(100);}
   assert(await page.eval('window.animationWorkbench?.ready'),await page.eval('document.querySelector("#status").textContent'));
   await page.eval('document.querySelector("#play").click()');
+  const exchange=await page.eval('animationWorkbench.samples[1]');
+  const hit=exchange.findIndex(s=>s[82]===1);assert(hit>0);
+  assert.equal(exchange[hit][74],86);assert.equal(exchange.filter(s=>s[81]).length,3);
+  for(let i=1;i<=3;i++)assert.deepEqual(exchange[hit+i].slice(0,80),exchange[hit].slice(0,80));
+  assert.equal(Math.abs(exchange.at(-1)[40]-exchange[hit][40]),8*8);
+  await page.eval('document.querySelector("#contact").click()');assert.equal(await page.eval('animationWorkbench.frame'),hit);
+  await page.eval('{const e=document.querySelector("[name=punch_hitstop_ticks]");e.value=0;e.dispatchEvent(new Event("input"));}');
+  const withoutFreeze=await page.eval('animationWorkbench.samples');
+  assert.equal(withoutFreeze[0].filter(s=>s[81]).length,3);assert.equal(withoutFreeze[1].filter(s=>s[81]).length,0);
+  await page.eval('document.querySelector("#reset-draft").click();document.querySelector("#opponent").value=2;document.querySelector("#opponent").dispatchEvent(new Event("change"))');
+  const guard=await page.eval('animationWorkbench.samples[1]');assert(guard.some(s=>s[82]===4));assert.equal(guard.at(-1)[74],100);
+  assert.equal(guard.filter(s=>s[81]).length,1);
+  await page.eval('document.querySelector("#miss").click()');
+  assert((await page.eval('animationWorkbench.samples[1]')).every(s=>!s[80]&&!s[82]&&s[74]===100));
+  // Solo mode isolates native texels from the other fighter's overlapping art.
+  await page.eval('document.querySelector("#opponent").value=0;document.querySelector("#opponent").dispatchEvent(new Event("change"))');
   const data=await page.eval('animationWorkbench.samples');assert.equal(data.length,2);assert.deepEqual(data[0],data[1]);
   assert(data[1].some(s=>s[9]===2)&&data[1].some(s=>s[9]===3));
   // Compare every opaque native sprite texel against the actual runtime atlas,
