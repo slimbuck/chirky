@@ -30,7 +30,7 @@ test('audio fetch failure is retryable and never starts playback by itself',asyn
 test('actual workbench transport only auditions running playback, never rebuild or seek',()=>{
  const source=fs.readFileSync('dashboard/public/animation-workbench.js','utf8');
  const section=source.slice(source.indexOf('function rebuild('),source.indexOf('function labelFor('));
- const elements={live:{checked:false},listen:{value:'1'},play:{},gap:{checkValidity:()=>true}};
+ const elements={live:{checked:false},listen:{value:'1'},play:{},gap:{checkValidity:()=>true},'counter-delay':{checkValidity:()=>true}};
  const event=Array(89).fill(0);event[85]=1;event[86]=70;
  const played=[];let stops=0;
  const context=vm.createContext({sound:{stop(){stops++;},sample(s){if(s[85])played.push(s[85]);}},

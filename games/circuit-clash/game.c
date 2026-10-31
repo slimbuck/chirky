@@ -20,6 +20,10 @@ static struct character_tuning characters[2];
 static struct stage_tuning stage;
 static chirky_asset artwork[2];
 static bool practice,show_boxes;
+enum dummy_mode { DUMMY_HIT=1, DUMMY_BLOCK, DUMMY_COUNTER };
+enum dummy_phase { DUMMY_GUARD, DUMMY_WAIT, DUMMY_STRIKE };
+static int practice_mode=DUMMY_COUNTER;
+static struct { int phase,wait; unsigned previous,mask; } dummy;
 static uint32_t players[2];
 static struct chirky_device_input controls[2];
 static char keyboard_join[64];
@@ -30,6 +34,7 @@ static int hitstop;
 static unsigned buffered_presses[2];
 static bool frozen_frame;
 static unsigned contact_mask;
+static unsigned recovery_hit_mask;
 enum combat_cue { CUE_NONE, CUE_PUNCH, CUE_KICK, CUE_BLOCK, CUE_MISS, CUE_COUNT };
 static chirky_asset sound_assets[CUE_COUNT];
 /* One event per attacker per update. The workbench records these, without audio
@@ -58,7 +63,8 @@ static void reset_round(void)
     fighters[1]=(struct fighter){.x=host->screen_width*8*stage.spawn_right_percent/100,.health=characters[1].health,.facing=-1};
     countdown=stage.countdown_ticks;round_ticks=0;winner=-1;release_gate=true;
     hitstop=0;memset(buffered_presses,0,sizeof(buffered_presses));
-    frozen_frame=false;contact_mask=0;memset(sound_events,0,sizeof(sound_events));
+    memset(&dummy,0,sizeof(dummy));
+    frozen_frame=false;contact_mask=0;recovery_hit_mask=0;memset(sound_events,0,sizeof(sound_events));
 }
 static void release_art(void)
 {
@@ -119,7 +125,7 @@ static bool load_content(const char *config)
 static bool init(const struct chirky_host_api *api,const char *config)
 {
     if(!api || api->abi_version!=CHIRKY_ABI_VERSION || !api->fill_rect || !api->draw_text)return false;
-    host=api;memset(artwork,0,sizeof(artwork));memset(sound_assets,0,sizeof(sound_assets));practice=false;
+    host=api;memset(artwork,0,sizeof(artwork));memset(sound_assets,0,sizeof(sound_assets));practice=false;practice_mode=DUMMY_COUNTER;
     if(!load_content(config)){release_art();host=NULL;return false;}
     memset(players,0,sizeof(players));memset(controls,0,sizeof(controls));
     memset(connected,0,sizeof(connected));memset(gates,0,sizeof(gates));
@@ -210,9 +216,39 @@ static void update_locomotion(int p,int old_x)
         f->motion=MOTION_IDLE;f->motion_tick=0;f->animation_tick=0;
     }
 }
+/* Shared practice/workbench opponent. Only produces ordinary input; it never
+   edits fighter timers, range, position or hit results. Delay counts actionable
+   simulation updates after guard recovery, excluding hit-stop. */
+static void dummy_control(int mode,int delay)
+{
+    memset(&controls[1],0,sizeof(controls[1]));
+    if(hitstop)return;
+    struct fighter *f=&fighters[1];unsigned mask=0;
+    if(delay<0)delay=0;
+    if(delay>30)delay=30;
+    if(mode==DUMMY_BLOCK)mask=(1u<<CHIRKY_BUTTON_PRIMARY)|(1u<<CHIRKY_BUTTON_SECONDARY);
+    else if(mode==DUMMY_COUNTER && winner==-1) {
+        if(dummy.phase==DUMMY_GUARD && f->stun && f->guard_stun) {
+            dummy.phase=DUMMY_WAIT;dummy.wait=0;
+        }
+        if(dummy.phase==DUMMY_WAIT && f->stun && !f->guard_stun)dummy.phase=DUMMY_GUARD;
+        if(dummy.phase==DUMMY_STRIKE && !f->attack)dummy.phase=DUMMY_GUARD;
+        if(dummy.phase==DUMMY_GUARD)mask=(1u<<CHIRKY_BUTTON_PRIMARY)|(1u<<CHIRKY_BUTTON_SECONDARY);
+        else if(dummy.phase==DUMMY_WAIT && !f->blocking && f->stun<=1 && f->guard_release<=1 &&
+                !f->attack && !f->y && !f->vy && !f->jump_wait && f->landing<=1 && f->transition<=1) {
+            if(dummy.wait<delay)dummy.wait++;
+            else {mask=1u<<CHIRKY_BUTTON_PRIMARY;dummy.phase=DUMMY_STRIKE;}
+        }
+    }
+    for(int b=0;b<CHIRKY_BUTTON_COUNT;b++) {
+        controls[1].buttons[b]=(mask&(1u<<b))!=0;
+        controls[1].button_pressed[b]=(mask&(1u<<b)) && !(dummy.previous&(1u<<b));
+    }
+    dummy.mask=mask;dummy.previous=mask;
+}
 static void simulate(void)
 {
-    frozen_frame=false;contact_mask=0;memset(sound_events,0,sizeof(sound_events));
+    frozen_frame=false;contact_mask=0;recovery_hit_mask=0;memset(sound_events,0,sizeof(sound_events));
     /* Contact is rendered once, followed by exactly N extra frozen updates.
        Preserve fresh button edges without advancing physics or combat timers. */
     if(hitstop) {
@@ -335,6 +371,8 @@ static void simulate(void)
             ahead-characters[1-p].body_half_width_px*8<m.reach*8 &&
             a->y+m.top*8>b->y && a->y+m.bottom*8<b->y+body_height(1-p)*8;
         blocked[p]=b->blocking && b->facing==-a->facing;
+        if(strikes[p] && b->attack && b->action_tick>=moves[1-p].startup+moves[1-p].active)
+            recovery_hit_mask|=1u<<p;
     }
     for(int p=0;p<2;p++)if(strikes[p]) {
         contact_mask|=1u<<(p+(blocked[p]?2:0));
@@ -402,12 +440,16 @@ static void update(const struct chirky_input *input)
         return;
     }
     if(countdown){countdown--;return;}
-    if(practice && controls[0].button_pressed[CHIRKY_BUTTON_START]){reset_round();return;}
+    if(practice && controls[0].button_pressed[CHIRKY_BUTTON_START]) {
+        if(controls[0].buttons[CHIRKY_BUTTON_DOWN])practice_mode=practice_mode==DUMMY_COUNTER?DUMMY_HIT:practice_mode+1;
+        reset_round();return;
+    }
     if(winner!=-1 && !hitstop) {
         for(int p=0;p<2;p++)if(controls[p].button_pressed[CHIRKY_BUTTON_PRIMARY])fighters[p].ready=true;
         if(fighters[0].ready && (practice || fighters[1].ready))reset_round();
         return;
     }
+    if(practice)dummy_control(practice_mode,2);
     simulate();
 }
 
@@ -560,13 +602,14 @@ static void render(void)
         text(x,h-48,p?"P2":"P1",1,colour(p));
         text(x,h-61,state_name(p),1,colour(p));
         char movement[64],clipped[64];
-        snprintf(movement,sizeof(movement),"%s",practice && p==1?"DUMMY":characters[p].name);
+        snprintf(movement,sizeof(movement),"%s",practice && p==1?
+            (practice_mode==DUMMY_COUNTER?"COUNTER":practice_mode==DUMMY_BLOCK?"BLOCK":"DUMMY"):characters[p].name);
         chirky_text_copy(clipped,sizeof(clipped),movement,(size_t)(w/2-40)/6);
         text(x+24,h-48,clipped,1,0x9baec2);
         if(!(practice && p==1)) {
             label_line(x,26,p,CHIRKY_BUTTON_PRIMARY,"PUNCH");
             label_line(x,12,p,CHIRKY_BUTTON_SECONDARY,"KICK");
-        } else {text(x,26,"START RESET",1,0x9baec2);text(x,12,"BOTH BLOCK",1,0x9baec2);}
+        } else {text(x,26,"START RESET",1,0x9baec2);text(x,12,"DOWN START MODE",1,0x9baec2);}
         draw_fighter(p);
     }
     if(winner!=-1 && !hitstop) {

@@ -21,6 +21,9 @@ const groups=[
   ['kick_recoil_ticks','Recoil duration','Ease-out travel; capped below stun length'],
   ['kick_hitstun_ticks','Hitstun','Opponent recovery, excluding hit-stop'],
   ['kick_blockstun_ticks','Blockstun','Guard recovery, excluding hit-stop']]],
+ ['Guard recovery',[
+  ['block_release_ticks','Release guard','Frames before moving or attacking after releasing block'],
+  ['block_knockback_percent','Blocked pushback','Percent of the move’s knockback; affects counter reach']]],
  ['Hit reaction artwork',[
   ['hit_reaction_style','Reaction style','Grounded hits only; movement and stun stay unchanged'],
   ['hit_impact_ticks','Impact pose','Frames after hit-stop; short stuns truncate the drawing holds'],
@@ -57,14 +60,16 @@ function validate(values){
 function config(values){return schema.character.map(f=>`${f.key}=${values[f.key]}`).join('\n')+'\n';}
 function numeric(values){return Object.fromEntries(schema.character.filter(f=>f.type==='integer' && f.minimum!==f.maximum).map(f=>[f.key,+values[f.key]]));}
 function same(a,b){return JSON.stringify(numeric(a))===JSON.stringify(numeric(b));}
-function snapshot(engine){const p=engine._wb_state()/4;return Array.from(engine.HEAP32.subarray(p,p+89));}
-function setupEngine(engine,values){engine.FS.writeFile('/character.conf',config(values));engine.FS.writeFile('/stage.conf',descriptor.stage);if(!engine._wb_load())throw Error('The game rejected this character configuration.');engine._wb_configure(+$('opponent').value,+$('gap').value);engine._wb_reset(facing);}
+function snapshot(engine){const p=engine._wb_state()/4;return Array.from(engine.HEAP32.subarray(p,p+92));}
+function setupEngine(engine,values){engine.FS.writeFile('/character.conf',config(values));engine.FS.writeFile('/stage.conf',descriptor.stage);if(!engine._wb_load())throw Error('The game rejected this character configuration.');engine._wb_configure(+$('opponent').value,+$('gap').value);engine._wb_response(+$('counter-delay').value);engine._wb_reset(facing);}
 function sequence(){
  const names=['idle','step','stop','tail'],v={};
  for(const name of names){const el=$('seq-'+name);if(!el.checkValidity())throw Error('Sequence lengths must be whole frames within the displayed limits.');v[name]=+el.value;}
  const move=$('attack').value;
  const attackLength=values=>+values[move+'_startup_ticks'] + +values[move+'_active_ticks'] + Math.max(+values[move+'_recovery_ticks'],+values[move+'_hitstun_ticks'],+values[move+'_blockstun_ticks']) + Math.max(+values[move+'_hitstop_ticks'],+values[move+'_blockstop_ticks']);
- const punch=v.idle+v.step+v.stop,total=punch+Math.max(attackLength(draft),attackLength(reference))+v.tail;
+ const replyLength=values=>+$('counter-delay').value + +values.block_release_ticks + +values.punch_startup_ticks + +values.punch_active_ticks + Math.max(+values.punch_recovery_ticks,+values.punch_hitstun_ticks) + +values.punch_hitstop_ticks + 3;
+ const reply=+$('opponent').value===3?Math.max(replyLength(draft),replyLength(reference)):0;
+ const punch=v.idle+v.step+v.stop,total=punch+Math.max(attackLength(draft),attackLength(reference))+reply+v.tail;
  return Array.from({length:total},(_,t)=>t>=v.idle&&t<v.idle+v.step?(facing>0?2:1):t===punch?(move==='kick'?32:16):0);
 }
 function rebuild(keepFrame=true){
@@ -73,6 +78,7 @@ function rebuild(keepFrame=true){
  try{
   validate(draft);validate(reference);
   if(!$('gap').checkValidity())throw Error('Starting gap must be 40–160 whole pixels.');
+  if(!$('counter-delay').checkValidity())throw Error('Counter delay must be 0–30 whole frames.');
   const nextInput=$('live').checked?inputFrames:sequence();
   engines.forEach((engine,i)=>setupEngine(engine,i===0?reference:draft));
   samples=engines.map(engine=>[snapshot(engine)]);inputFrames=nextInput;
@@ -132,9 +138,9 @@ function drawView(i){
  }
  ctx.restore();
  const pose=descriptor.manifest.frames[s[4]],dx=(s[0]-samples[i][0][0])/8;
- const opponent=s.slice(40,80),contact=s[82]?(s[82]&3?'HIT':'BLOCK'):s[81]?'HIT-STOP':'';
+ const opponent=s.slice(40,80),contact=s[82]?(s[82]===3?'TRADE':s[82]&2?'P2 HIT':s[82]&1?'P1 HIT':s[82]&4?'P1 BLOCKED':'P2 BLOCKED'):s[81]?'HIT-STOP':'';
  $('readout-'+(i?'b':'a')).textContent=`${contact?contact+' · ':''}P1 ${labelFor(s)} / ${pose.name} · x ${dx.toFixed(2)} px · v ${(s[2]/8).toFixed(2)} px/f`+
-  (s[83]?` | P2 ${labelFor(opponent)} · HP ${opponent[34]} · recoil ${opponent[37]}/${opponent[38]} · stun ${opponent[35]} · freeze left ${s[80]}`:'');
+  (s[83]?` · HP ${s[34]} · stun ${s[35]} | P2 ${labelFor(opponent)} · HP ${opponent[34]} · recoil ${opponent[37]}/${opponent[38]} · stun ${opponent[35]} · freeze left ${s[80]}`:'');
 }
 function render(){
  if(!ready || !samples[1].length)return;
@@ -156,6 +162,14 @@ function track(name,entries){
  const cursor=document.createElement('i');cursor.className='timeline-cursor';strip.append(cursor);
  strip.onclick=e=>{const r=strip.getBoundingClientRect();seek(Math.floor((e.clientX-r.left)/r.width*entries.length));};row.append(title,strip);return row;
 }
+function exchangeSummary(list,name){
+ const block=list.findIndex(s=>s[82]&4),hit=list.findIndex(s=>s[82]&1);
+ if(list[0][83]!==3)return `${name}: ${hit>=0?'hit at frame '+hit:block>=0?'blocked at frame '+block:'no contact'}.`;
+ if(block<0)return `${name}: no blocked contact; no counter triggered.`;
+ const counter=list.findIndex((s,n)=>n>block&&(s[82]&10)),miss=list.findIndex((s,n)=>n>block&&s[87]===4);
+ if(counter>=0){return `${name}: block ${block} → counter ${counter} (${list[counter][82]&8?'guarded':list[counter][91]&2?'caught attack recovery':'after P1 recovered'}).`;}
+ return `${name}: block ${block} → ${miss>=0?'counter missed at '+miss:'counter pending'}.`;
+}
 function renderTimeline(){
  const rows=[track('Input',[["Ready",'idle'],...inputFrames.map((m,n)=>{
   const seqStop=+$('seq-idle').value + +$('seq-step').value;
@@ -165,13 +179,15 @@ function renderTimeline(){
  for(const i of ($('compare').checked?[0,1]:[1])){
   const name=i?'B':'A';
   rows.push(track(name+' sound',samples[i].map(s=>{const cue=s[85]||s[87];return [cue?['','Punch','Kick','Block','Miss'][cue]:'',cue?'freeze':'idle'];})));
-  rows.push(track(name+' contact',samples[i].map(s=>s[82]?[s[82]&3?'Hit':'Blocked','freeze']:s[81]?['Hit-stop','freeze']:['','idle'])));
+  rows.push(track(name+' contact',samples[i].map(s=>s[82]?[s[82]===3?'Trade':s[82]&2?'P2 hit':s[82]&1?'P1 hit':s[82]&4?'P1 blocked':'P2 blocked','freeze']:s[81]?['Hit-stop','freeze']:['','idle'])));
+  if(samples[i][0][83]===3)rows.push(track(name+' P2 input',samples[i].map(s=>s[81]?['Frozen','freeze']:s[89]===48?['Guard','guard']:s[89]===16?['Punch','active']:s[90]===1?['Wait','recovery']:['Release','idle'])));
   for(const p of (samples[i][0][83]?[0,1]:[0])) {
    rows.push(track(name+' P'+(p+1)+' motion',samples[i].map(s=>{const f=s.slice(p*40,p*40+40);return [labelFor(f),motionClass(f)];})));
    rows.push(track(name+' P'+(p+1)+' pose',samples[i].map(s=>{const f=s.slice(p*40,p*40+40);return [descriptor.manifest.frames[f[4]].name,motionClass(f)];})));
   }
  }
  $('timeline').replaceChildren(...rows);
+ $('exchange-summary').textContent=($('compare').checked?[0,1]:[1]).map(i=>exchangeSummary(samples[i],i?'B':'A')).join(' · ');
 }
 function fit(){
  for(const c of canvas){if(c.closest('[hidden]'))continue;const box=c.parentElement,dpr=devicePixelRatio||1,space=Math.max(1,box.clientWidth-18);
@@ -234,7 +250,10 @@ $('facing').onclick=()=>{facing=-facing;$('facing').textContent=facing===1?'Face
 $('compare').onchange=()=>{$('reference-view').hidden=!$('compare').checked;$('views').classList.toggle('compare',$('compare').checked);fit();renderTimeline();render();};
 for(const id of ['onion','guides','boxes'])$(id).onchange=render;
 for(const id of ['idle','step','stop','tail'])$('seq-'+id).oninput=()=>{rebuild();};
-for(const id of ['opponent','gap','attack'])$(id).onchange=()=>rebuild(false);
+for(const id of ['opponent','attack'])$(id).onchange=()=>rebuild(false);
+for(const id of ['gap','counter-delay'])$(id).oninput=()=>rebuild(false);
+$('counter-study').onclick=()=>{$('opponent').value='3';$('attack').value='kick';$('gap').value=72;$('counter-delay').value=2;for(const [key,value] of Object.entries({idle:45,step:18,stop:12,tail:45}))$('seq-'+key).value=value;$('live').checked=false;$('live-pad').hidden=true;document.querySelectorAll('.sequence-fields input, #attack').forEach(e=>e.disabled=false);keyboard=0;pointers.clear();rebuild(false);};
+$('counter-contact').onclick=()=>{const n=samples[1].findIndex(s=>s[82]&10);if(n>=0)seek(n);else status('The counter did not connect. Check the gap, response delay and timeline.');};
 $('miss').onclick=()=>{$('opponent').value='1';$('gap').value=120;rebuild(false);};
 $('contact').onclick=()=>{const n=samples[1].findIndex(s=>s[82]);if(n>=0)seek(n);else status('No contact in this recording. Reduce the gap or step farther.');};
 $('live').onchange=()=>{keyboard=0;pointers.clear();inputFrames=[];$('live-pad').hidden=!$('live').checked;document.querySelectorAll('.sequence-fields input, #attack').forEach(e=>e.disabled=$('live').checked);rebuild(false);$('views').focus();};

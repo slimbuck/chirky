@@ -601,6 +601,27 @@ static void combat_audio(const struct chirky_host_api *api)
     shutdown();
 }
 
+static void practice_opponent(const struct chirky_host_api *api)
+{
+    assert(init(api,"games/circuit-clash/game.conf"));
+    tick(0,0,0);tick(16,0,0);tick(0,0,0);tick(64,0,0);tick(0,0,0);
+    for(int n=0;n<100;n++)tick(0,0,0);
+    assert(practice && practice_mode==DUMMY_COUNTER && fighters[1].blocking);
+    fighters[0].x=100*8;fighters[1].x=146*8;
+    tick(32,0,0);
+    for(int n=0;n<50;n++)tick(0,0,0);
+    assert(fighters[0].health==86 && fighters[1].health==100);
+    /* Down + Start cycles the dummy without changing normal two-player input. */
+    tick(72,0,0);assert(practice_mode==DUMMY_HIT && fighters[0].health==100);
+    tick(0,0,0);for(int n=0;n<100;n++)tick(0,0,0);
+    assert(!fighters[1].blocking);
+    tick(72,0,0);assert(practice_mode==DUMMY_BLOCK);
+    tick(0,0,0);for(int n=0;n<100;n++)tick(0,0,0);
+    assert(fighters[1].blocking);
+    tick(64,0,0);assert(practice_mode==DUMMY_BLOCK && dummy.phase==DUMMY_GUARD);
+    shutdown();
+}
+
 int main(void)
 {
     struct chirky_host_api api={.abi_version=CHIRKY_ABI_VERSION,.screen_width=288,.screen_height=216,.fill_rect=fill,.draw_text=draw,.draw_sprite=sprite};
@@ -647,5 +668,6 @@ int main(void)
     movement_and_balance(&api);animation_timing(&api);responsive_locomotion(&api);jump_response(&api);kick_and_kneel(&api);aerial_attacks(&api);explicit_guard_and_balance(&api);malformed_tuning();
     contact_feedback(&api);
     combat_audio(&api);
+    practice_opponent(&api);
     puts("Circuit Clash: movement, combat, exact hit-stop, eased recoil, trades, guard, walls, buffered input, KO and 1:1 sprites passed.");
 }

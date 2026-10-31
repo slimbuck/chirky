@@ -347,3 +347,38 @@ pixels with reviewed PNGs, dimensions, gutters, baselines and semantic details.
 Browser tests use real WASM, both facings and fractional desktop/mobile sizes.
 The balance editor tests saving, validation and stale-write protection. Physical
 Pi/controller verification remains a separate deployment step.
+
+## Block and counter study
+
+In the workbench, **Block & counter study** sets the shared sequence to idle
+45 → step 18 → stop 12 → kick → recover, starting 72 px apart. Both fighters
+use the selected take. The opponent guards, releases guard after actual blocked
+contact, waits for stun/guard recovery and the configured **Counter delay**
+(default 2 actionable frames), then presses punch once. It returns to guard
+after the attempt. It does not move into range, cancel recovery, read future
+inputs or retry a missed counter. Hit-stop freezes its wait counter too.
+A hit interrupts a pending reply; missing the opponent never arms it.
+
+P2's input track shows guard, wait and punch. **Jump to counter** seeks to the
+reply's contact. The summary distinguishes a hit during attack recovery, a hit
+after recovery, a guarded reply and a miss. Recovery-hit flags come from the
+shared collision update, after timers advance, so a fighter recovering on the
+same update is not falsely labelled as punished. The sequence reserves time
+for the reply and its hit-stop/recovery before returning to idle.
+
+Arthur's existing combat tuning is retained. With the standard study and a
+2-frame response, the kick blocks at sample 82, the reply starts at 94 and
+connects at 97 during the kick's recovery. At gap 78 the reply misses after
+block pushback. A punch instead blocks at 79 and receives the counter at 90,
+when it has recovered and can guard if both attack buttons are held. These
+are measured simulation frames, not an assumed frame-advantage formula.
+Guard release and blocked knockback are editable alongside both moves' timings.
+
+On Pi and browser, join P1 then press **Start** for practice. The dummy now
+starts in **COUNTER** mode, using the same controller and a two-frame delay.
+Hold **Down + Start** to cycle COUNTER → DUMMY (takes hits) → BLOCK → COUNTER;
+each mode change resets the round. **Start** alone resets without changing mode.
+The P2 heading identifies the mode. Move into range yourself and try punching,
+kicking, retreating or holding both attack buttons to guard after an attack.
+This is a training opponent, not a general fighting AI. Normal two-player
+matches still receive only their assigned physical input.

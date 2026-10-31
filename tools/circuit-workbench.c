@@ -8,8 +8,8 @@
 #define WB_EXPORT
 #endif
 
-enum { WB_FIGHTER_SIZE=40, WB_SAMPLE_SIZE=89 };
-static int wb_previous,wb_facing=1,wb_mode,wb_gap=78,wb_drawing;
+enum { WB_FIGHTER_SIZE=40, WB_SAMPLE_SIZE=92 };
+static int wb_previous,wb_facing=1,wb_mode,wb_gap=78,wb_drawing,wb_counter_delay=2;
 static int wb_sample[WB_SAMPLE_SIZE];
 static void wb_rect(void *ctx,int x,int y,int w,int h,unsigned char r,unsigned char g,unsigned char b)
 {(void)ctx;(void)x;(void)y;(void)w;(void)h;(void)r;(void)g;(void)b;}
@@ -40,7 +40,9 @@ WB_EXPORT void wb_reset(int facing)
     }
 }
 WB_EXPORT void wb_configure(int mode,int gap)
-{wb_mode=mode>=0 && mode<=2?mode:1;wb_gap=gap<40?40:gap>160?160:gap;}
+{wb_mode=mode>=0 && mode<=3?mode:1;wb_gap=gap<40?40:gap>160?160:gap;}
+WB_EXPORT void wb_response(int delay)
+{wb_counter_delay=delay<0?0:delay>30?30:delay;}
 WB_EXPORT int wb_load(void)
 {
     struct character_tuning next;struct stage_tuning arena;
@@ -55,10 +57,10 @@ WB_EXPORT void wb_step(int mask)
         controls[0].button_pressed[b]=(mask&(1<<b)) && !(wb_previous&(1<<b));
     }
     wb_previous=mask;memset(&controls[1],0,sizeof(controls[1]));
-    if(wb_mode==2)controls[1].buttons[CHIRKY_BUTTON_PRIMARY]=controls[1].buttons[CHIRKY_BUTTON_SECONDARY]=true;
+    dummy_control(wb_mode,wb_counter_delay);
     if(!wb_mode)fighters[1].y=1000000;
     if(winner==-1 || hitstop)simulate();
-    else {frozen_frame=false;contact_mask=0;memset(sound_events,0,sizeof(sound_events));}
+    else {frozen_frame=false;contact_mask=0;recovery_hit_mask=0;memset(sound_events,0,sizeof(sound_events));}
 }
 WB_EXPORT const int *wb_state(void)
 {
@@ -81,5 +83,7 @@ WB_EXPORT const int *wb_state(void)
     wb_sample[80]=hitstop;wb_sample[81]=frozen_frame;wb_sample[82]=contact_mask;
     wb_sample[83]=wb_mode;wb_sample[84]=round_ticks;
     for(int p=0;p<2;p++){wb_sample[85+p*2]=sound_events[p].cue;wb_sample[86+p*2]=sound_events[p].volume;}
+    wb_sample[89]=(int)dummy.mask;wb_sample[90]=dummy.phase;
+    wb_sample[91]=(int)recovery_hit_mask;
     return wb_sample;
 }

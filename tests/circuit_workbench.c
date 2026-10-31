@@ -1,5 +1,56 @@
 #include <assert.h>
 #include "../tools/circuit-workbench.c"
+static void counter_study(void)
+{
+    /* Inputs match the dashboard study. Counter behaviour is shared with the
+       Pi practice game; no collision or recovery is forced by the adapter. */
+    for(int facing=-1;facing<=1;facing+=2)for(int kind=1;kind<=2;kind++)
+    for(int gap=72;gap<=78;gap+=6)for(int delay=0;delay<=6;delay+=2) {
+        wb_configure(DUMMY_COUNTER,gap);wb_response(delay);wb_reset(facing);
+        int blocks=0,replies=0,contacts=0,misses=0,start=-1,contact=-1;
+        for(int frame=1;frame<170;frame++) {
+            int wait=dummy.wait,phase=dummy.phase,freeze=hitstop;
+            wb_step(frame>45 && frame<=63?(facing>0?2:1):frame==76?(kind==1?16:32):0);
+            const int *s=wb_state();
+            if(freeze){assert(dummy.wait==wait && dummy.phase==phase);assert(!s[82] && !s[91]);}
+            if(s[82]&4)blocks++;
+            if(controls[1].button_pressed[CHIRKY_BUTTON_PRIMARY] && !controls[1].buttons[CHIRKY_BUTTON_SECONDARY]) {
+                replies++;start=frame;assert(fighters[1].attack==1 && fighters[1].action_tick==0);
+            }
+            if(s[82]&2) {
+                contacts++;contact=frame;
+                assert(!!(s[91]&2)==(kind==1?delay==0:delay<=2));
+            }
+            if(s[87]==CUE_MISS)misses++;
+        }
+        assert(blocks==1 && replies==1);
+        assert(start==(kind==1?85:92)+delay);
+        if(kind==2 && gap==78)assert(!contacts && misses==1);
+        else assert(contacts==1 && !misses && contact==start+characters[1].punch_startup_ticks);
+    }
+    /* Same two-frame response: a recovered punch can guard; the heavier kick
+       is still recovering and gets punished, even if guard is already held. */
+    for(int kind=1;kind<=2;kind++) {
+        wb_configure(DUMMY_COUNTER,72);wb_response(2);wb_reset(1);unsigned result=0;
+        for(int frame=1;frame<145;frame++) {
+            int input=frame>45&&frame<=63?2:frame==76?(kind==1?16:32):frame>=86?48:0;
+            wb_step(input);result|=contact_mask&10;
+        }
+        assert(result==(kind==1?8u:2u));
+    }
+    /* A whiff never triggers a counter; taking a hit never auto-retaliates. */
+    for(int mode=1;mode<=3;mode+=2) {
+        wb_configure(mode,mode==1?72:120);wb_reset(1);
+        for(int frame=1;frame<170;frame++) {
+            wb_step(frame>45&&frame<=63?2:frame==76?32:0);
+            assert(!fighters[1].attack && !(contact_mask&2));
+        }
+    }
+    wb_configure(DUMMY_COUNTER,72);wb_reset(1);
+    wb_step(0);dummy.phase=DUMMY_WAIT;dummy.wait=5;wb_reset(1);
+    assert(dummy.phase==DUMMY_GUARD && !dummy.wait && !wb_state()[91]);
+    wb_response(2);
+}
 int main(void)
 {
     /* Native validation of the same adapter used in the dashboard WASM. */
@@ -97,5 +148,6 @@ int main(void)
     for(int i=0;i<30;i++){wb_step(0);assert(!wb_state()[80] && !wb_state()[82]);}
     assert(wb_state()[74]==100);
     wb_configure(0,78);wb_reset(1);assert(!wb_state()[83]);
+    counter_study();
     puts("Animation workbench: mirrored two-fighter contact, hit/block freezes, recoil, gap-controlled misses, solo replay and native sprite draws passed.");
 }
